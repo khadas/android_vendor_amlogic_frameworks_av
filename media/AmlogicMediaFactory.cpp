@@ -42,6 +42,16 @@ public:
         return 0.0;
     }
 
+    virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
+                              const sp<IStreamSource>& /*source*/,
+                              float /*curScore*/) {
+       if (AmlogicPlayer::PropIsEnable("media.amplayer.enable", true)) {
+           return 1.0;
+       }
+
+       return 0.0;
+    }
+
     virtual sp<MediaPlayerBase> createPlayer() {
         ALOGV("Create AmlogicPlayer stub");
         return new AmlogicPlayer();

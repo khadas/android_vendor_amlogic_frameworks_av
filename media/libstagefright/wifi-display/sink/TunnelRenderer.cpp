@@ -479,6 +479,7 @@ namespace android
 
     void TunnelRenderer::initPlayer()
     {
+/*
         if (mBufferProducer == NULL)
         {
             mComposerClient = new SurfaceComposerClient;
@@ -508,7 +509,7 @@ namespace android
             mSurface = mSurfaceControl->getSurface();
             CHECK(mSurface != NULL);
         }
-
+*/
         sp<IServiceManager> sm = defaultServiceManager();
         sp<IBinder> binder = sm->getService(String16("media.player"));
         sp<IMediaPlayerService> service = interface_cast<IMediaPlayerService>(binder);
@@ -534,7 +535,7 @@ namespace android
         }
         //mPlayer->setVideoSurfaceTexture(
         //        mBufferProducer != NULL ? mBufferProducer : mSurface->getSurfaceTexture());
-        mPlayer->setVideoSurfaceTexture(mSurface->getIGraphicBufferProducer());
+        //mPlayer->setVideoSurfaceTexture(mSurface->getIGraphicBufferProducer());
         Parcel request;
         mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_DIS_AUTO_BUFFER, request);
         mPlayer->prepareAsync();
@@ -560,7 +561,7 @@ namespace android
         mSystemControlService->setProperty(String16("media.libplayer.fastswitch"), String16("0"));
         mPlayer->stop();
         mPlayer.clear();
-
+/*
         if (mBufferProducer == NULL)
         {
             mSurface.clear();
@@ -569,6 +570,7 @@ namespace android
             mComposerClient->dispose();
             mComposerClient.clear();
         }
+*/
     }
 
     void TunnelRenderer::setIsHDCP(bool isHDCP)
