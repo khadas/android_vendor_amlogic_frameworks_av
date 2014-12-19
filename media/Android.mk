@@ -67,13 +67,13 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/media/libmediaplayerservice                                 \
     $(GRALLOC_DIR) \
     $(TOP)/system/core/libion/include/\
-    
+
 
 ifeq ($(BOARD_PLAYREADY_TVP),true)
 LOCAL_CFLAGS += -DBOARD_PLAYREADY_TVP
 endif
 ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
-    AMPLAYER_APK_DIR=$(TOP)/packages/amlogic/LibPlayer/
+    AMPLAYER_APK_DIR=$(LOCAL_PATH)/../LibPlayer/
     LOCAL_C_INCLUDES += \
         $(AMPLAYER_APK_DIR)/amplayer/player/include     \
         $(AMPLAYER_APK_DIR)/amplayer/control/include    \
