@@ -2291,6 +2291,7 @@ status_t AmlogicPlayer::initVideoSurface(void)
                 }else if(strcasestr(CallingAPkName,"lamo:benchmarks")||/*for com.quicinc.vellamo:benchmarks need osd for high score*/
                          strcasestr(CallingAPkName,"android.youtube")||//for android.youtube apk
                          strcasestr(CallingAPkName,"android.browser")|| //for android.browser,4.4need it now apk
+                         strcasestr(CallingAPkName,".mobile.news.ww")||//for bbc news
                          strcasestr(CallingAPkName,"roid.youtube.tv") //for youtube tv apk
                          )
                 {
