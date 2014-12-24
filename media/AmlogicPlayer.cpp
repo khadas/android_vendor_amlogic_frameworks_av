@@ -196,6 +196,11 @@ AmlogicPlayer::AmlogicPlayer() :
 		drop_tiny_seek_ms=100;
     mFFStatus = false;
     mSupportSeek = -1;
+    mSeekdone = false;
+    mLastPlaytime = 0;
+    mLastPosition = 0;
+    mPlayTimeBac = 0;
+    realpositionBac = 0;
     mLeftVolume = 1;
     mRightVolume = 1;
     mSetVolumeFlag = 0;
@@ -1470,6 +1475,7 @@ status_t AmlogicPlayer::seekTo(int position)
         player_timesearch(mPlayer_id, (float)position / 1000);
     }
 
+    mSeekdone = true;
     mPlayTime = position;
     mLastPlayTimeUpdateUS = ALooper::GetNowUs();
     return NO_ERROR;
@@ -2634,6 +2640,7 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     //LOGV("getCurrentPosition\n");
     LOGI(" getCurrentPosition Player time=%dms\n", (int)(ALooper::GetNowUs() - PlayerStartTimeUS) / 1000);
     Mutex::Autolock autoLock(mMutex);
+
     if (fastNotifyMode) {
         if (mStreamTime <= 0) { /*mStreamTime is have not set,just set a big value for netflix may pause bug.*/
             mStreamTime += mStreamTimeExtAddS * 1000;
@@ -2644,11 +2651,29 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     } else {
         if (!mPaused && LatestPlayerState == PLAYER_RUNNING) {
             int64_t realposition;
-            realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
-            LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
-                 mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
-            //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
-            *position = realposition;
+            if (mPlayTimeBac != mPlayTime) { //do not update position for mPlayTime no change, add by wxl
+                mPlayTimeBac = mPlayTime;
+                if (mPlayTime > mLastPlaytime || mSeekdone) {
+                    realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+                    mLastPlaytime = mPlayTime;
+                    mLastPosition = realposition;
+                    mSeekdone = false;
+                }else{
+                    realposition = mLastPosition + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+                    mLastPlaytime = mPlayTime;
+                }
+                LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
+                     mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
+                //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
+                *position = realposition;
+                realpositionBac = realposition;
+            }
+            else {
+                if (mPlayTimeBac == 0 && mPlayTime == 0) {
+                    realpositionBac = 0;
+                }
+                *position = realpositionBac;
+            }
         } else {
             //*position=((mPlayTime+500)/1000)*1000;
             *position = mPlayTime;
