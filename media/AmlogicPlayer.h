@@ -260,6 +260,11 @@ private:
     int DtshdApreTotal;
     int DtsHdStreamType;
     unsigned dts_dec_control;
+    bool mSeekdone;
+    int mLastPlaytime;
+    int64_t mLastPosition;
+    int mPlayTimeBac;
+    int64_t realpositionBac;
 };
 
 }; // namespace android
