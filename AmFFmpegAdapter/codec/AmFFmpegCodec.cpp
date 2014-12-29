@@ -42,7 +42,7 @@ static bool MimeSupportOrNot(const char * codecMime) {
     }
 
     //support audio codec
-    if(!strcmp(MEDIA_MIMETYPE_AUDIO_COOK, codecMime)
+    if (!strcmp(MEDIA_MIMETYPE_AUDIO_FFMPEG, codecMime)
        || !strcmp(MEDIA_MIMETYPE_AUDIO_FLAC, codecMime)){
         ALOGI("NOTE: audio using soft decoder\n");
         return true;
