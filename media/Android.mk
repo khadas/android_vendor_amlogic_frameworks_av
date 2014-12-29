@@ -33,6 +33,7 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
         AmlPlayerMetadataRetriever.cpp \
         AmlPlayerMetadataRetriever0.cpp \
         AmlogicMediaFactory.cpp \
+        AmlogicMetadataRetrieverFactory.cpp \
 
 
 endif

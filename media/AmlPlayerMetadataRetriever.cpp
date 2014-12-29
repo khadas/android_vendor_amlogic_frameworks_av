@@ -60,6 +60,20 @@ AmlPlayerMetadataRetriever::~AmlPlayerMetadataRetriever()
     mAmlogicFile.fd_valid = 0;
 }
 
+status_t AmlPlayerMetadataRetriever::setDataSource(
+            const sp<IMediaHTTPService> &httpService,
+            const char *url,
+            const KeyedVector<String8, String8> *headers)
+{
+    ALOGV("setDataSource(%s)", url);
+    mParsedMetaData = false;
+    mMetaData.clear();
+    delete mAlbumArt;
+    mAlbumArt = NULL;
+
+    return setdatasource(url, -1, 0, 0x7ffffffffffffffLL);
+}
+
 status_t AmlPlayerMetadataRetriever::setDataSource(const char * url, const KeyedVector<String8, String8> *headers)
 {
     ALOGV("setDataSource(%s)", url);

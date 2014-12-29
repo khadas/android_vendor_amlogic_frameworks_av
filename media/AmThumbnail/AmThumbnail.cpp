@@ -389,6 +389,11 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
             mVheight = mStream.pCodecCtx->height;
         }
 
+        if ((mVwidth > 1920) && (mVheight > 1088)) {
+            ALOGV("Can't support 4k\n");
+            goto err1;
+        }
+
         mStream.pCodec = avcodec_find_decoder(mStream.pCodecCtx->codec_id);
         if (mStream.pCodec == NULL) {
             ALOGV("Didn't find codec!\n");
