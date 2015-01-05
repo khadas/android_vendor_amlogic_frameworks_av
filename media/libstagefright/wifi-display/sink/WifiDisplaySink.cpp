@@ -430,7 +430,7 @@ namespace android
             {
                 mHDCPLock.lock();
                 ALOGI("kWhatStop: Initiating HDCP shutdown.");
-                //mHDCP->shutdownAsyncRx();
+                mHDCP->shutdownAsyncRx();
             }
 
             //looper()->stop();
@@ -1149,7 +1149,7 @@ namespace android
             return err;
         }
 
-        //err = mHDCP->initAsyncRx(mHDCPPort);
+        err = mHDCP->initAsyncRx(mHDCPPort);
 
         if (err != OK)
         {
