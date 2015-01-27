@@ -559,7 +559,7 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     if(isHTTPSource && IS_M3U8_URL(uri)) {
         isNormalHLS = true;
     }
-
+    mHTTPService = httpService;
 
     if (PropIsEnable("media.amplayer.useandroidhttp") &&  !strncmp(uri, "http://", strlen("http://"))) {
         mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
