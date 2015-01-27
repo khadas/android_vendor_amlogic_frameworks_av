@@ -900,12 +900,15 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             bufferTime = ALooper::GetNowUs()/1000;
         }
         if (!mInbuffering) {
-             mInbuffering = true;
+             //mInbuffering = true;
              if (!mLowLevelBufMode) {
              if(mDelaySendBufferingInfo_s > 0 ){
-                 if(ALooper::GetNowUs()/1000 - bufferTime > mDelaySendBufferingInfo_s * 1000)
-                 sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
+                 if (ALooper::GetNowUs()/1000 - bufferTime > mDelaySendBufferingInfo_s * 1000) {
+                    mInbuffering = true;
+                    sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
+                 }
              }else{
+                 mInbuffering = true;
                  sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
                  }
              }
@@ -2651,33 +2654,36 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     } else {
         if (!mPaused && LatestPlayerState == PLAYER_RUNNING) {
             int64_t realposition;
-            if (mPlayTimeBac != mPlayTime) { //do not update position for mPlayTime no change, add by wxl
-                mPlayTimeBac = mPlayTime;
-                if (mPlayTime > mLastPlaytime || mSeekdone) {
-                    realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
-                    mLastPlaytime = mPlayTime;
-                    mLastPosition = realposition;
-                    mSeekdone = false;
-                }else{
-                    realposition = mLastPosition + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
-                    mLastPlaytime = mPlayTime;
-                }
-                LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
-                     mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
-                //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
-                *position = realposition;
-                realpositionBac = realposition;
-            }
-            else {
-                if (mPlayTimeBac == 0 && mPlayTime == 0) {
-                    realpositionBac = 0;
-                }
-                *position = realpositionBac;
-            }
+            realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+            LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
+                 mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
+            *position = realposition;
         } else {
             //*position=((mPlayTime+500)/1000)*1000;
             *position = mPlayTime;
         }
+
+#ifdef LIVEPLAY_SEEK
+        if (mPlay_ctl.is_livemode == 1)
+        {
+            if (mPaused)
+            {
+                int64_t realposition;
+                if (mLastPlayTimeUpdateUS > 0)
+                    realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+                else
+                    realposition = mPlayTime;
+                *position = realposition;
+                mPlayTime = *position;
+                mLastPlayTimeUpdateUS = ALooper::GetNowUs();
+            }
+            else
+            {
+                *position = mPlayTime;
+            }
+        }
+#endif
+
     }
     if (mDuration > 0 && LatestPlayerState == PLAYER_RUNNING && *position >= mDuration && mDelayUpdateTime!=2) {
         LOGV("Maybe CurrentPosition exceed mDuration,just do minor adjustment(minus 100ms)\n");
