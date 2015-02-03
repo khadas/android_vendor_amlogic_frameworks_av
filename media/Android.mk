@@ -34,6 +34,7 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
         AmlPlayerMetadataRetriever0.cpp \
         AmlogicMediaFactory.cpp \
         AmlogicMetadataRetrieverFactory.cpp \
+        SStreamingExtractor.cpp \
 
 
 endif
@@ -70,6 +71,9 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/system/core/libion/include/\
 
 
+ifeq ($(BOARD_PLAYREADY_LP_IN_SS), true)
+LOCAL_CFLAGS += -DSS_MSPLAYREADY_TEST
+endif
 ifeq ($(BOARD_PLAYREADY_TVP),true)
 LOCAL_CFLAGS += -DBOARD_PLAYREADY_TVP
 endif

@@ -15,7 +15,7 @@ extern "C" {
 #include <media/MediaPlayerInterface.h>
 #include <media/AudioTrack.h>
 #include <WVMExtractor.h>
-///#include "SStreamingExtractor.h"
+#include "SStreamingExtractor.h"
 namespace android
 {
 
@@ -73,6 +73,7 @@ private:
     int64_t mLastAudioTimeUs;
     sp<DataSource> mReadDataSouce;
     sp<WVMExtractor> mWVMExtractor;
+    sp<SStreamingExtractor> mSSExtractor;
     sp<MediaExtractor> mMediaExtractor;
     //sp<MediaSource> mTrack;
     sp<MediaSource>mVideoTrack;

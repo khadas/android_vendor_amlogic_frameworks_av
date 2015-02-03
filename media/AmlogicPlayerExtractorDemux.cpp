@@ -62,6 +62,8 @@ int video_isdrminfo = 0;
 int audio_isdrminfo = 0;
 int fdr_audio = -1;
 
+const char * MEDIA_MIMETYPE_CONTAINER_PR= "application/vnd.ms-playready";
+
 int drm_stronedrminfo(char *outpktdata, char *addr,
                       int size, unsigned int pts, int type, int isdrminfo)
 {
@@ -131,13 +133,13 @@ int AmlogicPlayerExtractorDemux::BasicInit(void)
     extern bool SniffMPEG2PS(const sp<DataSource> &source, String8 * mimeType, float * confidence, sp<AMessage> *);
     extern bool SniffMatroska(const sp<DataSource> &source, String8 * mimeType, float * confidence, sp<AMessage> *);
     extern bool SniffWVM(const sp<DataSource> &source, String8 * mimeType, float * confidence, sp<AMessage> *);
-//    extern bool SniffSmoothStreaming(const sp<DataSource> &source, String8 *mimeType, float *confidence,sp<AMessage> *);
+    extern bool SniffSmoothStreaming(const sp<DataSource> &source, String8 *mimeType, float *confidence,sp<AMessage> *);
 #if 0
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMPEG2TS);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMPEG2PS);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMatroska);
 #endif
-//    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
+    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
     return 0;
 }
@@ -189,7 +191,10 @@ AmlogicPlayerExtractorDemux::AmlogicPlayerExtractorDemux(AVFormatContext *s)
             mWVMExtractor = new WVMExtractor(mReadDataSouce.get());
             mWVMExtractor->setAdaptiveStreamingMode(true);
             mMediaExtractor = mWVMExtractor;
-        } else {
+        } else if(!strcasecmp(smimeType, MEDIA_MIMETYPE_CONTAINER_PR)){
+            mSSExtractor = new SStreamingExtractor(mReadDataSouce.get());
+            mMediaExtractor = mSSExtractor;
+        }else {
             mMediaExtractor = MediaExtractor::Create(mReadDataSouce.get(), smimeType);
         }
     }
@@ -747,6 +752,7 @@ int AmlogicPlayerExtractorDemux::Close(AVFormatContext *s)
         LOGV("Clear AudioTrack");
     }
     mWVMExtractor.clear();
+    mSSExtractor.clear();
     mMediaExtractor.clear();
     if (mBuffer != NULL) {
         mBuffer->release();
