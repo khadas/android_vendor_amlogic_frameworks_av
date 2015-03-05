@@ -79,6 +79,7 @@ SubSource::SubSource()
       sub_cur_id=-1;
       sub_num=0;
       sub_handle=-1;
+      mLastPts = -1;
       //mMeta=new MetaData;
 	  //mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_TEXT_3GPP);
 }
@@ -274,7 +275,13 @@ status_t SubSource::read(
 	current_pts |= header[rd_oft++]<<8;
 	current_pts |= header[rd_oft++];
 	//last 4bytes 0xffffffff  --skip
-	//LOGE("current_pts is %d\n",current_pts);
+	LOGE("current_pts is %d\n",current_pts);
+	if (mLastPts == current_pts) {
+		current_pts += 1000;
+	}
+	LOGE("===new current_pts is %d\n",current_pts);
+	mLastPts = current_pts;
+
    //LOGE("current_length is %d\n",current_length);
 	/*data*/
 	//get next frame size

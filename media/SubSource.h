@@ -71,6 +71,7 @@ namespace android {
         int64_t mSamplesRead;
         int sub_handle;
         int sub_num;
+        int32_t mLastPts;
     
         struct pollfd {
             int fd;

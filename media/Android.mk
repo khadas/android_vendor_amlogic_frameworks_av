@@ -66,6 +66,9 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/native/include/media/openmax                  \
     $(TOP)/external/tremolo/Tremolo                                 \
     $(TOP)/frameworks/av/media/libmediaplayerservice                                 \
+    $(TOP)/frameworks/av/include/media					\
+    $(TOP)/external/icu/icu4c/source/common				\
+    $(TOP)/external/icu/icu4c/source/i18n					\
     $(GRALLOC_DIR) \
     $(TOP)/system/core/libion/include/\
 

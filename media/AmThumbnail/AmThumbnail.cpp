@@ -652,8 +652,19 @@ void AmThumbnailInt::amthumbnail_get_duration(int64_t *duration)
 int AmThumbnailInt::amthumbnail_get_key_metadata(char* key, const char** value)
 {
     AVDictionaryEntry *tag = NULL;
+    bool hasMetadata = false;
 
-    if (!mStream.pFormatCtx->metadata) {
+    if (mStream.pFormatCtx->metadata) {
+        hasMetadata = true;
+    }
+    for (int i = 0; i < mStream.pFormatCtx->nb_streams; i++) {
+        if (mStream.pFormatCtx->streams[i]->metadata) {
+            hasMetadata = true;
+            break;
+        }
+    }
+    if (!hasMetadata) {
+        ALOGI("[%s:%d]======metadata is null", __FUNCTION__, __LINE__);
         return 0;
     }
 
@@ -675,6 +686,14 @@ int AmThumbnailInt::amthumbnail_get_key_metadata(char* key, const char** value)
         return 1;
     }
 
+    for (int i = 0; i < mStream.pFormatCtx->nb_streams; i++) {
+        tag = av_dict_get(mStream.pFormatCtx->streams[i]->metadata, key, tag, 0);
+        if (tag) {
+            *value = tag->value;
+            return 1;
+        }
+
+    }
     return 0;
 }
 

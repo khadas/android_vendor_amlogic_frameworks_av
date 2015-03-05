@@ -18,6 +18,7 @@
 #define LOG_TAG "AmlPlayerMetadataRetriever"
 #include "AmlPlayerMetadataRetriever.h"
 #include <utils/Log.h>
+#include <CharacterEncodingDetector.h>
 
 namespace android
 {
@@ -241,6 +242,53 @@ MediaAlbumArt *AmlPlayerMetadataRetriever::extractAlbumArt()
     return NULL;
 }
 
+
+
+static char *StringToDetector(const char *name)
+{
+    struct DetectorMap{
+        char* from;
+        char* to;
+    };
+
+    static struct DetectorMap kDetectMap[] = {
+        {"album_artist", "albumartist"},
+        {NULL, NULL},
+    };
+
+    struct DetectorMap *p = kDetectMap;
+    while (p->from) {
+        if (!strcmp(p->from, name)) {
+            return p->to;
+        }
+        p++;
+    }
+    return (char *)name;
+}
+
+static char *StringFromDetector(const char *name)
+{
+    struct DetectorMap {
+        char* from;
+        char* to;
+    };
+
+    static struct DetectorMap kDetectMap[] = {
+        {"albumartist", "album_artist"},
+        {NULL, NULL},
+    };
+
+    struct DetectorMap *p = kDetectMap;
+    while (p->from) {
+        if (!strcmp(p->from, name)) {
+            return p->to;
+        }
+        p++;
+    }
+    return (char *)name;
+}
+
+
 void AmlPlayerMetadataRetriever::parseMetaData()
 {
 #if 0
@@ -289,14 +337,32 @@ void AmlPlayerMetadataRetriever::parseMetaData()
         { "height", METADATA_KEY_VIDEO_HEIGHT },
     };
     static const size_t kNumMapEntries = sizeof(kMap) / sizeof(kMap[0]);
-
+    CharacterEncodingDetector *detector = new CharacterEncodingDetector();
     for (size_t i = 0; i < kNumMapEntries; ++i) {
         const char *value;
         if (mClient->amthumbnail_get_key_metadata(kMap[i].from, &value)) {
             ALOGV("get %s: %s \n", kMap[i].from, value);
-            mMetaData.add(kMap[i].to, String8(value));
+            char *detectorName = StringToDetector(kMap[i].from);
+            detector->addTag(detectorName, value);
         }
     }
+
+    detector->detectAndConvert();
+    int size = detector->size();
+    if (size) {
+        for (int m = 0; m < size; m++) {
+            const char *name;
+            const char *value;
+            detector->getTag(m, &name, &value);
+            for (size_t n = 0; n < kNumMapEntries; ++n) {
+                char *detectorName = StringFromDetector(name);
+                if (!strcmp(kMap[n].from, detectorName)) {
+                    mMetaData.add(kMap[n].to, String8(value));
+                }
+            }
+        }
+    }
+    delete detector;
     int v, a, s;
     v = a = s = 0;
     mClient->amthumbnail_get_tracks_info(&v, &a, &s);
