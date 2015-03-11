@@ -242,28 +242,67 @@ int HistoryMgt(const char * path, int r0w1, int mTime)
 #define MAX_PATH_LEN  100
 #define MAX_VFM_MAP_LEN 300
 
+struct map_t {
+    int pos;
+    String8 name;
+};
+
+static int Vfm_Compare(const map_t *a, const map_t *b)
+{
+    if (a->pos > b->pos) {
+        return 1;
+    }
+    return 0;
+}
+
+static void Get_Vfm_Path(char * path, Vector<map_t> &list)
+{
+    const char* vfm_map_list[] = {
+        "ppmgr", "deinterlace", "decoder", "amvideo", "amlvideo2", "amlvideo",
+        "ionvideo", "amvideo4osd", "osd", "vdin0", "vdin1", "vm", NULL
+    };
+    char *node_p = NULL;
+    int i = 0;
+    i = 0;
+    while (vfm_map_list[i]) {
+        if (node_p = strstr(path, vfm_map_list[i])) {
+            map_t node;
+            node.pos = (int)node_p;
+            node.name.append(vfm_map_list[i]);
+            list.push_back(node);
+            LOGI("list path [%s] pos:%d\n", vfm_map_list[i], node_p);
+        }
+        i++;
+    }
+
+    if (list.size() > 1) {
+        list.sort(Vfm_Compare);
+    }
+}
+
 int IsTheSameVfmPathDefault(char * path)
 {
     int fd;
-    char vfm_node1[15] = {0};
-    char vfm_node2[15] = {0};
-    char vfm_node3[15] = {0};
-    char vfm_node4[15] = {0};
     char valstr[MAX_VFM_MAP_LEN] = {0};
     char default_map[MAX_VFM_MAP_LEN] = {0};
     char *start_p;
     char *end_p;
     int len;
-    
-    if(path != NULL)
-    {   
-    	  LOGE("get path [%s]\n", path);
-        sscanf(path,"%s %s %s %s",vfm_node1,vfm_node2,vfm_node3,vfm_node4);
-        LOGE("%s %s %s %s\n", vfm_node1,vfm_node2,vfm_node3,vfm_node4);
+
+    if (path == NULL) {
+        LOGE("[%s:%d] path is null\n", __FUNCTION__, __LINE__);
+        return 1;
     }
+    LOGI("get path [%s]\n", path);
+
+    Vector<map_t> prop_list;
+    Vector<map_t> node_list;
+
+    Get_Vfm_Path(path, prop_list);
+
     fd = open("sys/class/vfm/map", O_RDONLY);
     if (fd >= 0) {
-		    memset(valstr,0,MAX_VFM_MAP_LEN);
+        memset(valstr,0,MAX_VFM_MAP_LEN);
         read(fd, valstr, MAX_VFM_MAP_LEN);
         valstr[MAX_VFM_MAP_LEN-1] = '\0';
         close(fd);
@@ -272,33 +311,49 @@ int IsTheSameVfmPathDefault(char * path)
         sprintf(valstr, "%s", "fail");
         return -1;
     }
-    
+
     start_p = strstr(valstr, "default {");
     end_p = strstr(start_p, "}");
-    
+
     len = end_p-start_p+1;
-    
+
     strncpy(default_map, start_p, len);
-    
-    if((strlen(vfm_node1)!=0)&&(strstr(default_map, vfm_node1)== NULL))
-    {
-        return -1;	
-    }
-    else if((strlen(vfm_node2)!=0)&&(strstr(default_map, vfm_node2)== NULL))
-    {
-    	  return -1;
-    }
-    else if((strlen(vfm_node3)!=0)&&(strstr(default_map, vfm_node3)== NULL))
-    {
-    	  return -1;
-    }
-    else if((strlen(vfm_node4)!=0)&&(strstr(default_map, vfm_node4)== NULL))
-    {
-    	  return -1;
-    }
-    
+    LOGI("default_map path [%s]\n", default_map);
+
+    Get_Vfm_Path(default_map, node_list);
+
+    bool isPropEmpty, isNodeEmpty;
+    do {
+        isPropEmpty = prop_list.isEmpty();
+        isNodeEmpty = node_list.isEmpty();
+        if (isPropEmpty) {
+            if (!isNodeEmpty) {
+                LOGE("[%s:%d] prop_list is null but node_list is not null\n", __FUNCTION__, __LINE__);
+                return -1;
+            }
+            LOGI("[%s:%d]both prop_list and node_list is null\n", __FUNCTION__, __LINE__);
+        }
+        else {
+            if (isNodeEmpty) {
+                LOGE("[%s:%d] node_list is null but prop_list is not null\n", __FUNCTION__, __LINE__);
+                return -1;
+            }
+            map_t prop = prop_list.itemAt(0);
+            map_t node = node_list.itemAt(0);
+            prop_list.removeAt(0);
+            node_list.removeAt(0);
+            LOGI("prop_list [%s]  node_list[%s]\n", prop.name.string(), node.name.string());
+            if (prop.name != node.name) {
+                LOGE("prop_list [%s] is different with node_list[%s]\n", prop.name.string(), node.name.string());
+                return -1;
+            }
+            else {
+                LOGI("prop_list [%s] is same with node_list[%s]\n", prop.name.string(), node.name.string());
+            }
+        }
+    }while (!isPropEmpty && !isNodeEmpty);
+    LOGI("prop_list path is same with node_list\n");
     return 1;
-    
 }
 
 status_t AmlogicPlayer::BasicInit()
