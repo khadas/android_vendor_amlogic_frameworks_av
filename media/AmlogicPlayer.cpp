@@ -1364,6 +1364,7 @@ status_t AmlogicPlayer::start()
         //so we just set invalid num
         //player_sid(mPlayer_id, 0xffff);
     }
+    sendEvent(MEDIA_STARTED, 0, 0);
     return NO_ERROR;
 }
 
@@ -1903,6 +1904,47 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
     return OK;
 }
 
+int32_t AmlogicPlayer::getSelectedTrack(const Parcel& request) const
+{
+    size_t trackCount = mStreamInfo.stream_info.nb_streams;
+    int32_t type = request.readInt32();
+    int32_t trackId = -1;
+    switch (type) {
+        case MEDIA_TRACK_TYPE_VIDEO:
+            if (mhasVideo) {
+                for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
+                    for (int j = 0; j < mStreamInfo.stream_info.total_video_num; j++) {
+                        if (i == mStreamInfo.video_info[j]->index) {
+                            trackId = i;
+                            return trackId;
+                        }
+                    }
+                }
+            }
+            break;
+        case MEDIA_TRACK_TYPE_AUDIO:
+            if (mhasAudio) {
+                for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
+                    for (int j = 0; j < mStreamInfo.stream_info.total_audio_num; j++) {
+                        if (i == mStreamInfo.audio_info[j]->index) {
+                            trackId = i;
+                            return trackId;
+                        }
+                    }
+                }
+            }
+            break;
+        case MEDIA_TRACK_TYPE_TIMEDTEXT:
+            if (mhasSub) {
+                return mTextDriver->getSelectedTrack();
+            }
+            break;
+        default:break;
+    }
+    return trackId;
+}
+
+
 void transferFileSize(int64_t size, char *filesize)
 {
     //LOGE("[transferFileSize] size:%lld\n", size);
@@ -2179,6 +2221,12 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
 		float right_volume = request.readFloat();
 		LOGV("Set left volume:%f, right volume = %f\n",left_volume,right_volume);
 		return setVolume(left_volume,right_volume);
+	}
+	case INVOKE_ID_GET_SELECTED_TRACK: {
+		int32_t trackId = getSelectedTrack(request);
+		LOGI("get select track id:%d\n", trackId);
+		reply->writeInt32((int)trackId);
+		return OK;
 	}
     default: {
         return ERROR_UNSUPPORTED;
@@ -2654,6 +2702,31 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     } else {
         if (!mPaused && LatestPlayerState == PLAYER_RUNNING) {
             int64_t realposition;
+            #if 0
+            if (mPlayTimeBac != mPlayTime) { //do not update position for mPlayTime no change, add by wxl
+                mPlayTimeBac = mPlayTime;
+                if (mPlayTime > mLastPlaytime || mSeekdone) {
+                    realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+                    mLastPlaytime = mPlayTime;
+                    mLastPosition = realposition;
+                    mSeekdone = false;
+                }else{
+                    realposition = mLastPosition + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
+                    mLastPlaytime = mPlayTime;
+                }
+                LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
+                     mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
+                //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
+                *position = realposition;
+                realpositionBac = realposition;
+            }
+            else {
+                if (mPlayTimeBac == 0 && mPlayTime == 0) {
+                    realpositionBac = 0;
+                }
+                *position = realpositionBac;
+            }
+            #endif
             realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
             LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
@@ -2662,28 +2735,6 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             //*position=((mPlayTime+500)/1000)*1000;
             *position = mPlayTime;
         }
-
-#ifdef LIVEPLAY_SEEK
-        if (mPlay_ctl.is_livemode == 1)
-        {
-            if (mPaused)
-            {
-                int64_t realposition;
-                if (mLastPlayTimeUpdateUS > 0)
-                    realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
-                else
-                    realposition = mPlayTime;
-                *position = realposition;
-                mPlayTime = *position;
-                mLastPlayTimeUpdateUS = ALooper::GetNowUs();
-            }
-            else
-            {
-                *position = mPlayTime;
-            }
-        }
-#endif
-
     }
     if (mDuration > 0 && LatestPlayerState == PLAYER_RUNNING && *position >= mDuration && mDelayUpdateTime!=2) {
         LOGV("Maybe CurrentPosition exceed mDuration,just do minor adjustment(minus 100ms)\n");

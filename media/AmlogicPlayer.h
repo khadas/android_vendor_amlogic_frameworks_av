@@ -163,6 +163,7 @@ private:
     status_t dump_subtitleinfo(int fd, media_info_t mStreamInfo)const;
     int get_cur_dispmode();
     int set_cur_dispmode(int mode);
+    int32_t getSelectedTrack(const Parcel& request) const;
 
     sp<Surface>             mSurface;
     sp<ANativeWindow>       mNativeWindow;
