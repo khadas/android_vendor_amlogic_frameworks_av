@@ -451,6 +451,11 @@ int set_sys_int(const char *path, int val)
 bool IsManifestUrl( const char* url) {
     return IS_END_OF(url,"/manifest");
 }
+bool IsVrVmUrl( const char* url) {
+     if ( !strncasecmp ( url, "vrwc",4 )||!strncasecmp ( url, "vstb", 4 ) ) ////Verimatrix link, vrwc:viewright web client ; vstb:viewright stb for iptv
+         return true;
+     else return false;
+}
 
 #define DISABLE_VIDEO "/sys/class/video/disable_video"
 void
@@ -551,7 +556,8 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     }
     if (strncmp(uri, "http", strlen("http")) == 0 ||
         strncmp(uri, "shttp", strlen("shttp")) == 0 ||
-        strncmp(uri, "https", strlen("https")) == 0) {
+        strncmp(uri, "https", strlen("https")) == 0 ||
+        IsVrVmUrl(uri) ) {
         isHTTPSource = true;
     }
 
@@ -1202,7 +1208,8 @@ status_t AmlogicPlayer::setdatasource(const char *path, int fd, int64_t offset, 
             strncmp(path, "rtsp", strlen("rtsp")) == 0 ||
             strncmp(path, "mms", strlen("mms")) == 0 ||
             strncmp(path, "ftp", strlen("ftp")) == 0 ||
-            strncmp(path, "widevine", strlen("widevine")) == 0) { /*if net work mode ,enable buffering*/
+            strncmp(path, "widevine", strlen("widevine")) == 0||
+            IsVrVmUrl(path)) { /*if net work mode ,enable buffering*/
             mPlay_ctl.auto_buffing_enable = 1;
         }
         LOGV("setDataSource enable buffering\n");
