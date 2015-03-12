@@ -494,6 +494,10 @@ retry:
                 //LOGI("--------------read video failed error (%d)\n", err);
                 if (err == INFO_FORMAT_CHANGED || err == WOULD_BLOCK) {
                   //  LOGV("fmt changed info ignored and retry \n");
+                    if (url_interrupt_cb()) {
+                        LOGE("[drm read_packet] interrupt return -EIO\n");
+                        return AVERROR(EIO);
+                    }
                     goto retry;
                 } else if (err == ERROR_IO) {
                     usleep(300000);
@@ -632,6 +636,10 @@ retry:
                    // LOGI("read audio  ed error (%d)\n", err);
                     if (err == INFO_FORMAT_CHANGED || err == WOULD_BLOCK) {
                        // LOGV("fmt changed info ignored and retry \n");
+                        if (url_interrupt_cb()) {
+                            LOGE("[drm read_packet] interrupt return -EIO\n");
+                            return AVERROR(EIO);
+                        }
                         goto retry;
                     } else if (err == ERROR_IO) {
                         usleep(300000);
