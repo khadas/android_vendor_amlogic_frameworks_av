@@ -662,86 +662,86 @@ int AmSuperPlayer::match_codecs(const char *filefmtstr,const char *fmtsetting)
 
 player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
 {
-	int ret;
-	char value[PROPERTY_VALUE_MAX];
-	bool amplayer_enabed=PropIsEnable("media.amplayer.enable");
-	if(NULL!=mHardPara){
-		if(match_codecs(type,mHardPara)){
-			LOGV("%s type will use hard-decoder,force-list:%s\n",type,mHardPara);
-			return AMLOGIC_PLAYER;
-		}
-	}
-	if(NULL!=mSoftPara&&match_codecs(type,mSoftPara)){
-		LOGV("%s type will use soft-decoder,force-list:%s\n",type,mSoftPara);
-		if(match_codecs(type,"midi,mmf,mdi")){			
-			return SONIVOX_PLAYER;
-		}else {
-			return STAGEFRIGHT_PLAYER;
-		}
-	}
-	if(amplayer_enabed && type!=NULL)
-	{
-		bool audio_all,no_audiofile;
-		//if(audios==0 && videos==0){
-			/*parser get type but have not finised get videos and audios*/
-			if(match_codecs(type,"mpeg,mpegts,rtsp")  /*some can't parser stream info in header parser*/
-				&& !strstr(type, "hevc"))   /* hevc/h.265 in ts format not support by libplayer now */
-			        return AMLOGIC_PLAYER;
-		//}
-		if (PropIsEnable("media.amplayer.widevineenable") && match_codecs(type, "drm,DRM,DRMdemux"))
-			return AMLOGIC_PLAYER;	/* 	if DRM allways goto AMLOGIC_PLAYER	*/
-		else if (match_codecs(type, "Demux_no_prot")) {
-		    return AMLOGIC_PLAYER;  //for SS
-		}
-		if (match_codecs(type, "webm,vp8,vp6,hevc,rmsoft,wmv2")) {
-			if(match_codecs(type, "hevcHW")) {
-			    goto PASS_THROUGH;
-			}
-			if(match_codecs(type, "hevc")) {
-				isHEVC = true;
-			}
-			if (isHEVC && url_valid && (!strncasecmp("http://", muri, 7)
-			    || !strncasecmp("https://", muri, 8))) { //if m3u8 file, only NU_Player can handle.
-				size_t len = strlen(muri);
-				if (len >= 5 && !strcasecmp(".m3u8", &muri[len - 5])) {
-				return NU_PLAYER;
-				}
+    int ret;
+    char value[PROPERTY_VALUE_MAX];
+    bool amplayer_enabed=PropIsEnable("media.amplayer.enable");
+    if (NULL != mHardPara) {
+        if (match_codecs(type,mHardPara)) {
+            LOGV("%s type will use hard-decoder,force-list:%s\n",type,mHardPara);
+            return AMLOGIC_PLAYER;
+        }
+    }
+    if (NULL != mSoftPara && match_codecs(type,mSoftPara)) {
+        LOGV("%s type will use soft-decoder,force-list:%s\n",type,mSoftPara);
+        if (match_codecs(type,"midi,mmf,mdi")) {
+            return SONIVOX_PLAYER;
+        } else {
+            return STAGEFRIGHT_PLAYER;
+        }
+    }
+    if (amplayer_enabed && type != NULL)
+    {
+        bool audio_all,no_audiofile;
+        //if(audios == 0 && videos == 0){
+        /*parser get type but have not finised get videos and audios*/
+        if (match_codecs(type,"mpeg,mpegts,rtsp")  /*some can't parser stream info in header parser*/
+                    && !strstr(type, "hevc"))   /* hevc/h.265 in ts format not support by libplayer now */
+            return AMLOGIC_PLAYER;
+        //}
+        if (PropIsEnable("media.amplayer.widevineenable") && match_codecs(type, "drm,DRM,DRMdemux"))
+            return AMLOGIC_PLAYER;	/* 	if DRM allways goto AMLOGIC_PLAYER	*/
+        else if (match_codecs(type, "Demux_no_prot")) {
+            return AMLOGIC_PLAYER;  //for SS
+        } else if (!strcmp(type, "asf-pr"))
+            return AMLOGIC_PLAYER;
+        if (match_codecs(type, "webm,vp8,vp6,hevc,rmsoft,wmv2")) {
+            if (match_codecs(type, "hevcHW")) {
+                goto PASS_THROUGH;
+            }
+            if (match_codecs(type, "hevc")) {
+                isHEVC = true;
+            }
+            if (isHEVC && url_valid && (!strncasecmp("http://", muri, 7)
+                        || !strncasecmp("https://", muri, 8))) { //if m3u8 file, only NU_Player can handle.
+                size_t len = strlen(muri);
+                if (len >= 5 && !strcasecmp(".m3u8", &muri[len - 5])) {
+                    return NU_PLAYER;
+                }
 
-				if (strstr(muri,"m3u8")) {
-				return NU_PLAYER;
-				}
-			}
-			return STAGEFRIGHT_PLAYER;
-		}
+                if (strstr(muri,"m3u8")) {
+                    return NU_PLAYER;
+                }
+            }
+            return STAGEFRIGHT_PLAYER;
+        }
 PASS_THROUGH:
-		if(videos>0)
-			return AMLOGIC_PLAYER;
-		audio_all=PropIsEnable("media.amplayer.audio-all");
-		if(audios>0 && audio_all )
-			return AMLOGIC_PLAYER;
+        if (videos>0)
+            return AMLOGIC_PLAYER;
+        audio_all=PropIsEnable("media.amplayer.audio-all");
+        if (audios>0 && audio_all )
+            return AMLOGIC_PLAYER;
 
+        ret=property_get("media.amplayer.enable-acodecs",value,NULL);
+        if (ret>0 && (match_codecs(type,value)|| (!match_codecs(type,"ogg") && url_valid && IS_LOCAL_HTTP(muri)))) {
+            /*some local http(127.0.0.1) dont support switch http clinet,use old AmlogicPlayer*/
+            return AMLOGIC_PLAYER;
+        }
 
-		ret=property_get("media.amplayer.enable-acodecs",value,NULL);
-		if(ret>0 && (match_codecs(type,value)|| (!match_codecs(type,"ogg") && url_valid && IS_LOCAL_HTTP(muri)))){
-			/*some local http(127.0.0.1) dont support switch http clinet,use old AmlogicPlayer*/
-			return AMLOGIC_PLAYER;
-		}		
-			
-	}
+    }
 
-	if(match_codecs(type,"midi,mmf,mdi"))
-		return SONIVOX_PLAYER;
-	
-	if(match_codecs(type,"m4a")) {
-		ret=property_get("media.amsuperplayer.m4aplayer",value,NULL);
-		if (ret>0) {
-			LOGI("media.amsuperplayer.m4aplayer=%s\n",value);
-			return AmSuperPlayer::Str2PlayerType(value);
-		}
-	}
+    if (match_codecs(type,"midi,mmf,mdi"))
+        return SONIVOX_PLAYER;
+
+    if (match_codecs(type,"m4a")) {
+        ret=property_get("media.amsuperplayer.m4aplayer",value,NULL);
+        if (ret>0) {
+            LOGI("media.amsuperplayer.m4aplayer=%s\n",value);
+            return AmSuperPlayer::Str2PlayerType(value);
+        }
+    }
     // if mp2, return AMLogic Player
 #if 0
-    if(match_codecs(type,"mp2")){
+    if (match_codecs(type,"mp2")) {
       LOGI("[%s, %d]:This is MP3 LAYER 2!!!\n", __func__, __LINE__);
       return AMLOGIC_PLAYER;
     }
@@ -751,8 +751,6 @@ PASS_THROUGH:
     }
 
     return STAGEFRIGHT_PLAYER;
-    
-
 }
 
 static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
