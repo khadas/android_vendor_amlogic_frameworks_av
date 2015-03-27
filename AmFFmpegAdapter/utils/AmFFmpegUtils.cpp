@@ -125,7 +125,7 @@ AVInputFormat *probeFormat(const sp<DataSource> &source) {
         //       instead of having a loop here.
         AVProbeData probe_data;
         probe_data.filename = kDummyFileName;
-        probe_data.buf = new unsigned char[bufSize];
+        probe_data.buf = new unsigned char[bufSize+FF_INPUT_BUFFER_PADDING_SIZE];
         //probe_data.s = NULL;
         if (NULL == probe_data.buf) {
             ALOGE("failed to allocate memory for probing file format.");
