@@ -3249,18 +3249,18 @@ int AmlogicPlayer::set_cur_dispmode(int mode)
         case 0:
             property_set(prop_3d,"0");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3doff");
-            ///SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
+            SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
             break;
         case 1:
             property_set(prop_3d,"1");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3dlr");
-            ///SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
+            SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
             LOGV("set display mode, set 3dlr \n");
             break;
         case 2:
             property_set(prop_3d,"2");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3dtb");
-           /// SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
+            SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
             LOGV("set display mode, set 3dtb \n");
             break;
         default:
