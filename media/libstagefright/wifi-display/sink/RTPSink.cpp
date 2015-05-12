@@ -307,6 +307,12 @@ namespace android
         {
             mNetSession->destroySession(mRTPSessionID);
         }
+
+        if (mRenderer != NULL)
+        {
+            looper()->unregisterHandler(mRenderer->id());
+            mRenderer.clear();
+        }
     }
 
     status_t RTPSink::init(bool useTCPInterleaving)

@@ -316,9 +316,9 @@ namespace android
             {
                 float  noPacketTime = (ALooper::GetNowUs() - mFirstFailedAttemptUs) / 1E6;
                 ALOGV("no packets available for %.2f secs", noPacketTime);
-                if (noPacketTime > 6.0) //beyond 6S
+                if (noPacketTime > 12.0) //beyond 12S
                 {
-                    ALOGI("no packets available beyond 10 secs,stop WifiDisplaySink now");
+                    ALOGI("no packets available beyond 12 secs,stop WifiDisplaySink now");
                     sp<AMessage> notify = mStopNotify->dup();
                     notify->post();
                     mFirstFailedAttemptUs = ALooper::GetNowUs();
@@ -528,6 +528,7 @@ namespace android
         mSystemControlService->setProperty(String16("media.libplayer.fastswitch"), String16("2"));
         if (mIsHDCP)
         {
+            ALOGI("HDCP Enabled!!!");
             Parcel data;
             data.writeInt32(1);
             mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
