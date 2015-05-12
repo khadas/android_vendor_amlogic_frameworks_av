@@ -76,6 +76,22 @@ public:
                                int64_t offset,
                                int64_t /*length*/,
                                float /*curScore*/) {
+        char buf[32];
+        lseek(fd, offset, SEEK_SET);
+        read(fd, buf, sizeof(buf));
+        lseek(fd, offset, SEEK_SET);
+        long ident = *((long*)buf);
+        /* Ogg vorbis?
+         * ogm header syntax:
+         * number_page_segments:1 byte -----> buf[28]
+         * egment_table : buf[29] .....
+         * We  just use partial  of header info to check if it is a music file
+         */
+        if (ident == 0x5367674f) {
+            if ((buf[28] == 1)&&  (!(((buf[29] == 'v') && (buf[30] == 'i') && (buf[31] == 'd' ))  || buf[29] == 't'))) {
+                return 0.0;  //ogg
+            }
+        }
         return 0.9;
     }
 
