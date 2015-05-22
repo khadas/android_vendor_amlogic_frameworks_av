@@ -56,7 +56,7 @@ AmAudioCodec::~AmAudioCodec()
 
 int32_t AmAudioCodec::audio_decode_init(const char * codecMime, AUDIO_INFO_T *ainfo)
 {
-    AVCodecID id = static_cast<AVCodecID>(convertMimeTypetoCodecId(codecMime));
+    AVCodecID id = static_cast<AVCodecID>(ainfo->codec_id);
     mCodec = avcodec_find_decoder(id);
     Trace("audio:codec name: %s\n", mCodec->name);
     if(!mCodec) {
