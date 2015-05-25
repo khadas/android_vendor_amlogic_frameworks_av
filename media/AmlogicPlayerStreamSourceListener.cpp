@@ -61,6 +61,11 @@ void AmlogicPlayerStreamSourceListener::start()
 	mOnWaitData = false;
 }
 
+void AmlogicPlayerStreamSourceListener::stop()
+{
+	mSource.clear();
+}
+
 void AmlogicPlayerStreamSourceListener::queueBuffer(size_t index, size_t size)
 {
     QueueEntry entry;

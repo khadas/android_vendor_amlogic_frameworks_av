@@ -290,6 +290,7 @@ int AmlogicPlayerStreamSource::Source_close()
     dumpfd = -1;
     mStreamListener.clear();
 #endif
+    mStreamListener->stop();
     return 0;
 }
 

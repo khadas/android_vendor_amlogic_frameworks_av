@@ -38,6 +38,7 @@ struct  AmlogicPlayerStreamSourceListener : public BnStreamListener {
         Command cmd, bool synchronous, const sp<AMessage> &extra);
 
     void start();
+    void stop();
     ssize_t read(void *data, size_t size, sp<AMessage> *extra,int blockMode);
 
 private:

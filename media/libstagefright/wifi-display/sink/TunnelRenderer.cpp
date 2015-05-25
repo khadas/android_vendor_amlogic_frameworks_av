@@ -46,7 +46,10 @@ namespace android
         }
 
     protected:
-        virtual ~PlayerClient() {}
+        virtual ~PlayerClient()
+        {
+            ALOGI("~PlayerClient");
+        }
 
     private:
         DISALLOW_EVIL_CONSTRUCTORS(PlayerClient);
@@ -93,6 +96,7 @@ namespace android
 
     TunnelRenderer::StreamSource::~StreamSource()
     {
+        ALOGI("~StreamSource");
     }
 
     void TunnelRenderer::StreamSource::setListener(
@@ -550,6 +554,7 @@ namespace android
         mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_ENA_AUTO_BUFFER, request);
         request.writeString16(String16("freerun_mode:0"));
         mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_FREERUN_MODE, request);
+        mPlayerClient.clear();
         mStreamSource.clear();
         if (mIsHDCP)
         {
