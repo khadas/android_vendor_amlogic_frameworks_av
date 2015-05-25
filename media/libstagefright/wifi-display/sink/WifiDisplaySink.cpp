@@ -49,6 +49,7 @@ namespace android
           mNetSession(netSession),
           mBufferProducer(bufferProducer),
           mSessionID(0),
+          mHDCPRunning(false),
           mUsingHDCP(false),
           mNeedHDCP(false),
           mNextCSeq(1),
@@ -281,6 +282,7 @@ namespace android
                     ALOGI("Lost control connection.");
 
                     // The control connection is dead now.
+#if 0
                     mNetSession->destroySession(mSessionID);
                     mSessionID = 0;
 
@@ -289,12 +291,14 @@ namespace android
                         looper()->unregisterHandler(mRTPSink->id());
                         mRTPSink.clear();
                     }
-
+#endif
                     ALOGI("Quiting WifiDisplaySink.");
                     if (err == -111)  	//"Connection refused"
                     {
                         if (mConnectionRetry++ < MAX_CONN_RETRY)
                         {
+                            mNetSession->destroySession(mSessionID);
+                            mSessionID = 0;
                             ALOGI("Retry rtsp connection %d", mConnectionRetry);
                             retryStart(100000ll);	//delay 100ms
                         }
@@ -308,8 +312,9 @@ namespace android
                     }
                     else if(err == -104)    //connection reset by peer
                     {
-                        sp<AMessage> msg = new AMessage(kWhatNoPacket, id());
-                        ALOGI("post msg kWhatNoPacket - connection reset by peer");
+                        sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                        ALOGI("post msg kWhatSinkNotify - connection reset by peer");
+                        msg->setString("reason", "RTSP_RESET");
                         msg->post();
                     }
                     //looper()->stop();
@@ -426,9 +431,9 @@ namespace android
                 mRTPSink.clear();
             }
 
-            if (mHDCP != NULL && mHDCPRunning == true)
-            {
+            if (mHDCP != NULL /*&& mHDCPRunning == true*/) {
                 mHDCPLock.lock();
+                mHDCPRunning = true;
                 ALOGI("kWhatStop: Initiating HDCP shutdown.");
                 mHDCP->shutdownAsyncRx();
             }
@@ -439,16 +444,6 @@ namespace android
         }
         case kWhatNoPacket:
         {
-            if (mSessionID != 0)
-            {
-                mNetSession->destroySession(mSessionID);
-                mSessionID = 0;
-            }
-            if (mRTPSink != NULL)
-            {
-                looper()->unregisterHandler(mRTPSink->id());
-                mRTPSink.clear();
-            }
             sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
             ALOGI("post msg kWhatSinkNotify - RTP no packets");
             msg->setString("reason", "RTP_NO_PACKET");
@@ -674,6 +669,33 @@ namespace android
         return OK;
     }
 
+    status_t WifiDisplaySink::onReceiveTeardownResponse(
+            int32_t sessionID, const sp<ParsedMessage> &msg)
+    {
+        int32_t statusCode;
+
+        ALOGI("%s", __FUNCTION__);
+
+        if (!msg->getStatusCode(&statusCode))
+        {
+            return ERROR_MALFORMED;
+        }
+
+        if (statusCode != 200)
+        {
+            return ERROR_UNSUPPORTED;
+        }
+
+        sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mHandlerId);
+        ALOGI("post msg kWhatSinkNotify - received msg teardown Response");
+        msg1->setString("reason", "RTSP_TEARDOWN");
+        msg1->post();
+
+        mState = UNDEFINED;
+
+        return OK;
+    }
+
     void WifiDisplaySink::onReceiveClientData(const sp<AMessage> &msg)
     {
         int32_t sessionID;
@@ -807,26 +829,43 @@ namespace android
         char prop[PROPERTY_VALUE_MAX];
         int ret = property_get("persist.miracast.hdcp2", prop, "false");
         status_t err;
-        mHDCPLock.lock();
+        ALOGI("prepareHDCP==>");
+        while (1)
+        {
+            if (!mHDCPRunning)
+            {
+                ALOGI("prepareHDCP1==>");
+                mHDCPLock.lock();
+                break;
+            }
+            else
+            {
+                ALOGI("prepareHDCP2==>");
+                sleep(2);
+            }
+        }
+        ALOGI("prepareHDCP lock");
         if (!strcmp(prop, "true"))
         {
             if (mHDCP == 0)
             {
-                mHDCPPort++;
-                err = makeHDCP();
-                mUsingHDCP = true;
-                mHDCPRunning = false;
-                if (err != OK)
                 {
-                    ALOGE("Unable to instantiate HDCP component. "
-                          "Not using HDCP after all.");
-                    mUsingHDCP = false;
+                    mHDCPPort++;
+                    err = makeHDCP();
+                    mUsingHDCP = true;
+                    mHDCPRunning = false;
+                    if (err != OK)
+                    {
+                        ALOGE("Unable to instantiate HDCP component. "
+                              "Not using HDCP after all.");
+                        mUsingHDCP = false;
+                    }
                 }
             }
-        }
-        else
-        {
-            mUsingHDCP = false;
+            else
+            {
+                mUsingHDCP = false;
+            }
         }
         mHDCPLock.unlock();
     }
@@ -899,8 +938,8 @@ namespace android
             snprintf(body + strlen(body), sizeof(body) - strlen(body),
                      "wfd_uibc_capability: input_category_list=GENERIC;generic_cap_list=Keyboard, Mouse, SingleTouch;hidc_cap_list=none;port=none\r\n");
 
-        if (mNeedStandbyResumeCapability)
-            snprintf(body + strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: supported\r\n");
+        //if(mNeedStandbyResumeCapability)
+            //snprintf(body+ strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: supported\r\n");
 
 
         AString response = "RTSP/1.0 200 OK\r\n";
@@ -1028,6 +1067,32 @@ namespace android
         return OK;
     }
 
+    status_t WifiDisplaySink::sendTeardown(int32_t sessionID, const char *uri)
+    {
+        AString request = StringPrintf("TEARDOWN %s RTSP/1.0\r\n", uri);
+        AppendCommonResponse(&request, mNextCSeq);
+        request.append("\r\n");
+
+        ALOGI("\nSend Request:\n%s", request.c_str());
+
+        status_t err = mNetSession->sendRequest(
+                sessionID, request.c_str(), request.size());
+
+        if (err != OK)
+        {
+            return err;
+        }
+
+        ALOGI("registerResponseHandler:id = %d, onReceiveTeardownResponse", mNextCSeq);
+
+        registerResponseHandler(
+                sessionID, mNextCSeq, &WifiDisplaySink::onReceiveTeardownResponse);
+
+        ++mNextCSeq;
+
+        return OK;
+    }
+
     void WifiDisplaySink::onSetParameterRequest(
         int32_t sessionID,
         int32_t cseq,
@@ -1043,11 +1108,16 @@ namespace android
         status_t err = mNetSession->sendRequest(sessionID, response.c_str());
         CHECK_EQ(err, (status_t)OK);
 
-        if (strstr(content, "wfd_trigger_method: SETUP\r\n") != NULL)
-        {
+        if (strstr(content, "wfd_trigger_method: SETUP\r\n") != NULL) {
             AString url = StringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
             status_t err = sendSetup( sessionID, url.c_str());
 
+            CHECK_EQ(err, (status_t)OK);
+        }
+        else if (strstr(content, "wfd_trigger_method: TEARDOWN\r\n") != NULL)
+        {
+            AString url = StringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+            status_t err = sendTeardown(sessionID, url.c_str());
             CHECK_EQ(err, (status_t)OK);
         }
     }

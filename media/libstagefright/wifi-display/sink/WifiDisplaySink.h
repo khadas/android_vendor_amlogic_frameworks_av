@@ -150,6 +150,7 @@ namespace android
         status_t sendDescribe(int32_t sessionID, const char *uri);
         status_t sendSetup(int32_t sessionID, const char *uri);
         status_t sendPlay(int32_t sessionID, const char *uri);
+        status_t sendTeardown(int32_t sessionID, const char *uri);
 
         status_t onReceiveM2Response(
             int32_t sessionID, const sp<ParsedMessage> &msg);
@@ -163,7 +164,10 @@ namespace android
         status_t configureTransport(const sp<ParsedMessage> &msg);
 
         status_t onReceivePlayResponse(
-            int32_t sessionID, const sp<ParsedMessage> &msg);
+                int32_t sessionID, const sp<ParsedMessage> &msg);
+
+        status_t onReceiveTeardownResponse(
+                int32_t sessionID, const sp<ParsedMessage> &msg);
 
         void registerResponseHandler(
             int32_t sessionID, int32_t cseq, HandleRTSPResponseFunc func);
