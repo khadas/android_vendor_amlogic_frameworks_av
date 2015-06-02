@@ -387,7 +387,7 @@ namespace android
             return NULL;
         }
 
-        if (mFirstFailedAttemptUs + 50000ll > ALooper::GetNowUs())
+        if (mFirstFailedAttemptUs + 10000ll > ALooper::GetNowUs())
         {
             // We're willing to wait a little while to get the right packet.
 
@@ -563,7 +563,7 @@ namespace android
             mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
         }
         mSystemControlService->setProperty(String16("media.libplayer.wfd"), String16("0"));
-        mSystemControlService->setProperty(String16("media.libplayer.fastswitch"), String16("0"));
+        mSystemControlService->setProperty(String16("media.libplayer.fastswitch"), String16(""));
         mPlayer->stop();
         mPlayer.clear();
 
