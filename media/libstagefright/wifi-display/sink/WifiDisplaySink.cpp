@@ -59,7 +59,7 @@ namespace android
     {
         srand(time(0));
         mHDCPPort = 9000 + rand() % 100;
-        setResolution(Normal);
+        setResolution(High);
     }
 
     WifiDisplaySink::~WifiDisplaySink()
