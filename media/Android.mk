@@ -102,6 +102,8 @@ endif
 
 LOCAL_MODULE:= libmedia_amlogic
 
+LOCAL_32_BIT_ONLY := true
+
 include $(BUILD_SHARED_LIBRARY)
 
 include $(call all-makefiles-under,$(LOCAL_PATH))
