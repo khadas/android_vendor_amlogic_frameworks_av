@@ -48,6 +48,7 @@ typedef struct AUDIO_INFO{
     int32_t samplerate;
     int32_t bitspersample;
     int32_t blockalign;
+    int32_t codec_id;
     int32_t extradata_size;
     uint8_t extradata[16384]; 
 } AUDIO_INFO_T;

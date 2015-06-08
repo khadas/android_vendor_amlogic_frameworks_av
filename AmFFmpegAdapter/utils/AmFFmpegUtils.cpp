@@ -111,7 +111,7 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_AUDIO_TRUEHD, AV_CODEC_ID_TRUEHD},        
     { MEDIA_MIMETYPE_TEXT_3GPP, AV_CODEC_ID_MOV_TEXT },
     { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_COOK },
-    { MEDIA_MIMETYPE_AUDIO_FLAC, AV_CODEC_ID_FLAC },
+    { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_FLAC },
 };
 
 static const size_t kNumEntries = NELEM(kKeyMap);
@@ -343,7 +343,7 @@ void addESDSFromCodecPrivate(
     };
 
     // Make sure all sizes can be coded in a single byte.
-    CHECK(privSize + 22 - 2 < 128);
+    if (privSize + 22 - 2 < 128) {
     size_t esdsSize = sizeof(kStaticESDS) + privSize + 1;
     uint8_t *esds = new uint8_t[esdsSize];
     memcpy(esds, kStaticESDS, sizeof(kStaticESDS));
@@ -364,6 +364,7 @@ void addESDSFromCodecPrivate(
 
     delete[] esds;
     esds = NULL;
+    }
 }
 
 // extract vps/sps/pps from input packet.
