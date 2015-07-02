@@ -248,6 +248,7 @@ status_t AmlogicPlayerRender::NativeWindowInit(void)
     } else {
         native_window_set_usage(mNativeWindow.get(), GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP  | GRALLOC_USAGE_AML_VIDEO_OVERLAY);
         native_window_set_buffers_format(mNativeWindow.get(), WINDOW_FORMAT_RGBA_8888);
+		mWindowChanged = 3;
     }
     setVideoScalingMode_locked(mVideoScalingMode);
     return OK;
