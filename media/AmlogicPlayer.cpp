@@ -604,6 +604,13 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     const char *uri, const KeyedVector<String8, String8> *headers)
 {
     LOGV("setDataSource");
+
+    if (!strncmp(uri, "tvin:", strlen("tvin:"))) {
+        setdatasource(uri, -1, 0, 0x7ffffffffffffffLL, headers);
+        sendEvent(MEDIA_PREPARED);
+        return NO_ERROR;
+    }
+
     if (IsManifestUrl(uri)) {
         // SmoothStreaming source detected.
         setdatasource(uri, -1, 0, 0x7ffffffffffffffLL, headers);
@@ -1310,6 +1317,9 @@ status_t AmlogicPlayer::prepareAsync()
     float buftime = PropGetFloat("media.amplayer.buffertime",5);
     float delaybuffering = (int)PropGetFloat("media.amplayer.delaybuffering");
     LOGV("prepareAsync\n");
+    if (!strncasecmp("tvin:", mPlay_ctl.file_name, 5)) {
+        return NO_ERROR;
+    }
     mPlay_ctl.callback_fn.notify_fn = notifyhandle;
     mPlay_ctl.callback_fn.update_interval = 1000;
     mPlay_ctl.audio_index = -1;

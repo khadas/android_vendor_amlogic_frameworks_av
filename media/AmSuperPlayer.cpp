@@ -862,11 +862,16 @@ Retry:
 		tmprequest.writeInt32(INVOKE_ID_SET_VIDEO_SCALING_MODE);
 		tmprequest.writeInt32(mVideoScalingMode);
 		tmprequest.setDataPosition(0);
-		p->invoke(tmprequest,&reply);	
+		p->invoke(tmprequest,&reply);
 	}
 	p->prepareAsync();
+
+	if (muri != NULL && !strncasecmp("tvin:", muri, 5)) {
+	    mTypeReady = true;
+	}
+
 	if(!mTypeReady && p->playerType()==AMLOGIC_PLAYER){
-		AmlogicPlayer* amplayer; 
+		AmlogicPlayer* amplayer;
 		bool FileTypeReady=false;
 		amplayer=(AmlogicPlayer *)p.get();
 		while(!mTypeReady)
