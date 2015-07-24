@@ -699,6 +699,50 @@ uint32_t AmFFmpegExtractor::flags() const {
 AmFFmpegExtractor::SourceInfo::SourceInfo()
     : mIsActive(false) { }
 
+int get_codec_id(const sp<DataSource> &source, AVInputFormat *inputFormat){
+
+    int ret = -1;
+    sp<AmFFmpegByteIOAdapter> adapter = new AmFFmpegByteIOAdapter();
+    AVFormatContext* context = avformat_alloc_context();
+
+    if (adapter == NULL || context == NULL) {
+        ALOGE("Failed to allocate AVFormatContext or new AmFFmpegByteIOAdapter.");
+        return ret;
+    }
+
+    adapter->init(source);
+    context->pb = adapter->getContext();
+    int res = avformat_open_input(
+            &context,
+            "dummy_file_name",  // need to pass a filename
+            inputFormat,  // probe the container format.
+            NULL);  // no special parameters
+    if (res < 0) {
+        ALOGE("Failed to open the input stream.");
+        avformat_free_context(context);
+       return ret;
+    }
+
+    int hasvideo = 0;
+    int hasaudio = 0;
+    for (uint32_t i = 0; i < context->nb_streams; i++) {
+        if (context->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+           hasvideo ++;
+        }else if(context->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+           if (context->streams[i]->codec->codec_id == AV_CODEC_ID_PCM_S16LE) {
+               hasaudio ++;
+            }
+        }
+    }
+
+    if (hasvideo == 0 && hasaudio == context->nb_streams) {
+        ret = 1;
+    }
+
+    avformat_free_context(context);
+    adapter.clear();
+    return ret;
+}
 bool SniffAmFFmpeg(
         const sp<DataSource> &source, String8 *mimeType, float *confidence,
         sp<AMessage> *) {
@@ -707,6 +751,12 @@ bool SniffAmFFmpeg(
     if (NULL != inputFormat) {
         const char *mimeDetected = convertInputFormatToMimeType(inputFormat);
         if (NULL != mimeDetected) {
+            if (!strcmp(mimeDetected,MEDIA_MIMETYPE_CONTAINER_MATROSKA)) {
+                if (get_codec_id(source, inputFormat) == 1) {
+                    ALOGI("using MatroskaExtractor\n");
+                    return false;
+                }
+            }
             *mimeType = mimeDetected;
             // only available when stagefright not support
             *confidence = 0.05f;
