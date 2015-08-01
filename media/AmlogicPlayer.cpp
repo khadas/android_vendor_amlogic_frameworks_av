@@ -1005,7 +1005,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         LOGV("Player status:%s, playback complete", player_status2str(info->status));
         if (mHttpWV == false) {
             if (!mEnded) {
-                //sendEvent(MEDIA_PLAYBACK_COMPLETE);
+                sendEvent(MEDIA_PLAYBACK_COMPLETE);
             }
         }
         if (info->current_ms >= 100) {
