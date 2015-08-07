@@ -243,6 +243,7 @@ private:
     float mHWvideobuflevel;
     int mVideoScalingMode;
     bool isHTTPSource;
+    bool isDvbTvinSource;
     char CallingAPkName[64];
     //for new start mode
     wp<MediaPlayerBase> mListener;

@@ -180,6 +180,7 @@ AmlogicPlayer::AmlogicPlayer() :
     mHWaudiobuflevel = 0;
     mHWvideobuflevel = 0;
     isHTTPSource = false;
+    isDvbTvinSource = false;
     mStreamTimeExtAddS = PropGetFloat("media.amplayer.streamtimeadd");
     if (mStreamTimeExtAddS <= 0) {
         mStreamTimeExtAddS = 10000;
@@ -606,6 +607,7 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     LOGV("setDataSource");
 
     if (!strncmp(uri, "tvin:", strlen("tvin:"))) {
+        isDvbTvinSource = true;
         setdatasource(uri, -1, 0, 0x7ffffffffffffffLL, headers);
         sendEvent(MEDIA_PREPARED);
         return NO_ERROR;
@@ -2443,7 +2445,7 @@ status_t AmlogicPlayer::initVideoSurface(void)
             }
         }
         LOGI("AmlogicPlayerRender,needosdvideo=%d,isHTTPSource=%d", needosdvideo, isHTTPSource);
-        mPlayerRender = new AmlogicPlayerRender(mNativeWindow, needosdvideo);
+        mPlayerRender = new AmlogicPlayerRender(mNativeWindow, needosdvideo|(isDvbTvinSource<<1));
         mPlayerRender->setVideoScalingMode(mVideoScalingMode);
         mPlayerRender->onSizeChanged(curLayout, Rect(mWidth, mHeight));
         if (video_rotation_degree == 1 || video_rotation_degree == 3) {

@@ -283,16 +283,20 @@ status_t AmlogicPlayerRender::OSDVideoInit(void)
 void AmlogicPlayerRender::onFirstRef()
 {
     TRACE();
-	LOGI("AmlogicPlayerRender::onFirstRef");
-    Mutex::Autolock l(mMutex);
-	mAmstreamCanBeOpened = false;
-	int handle = open("/dev/amstream_vbuf", O_RDWR | O_NONBLOCK);
-    if (handle < 0) {
-        LOGE("amstream_vbuf opend failed!***********************");
+    LOGI("AmlogicPlayerRender::onFirstRef,mFlags=%d",mFlags);
+    if (mFlags & 2 == 0) {
+        Mutex::Autolock l(mMutex);
+        mAmstreamCanBeOpened = false;
+        int handle = open("/dev/amstream_vbuf", O_RDWR | O_NONBLOCK);
+        if (handle < 0) {
+            LOGE("amstream_vbuf opend failed!***********************");
+        } else {
+            int ret = close(handle);
+            mAmstreamCanBeOpened = true;
+            LOGI("onFirstRef___________amstream_vbuf_______OK");
+        }
     } else {
-        int ret = close(handle);
-		mAmstreamCanBeOpened = true;
-        LOGI("onFirstRef___________amstream_vbuf_______OK");
+        mAmstreamCanBeOpened = true;
     }
     if (mFlags & 1 &&
         AmlogicPlayer::PropIsEnable("media.amplayer.v4osd.enable", true) &&
