@@ -109,7 +109,7 @@ public:
 private:
     typedef struct ScreenMediaSourceClient_S{
         int32_t width;
-		    int32_t height;
+        int32_t height;
         int32_t framerate;
         bool isPrimateClient;
         SCREENMEDIASOURCEDATATYPE data_type;
@@ -117,7 +117,7 @@ private:
     }ScreenMediaSourceClient;
 
     typedef struct FrameBufferInfo_s{
-        void* buf_ptr;
+        long* buf_ptr;
         unsigned canvas;
         int64_t timestampUs;
     }FrameBufferInfo;

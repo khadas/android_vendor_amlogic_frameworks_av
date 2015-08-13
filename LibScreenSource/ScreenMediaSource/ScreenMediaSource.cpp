@@ -433,7 +433,7 @@ status_t ScreenMediaSource::readBuffer(int32_t client_id, sp<IMemory> buffer, in
 {
     Mutex::Autolock autoLock(mLock);
 
-    unsigned buff_info[3] = {0,0,0};
+    long buff_info[3] = {0,0,0};
     int ret = 0;
     int count = 0;
     FrameBufferInfo* frame = NULL;
@@ -458,8 +458,8 @@ status_t ScreenMediaSource::readBuffer(int32_t client_id, sp<IMemory> buffer, in
         //ALOGE("ptr:%x canvas:%d", frame->buf_ptr, frame->canvas);
 
         buff_info[0] = kMetadataBufferTypeCanvasSource;
-        buff_info[1] = (unsigned)frame->buf_ptr;
-        buff_info[2] = (unsigned)frame->canvas;
+        buff_info[1] = (long)frame->buf_ptr;
+        buff_info[2] = (long)frame->canvas;
         memcpy((uint8_t *)buffer->pointer(), &buff_info[0],sizeof(buff_info));
 
         *pts = frame->timestampUs;
@@ -504,11 +504,11 @@ status_t ScreenMediaSource::freeBuffer(int32_t client_id, sp<IMemory>buffer) {
     source_data_type = client->data_type;
 
     if (SCREENMEDIASOURC_CANVAS_TYPE == source_data_type) {
-        unsigned buff_info[3] = {0,0,0};
+        long buff_info[3] = {0,0,0};
         memcpy(&buff_info[0],(uint8_t *)buffer->pointer(), sizeof(buff_info));
 
         if (mScreenDev)
-            mScreenDev->ops.release_buffer(mScreenDev, (int *)buff_info[1]);
+            mScreenDev->ops.release_buffer(mScreenDev, (long *)buff_info[1]);
         }
 
     ++mNumFramesEncoded;
@@ -518,7 +518,7 @@ status_t ScreenMediaSource::freeBuffer(int32_t client_id, sp<IMemory>buffer) {
 
 int ScreenMediaSource::dataCallBack(aml_screen_buffer_info_t *buffer){
     int ret = NO_ERROR;
-    int buff_info[3] = {0,0,0};
+    long buff_info[3] = {0,0,0};
     int status = OK;
     ANativeWindowBuffer* buf;
     void *src = NULL;
@@ -611,7 +611,7 @@ int ScreenMediaSource::dataCallBack(aml_screen_buffer_info_t *buffer){
                     client = mClientList.valueAt(i);
                     if (client->data_type == SCREENMEDIASOURC_CANVAS_TYPE) {
                         buff_info[0] = kMetadataBufferTypeCanvasSource;
-                        buff_info[1] = (int)buffer->buffer_mem;
+                        buff_info[1] = (long)buffer->buffer_mem;
                         buff_info[2] = buffer->buffer_canvas;
 
                         if (mBufferGet == NULL)
