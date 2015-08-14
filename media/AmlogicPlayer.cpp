@@ -1006,7 +1006,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
     } else if (info->status == PLAYER_STOPED || info->status == PLAYER_PLAYEND) {
         LOGV("Player status:%s, playback complete", player_status2str(info->status));
         if (mHttpWV == false) {
-            if (!mEnded) {
+            if ((!mEnded) && (info->status == PLAYER_PLAYEND)) {
                 sendEvent(MEDIA_PLAYBACK_COMPLETE);
             }
         }
@@ -1022,7 +1022,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         mRunning = false;
         if (mHttpWV == false) {
             if (!mLoop && (mState != STATE_ERROR) && (!mEnded)) { //no errors & no loop^M
-                sendEvent(MEDIA_PLAYBACK_COMPLETE);
+                //sendEvent(MEDIA_PLAYBACK_COMPLETE);
             }
         }
         mPaused=true;
