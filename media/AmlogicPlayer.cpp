@@ -1481,11 +1481,13 @@ status_t AmlogicPlayer::seekTo(int position)
         /*cancel seek*/
         return NO_ERROR;
     }
-#if 0
-    if (position < mPlayTime + 1000 && position >= mPlayTime - 1000) {
+
+    if (position < mPlayTime + 10 && position >= mPlayTime - 10) {
         sendEvent(MEDIA_SEEK_COMPLETE);
-        return NO_ERROR;/**/
+        return NO_ERROR;/*ignore the same same time seek.*/
     }
+#if 0
+
     int time = position / 1000;
     LOGV("seekTo:%d\n", position);
     player_timesearch(mPlayer_id, time);
