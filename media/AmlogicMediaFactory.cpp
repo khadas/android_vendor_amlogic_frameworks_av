@@ -20,6 +20,7 @@
 #include <media/stagefright/foundation/ADebug.h>
 #include <utils/Errors.h>
 #include <utils/misc.h>
+#include <libsonivox/eas.h>
 
 #include "AmSuperPlayer.h"
 #include "AmlogicPlayer.h"
@@ -74,7 +75,7 @@ public:
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                int fd,
                                int64_t offset,
-                               int64_t /*length*/,
+                               int64_t length,
                                float /*curScore*/) {
         char buf[32];
         lseek(fd, offset, SEEK_SET);
@@ -92,6 +93,23 @@ public:
                 return 0.0;  //ogg
             }
         }
+        // Some kind of MIDI?
+        EAS_DATA_HANDLE easdata;
+        if (EAS_Init(&easdata) == EAS_SUCCESS) {
+            EAS_FILE locator;
+            locator.path = NULL;
+            locator.fd = fd;
+            locator.offset = offset;
+            locator.length = length;
+            EAS_HANDLE  eashandle;
+            if (EAS_OpenFile(easdata, &locator, &eashandle) == EAS_SUCCESS) {
+                EAS_CloseFile(easdata, eashandle);
+                EAS_Shutdown(easdata);
+                return 0.0;
+            }
+            EAS_Shutdown(easdata);
+        }
+
         return 0.9;
     }
 
