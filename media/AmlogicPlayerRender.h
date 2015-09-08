@@ -17,6 +17,7 @@
 extern "C" {
 #include <errno.h>
 #include <ionvideo.h>
+#include <ion/ion.h>
 }
 
 namespace android
@@ -25,6 +26,14 @@ struct BufferList {
     ANativeWindowBuffer* nativeBuffer;
     int shareFd;
     int index;
+};
+
+/* only for non-nativebuffer! */
+struct NoWindowRenderBufs {
+    int shareFd;
+    int index;
+    void *fdPtr;
+    ion_user_handle_t ionHnd;
 };
 
 class AmlogicPlayerRender: public Thread
@@ -59,7 +68,9 @@ private:
     status_t    ScheduleOnce();
     status_t    initCheck();
     bool        dequeueThread(void);
-
+    int         AllocNoWindowRenderBuffers(int count);
+    int         FreeNoWindowRenderBuffers(void);
+    bool        NoWindowRender(void);
     sp<ANativeWindow>   mNativeWindow;
 
     int         mUpdateInterval_ms;
@@ -97,6 +108,10 @@ private:
     bool mIonInitIsOk;
     bool mOsdInitIsOk;
     bool mAmstreamCanBeOpened;
+
+    bool mHasNativeBuffers;
+    int mIonFd;
+    NoWindowRenderBufs* mNoWindowRenderBufs;
 };
 
 }

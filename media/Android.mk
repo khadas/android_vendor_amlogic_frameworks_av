@@ -58,6 +58,7 @@ LOCAL_SHARED_LIBRARIES :=       \
     libmediaplayerservice              \
     libstagefright              \
     libstagefright_foundation \
+    libion \
     
 LOCAL_C_INCLUDES :=                                                 \
     $(call include-path-for, graphics corecg)                       \

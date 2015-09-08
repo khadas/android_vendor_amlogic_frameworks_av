@@ -19,6 +19,8 @@
 #include <gralloc_priv.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <ion/ion.h>
+#include <sys/mman.h>
 
 #define ALIGN(x, a) (((x)+(a)-1)&~((a)-1))
 //#define  TRACE()    LOGV("[%s::%d]\n",__FUNCTION__,__LINE__)
@@ -27,6 +29,7 @@
 #define NORMAL_UPDATE_INTERVAL_MS 100
 #define PAUSED_UPDATE_INTERVAL_MS 1000
 #define BUFFERNUM 4
+#define NORENDER_BUFS_NUM 2
 namespace android
 {
 
@@ -64,8 +67,11 @@ AmlogicPlayerRender::AmlogicPlayerRender(const sp<ANativeWindow> &nativeWindow, 
     mBufferList = NULL;
     mMinUndequeuedBufs = 2;
     mNativeWindowChanged = 0;
-	mIonInitIsOk = false;
-	mOsdInitIsOk = false;
+    mIonInitIsOk = false;
+    mOsdInitIsOk = false;
+    mHasNativeBuffers = false;
+    mNoWindowRenderBufs = NULL;
+    mIonFd = 0;
     return;
 }
 
@@ -97,6 +103,10 @@ status_t AmlogicPlayerRender::SwitchNativeWindow(const sp<ANativeWindow> &native
         for (int i = 0; i < BUFFERNUM; i++){
             mBufferList[i].index = -1;
         }
+
+        if (nativeWindow != NULL)
+            mHasNativeBuffers = true;
+
         return OK;
     } else {
         Mutex::Autolock l(mMutex);
@@ -430,6 +440,8 @@ status_t AmlogicPlayerRender::Stop()
             free (mBufferList);
             mBufferList = NULL;
         }
+        if (!mHasNativeBuffers)
+            return FreeNoWindowRenderBuffers();
     }
     return OK;
 }
@@ -478,6 +490,134 @@ bool AmlogicPlayerRender::threadLoop()
     return true;
 }
 
+int AmlogicPlayerRender::AllocNoWindowRenderBuffers(int count)
+{
+    ion_user_handle_t ion_hnd;
+    int shared_fd;
+    int ret = 0;
+    int buffer_size = nativeWidth * nativeHeight * mBytePerPixel ;
+    LOGE("AllocNoRenderBuffers %d %d, %f///%d\n", nativeWidth, nativeHeight, mBytePerPixel, buffer_size);
+    if (mNoWindowRenderBufs == NULL) {
+        mNoWindowRenderBufs = (NoWindowRenderBufs *)malloc(sizeof(NoWindowRenderBufs) * count);
+        memset(mNoWindowRenderBufs, 0, sizeof(NoWindowRenderBufs) * count);
+    }
+    mIonFd = ion_open();
+    if (mIonFd < 0) {
+        LOGE("ion open failed!\n");
+        return -1;
+    }
+    int i = 0;
+    while (i < count) {
+        ret = ion_alloc(mIonFd, buffer_size, 0, ION_HEAP_CARVEOUT_MASK, 0, &ion_hnd);
+        if (ret) {
+            LOGE("ion alloc error");
+            ion_close(mIonFd);
+            return -1;
+        }
+        ret = ion_share(mIonFd, ion_hnd, &shared_fd);
+        if (ret) {
+            LOGE("ion share error!\n");
+            ion_free(mIonFd, ion_hnd);
+            ion_close(mIonFd);
+            return -1;
+        }
+        void *cpu_ptr = mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
+        if (MAP_FAILED == cpu_ptr) {
+            LOGE("ion mmap error!\n");
+            ion_free(mIonFd, ion_hnd);
+            ion_close(mIonFd);
+            return -1;
+        }
+        LOGE("AllocDmaBuffers__shared_fd=%d,mIonFd=%d\n",shared_fd,mIonFd);
+        mNoWindowRenderBufs[i].shareFd = shared_fd;
+        mNoWindowRenderBufs[i].index = i;
+        mNoWindowRenderBufs[i].fdPtr = cpu_ptr;
+        mNoWindowRenderBufs[i].ionHnd = ion_hnd;
+        i++;
+    }
+    return ret;
+    }
+
+int AmlogicPlayerRender::FreeNoWindowRenderBuffers()
+{
+    int buffer_size = nativeWidth * nativeHeight * mBytePerPixel ;
+    int i = 0;
+    if (mNoWindowRenderBufs == NULL)
+        return -1;
+    while (i < NORENDER_BUFS_NUM) {
+        munmap(mNoWindowRenderBufs[i].fdPtr, buffer_size);
+        close(mNoWindowRenderBufs[i].shareFd);
+        LOGE("FreeDmaBuffers_mOutBuffer[i].fd=%d,mIonFd=%d\n",mNoWindowRenderBufs[i].shareFd, mIonFd);
+        ion_free(mIonFd, mNoWindowRenderBufs[i].ionHnd);
+        i++;
+    }
+    int ret = ion_close(mIonFd);
+    free(mNoWindowRenderBufs);
+    mNoWindowRenderBufs = NULL;
+    return ret;
+}
+
+bool AmlogicPlayerRender::NoWindowRender()
+{
+    ANativeWindowBuffer* buf;
+    vframebuf_t vf;
+    int ret = 0;
+    int err = 0;
+    int fmt;
+    int ionFd;
+    ion_user_handle_t ion_hnd;
+
+    if (mNativeWindowChanged) {
+        mNativeWindowChanged = 0;
+        ionvideo_release (ionvideo_dev);
+        ionvideo_dev = new_ionvideo(FLAGS_V4L_MODE);
+        if (!ionvideo_dev) {
+            LOGE("new_ionvideo error");
+            return false;
+        }
+        ret = ionvideo_init(ionvideo_dev, 0, nativeWidth, nativeHeight, mV4LFormat, BUFFERNUM);
+        if (ret != 0) {
+            LOGE("ionvideo_reset failed =%d\n", ret);
+            return false;
+        }
+        LOGI("ionvideo size changed nativeWidth=%d,nativeHeight=%d\n", nativeWidth, nativeHeight);
+
+        ionvideo_start(ionvideo_dev);
+        ret = AllocNoWindowRenderBuffers(NORENDER_BUFS_NUM);
+        if (ret < 0) {
+            LOGE("AllocNoRenderBuffers failed!\n");
+            return false;
+        }
+        for (int i = 0; i < NORENDER_BUFS_NUM; i++) {
+            vf.index = i;
+            vf.fd = mNoWindowRenderBufs[i].shareFd;
+            vf.length = nativeWidth * nativeHeight * mBytePerPixel;
+            ret = ionv4l_queuebuf(ionvideo_dev, &vf);
+            if (ret) {
+                LOGE("ionv4l_queuebuf error, errno:%d\n", ret);
+                return false;
+            }
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////
+    ret = ionv4l_dequeuebuf(ionvideo_dev, &vf);
+    if (ret == -EAGAIN) {
+        //mCondition.waitRelative(mMutex, milliseconds_to_nanoseconds(2));
+        return true;
+    } else if (ret) {
+        LOGE("ionv4l_dequeuebuf error, errno:%d\n", errno);
+        return false;
+    }
+
+    ret = ionv4l_queuebuf(ionvideo_dev, &vf);
+    if (ret != 0) {
+        LOGE("ionv4l_queuebuf error, errno:%d\n", errno);
+        return false;
+    }
+
+    return true;
+}
+
 bool AmlogicPlayerRender::dequeueThread()
 {
 
@@ -492,6 +632,8 @@ bool AmlogicPlayerRender::dequeueThread()
     mCondition.waitRelative(mMutex, milliseconds_to_nanoseconds(5));
     if (mNativeWindow.get() == NULL) {
         LOGE("mNativeWindow.get() NULL");
+        if (!mHasNativeBuffers)
+            return NoWindowRender();
         return true;
     }
 
