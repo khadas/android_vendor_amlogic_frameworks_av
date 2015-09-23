@@ -295,7 +295,6 @@ static void initInputFormatToMimeTypeMap(
     map.add(av_find_input_format("hevc"), MEDIA_MIMETYPE_VIDEO_HEVC);
     map.add(av_find_input_format("ape"), MEDIA_MIMETYPE_AUDIO_APE);
     map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM);
-    map.add(av_find_input_format("mp3"), MEDIA_MIMETYPE_AUDIO_MPEG);
 }
 
 const char *convertInputFormatToMimeType(AVInputFormat *inputFormat) {
