@@ -184,6 +184,7 @@ private:
     int                 mStreamType;
     bool                mLoop;
     bool                mAndroidLoop;
+    bool                mFirstPlaying;
     volatile bool       mExit;
     bool                mPaused;
     bool                mLatestPauseState;    

@@ -123,7 +123,7 @@ static URLProtocol android_protocol;
 AmlogicPlayer::AmlogicPlayer() :
     mPlayTime(0),  mStreamTime(0), mDuration(0),
     mState(STATE_ERROR),
-    mStreamType(-1), mLoop(false),
+    mStreamType(-1), mLoop(false), mFirstPlaying(true),
     mExit(false), mPaused(false), mRunning(false),
     mPlayer_id(-1),
     mWidth(0), mHeight(0),
@@ -1057,6 +1057,10 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             mInbuffering = false;
             sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_END);
             bufferTime = 0;
+        }
+        if (mFirstPlaying && info->status == PLAYER_RUNNING) {
+            sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_END);
+            mFirstPlaying = false;
         }
         if (mDuration > 0) {
             percent = (mPlayTime) * 100 / (mDuration);
