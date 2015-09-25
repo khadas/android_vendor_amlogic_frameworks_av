@@ -683,10 +683,6 @@ int AmlogicScreenMediaSourceInit(void)
 
     ScreenMediaSource::instantiate();
 
-    ProcessState::self()->startThreadPool();
-    IPCThreadState::self()->disableBackgroundScheduling(true);
-    IPCThreadState::self()->joinThreadPool();
-
     ALOGV("AmlogicScreenMediaSourceInit");
 
     return 0;
