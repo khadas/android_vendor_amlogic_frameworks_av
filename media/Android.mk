@@ -6,7 +6,7 @@ LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
 
-GRALLOC_DIR := hardware/amlogic/gralloc
+MESON_GRALLOC_DIR?=hardware/amlogic/gralloc
 
 
 ifeq ($(BOARD_WIDEVINE_OEMCRYPTO_LEVEL),1)
@@ -72,7 +72,7 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/include/media					\
     $(TOP)/external/icu/icu4c/source/common				\
     $(TOP)/external/icu/icu4c/source/i18n					\
-    $(GRALLOC_DIR) \
+    $(TOP)/$(MESON_GRALLOC_DIR) \
     $(TOP)/system/core/libion/include/\
     $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer
 
