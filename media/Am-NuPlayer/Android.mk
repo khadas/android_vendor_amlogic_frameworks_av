@@ -1,0 +1,51 @@
+LOCAL_PATH:= $(call my-dir)
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES:=                       \
+        AmGenericSource.cpp               \
+        AmHTTPLiveSource.cpp              \
+        AmNuPlayer.cpp                    \
+        AmNuPlayerCCDecoder.cpp           \
+        AmNuPlayerDecoder.cpp             \
+        AmNuPlayerDecoderBase.cpp         \
+        AmNuPlayerDecoderPassThrough.cpp  \
+        AmNuPlayerDriver.cpp              \
+        AmNuPlayerRenderer.cpp            \
+        AmNuPlayerStreamListener.cpp      \
+        AmRTSPSource.cpp                  \
+        AmStreamingSource.cpp             \
+
+LOCAL_C_INCLUDES := \
+	$(TOP)/vendor/amlogic/frameworks/av/media/Am-Httplive         \
+	$(TOP)/frameworks/av/media/libstagefright/include             \
+	$(TOP)/frameworks/av/media/libstagefright/mpeg2ts             \
+	$(TOP)/frameworks/av/media/libstagefright/rtsp                \
+	$(TOP)/frameworks/av/media/libstagefright/timedtext           \
+	$(TOP)/frameworks/av/media/libmediaplayerservice              \
+	$(TOP)/frameworks/native/include/media/openmax                \
+    $(TOP)/external/curl/include                                  \
+    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include
+
+LOCAL_SHARED_LIBRARIES := \
+        libbinder \
+        libcrypto \
+        libcutils \
+        libgui \
+        libmedia \
+        libdrmframework \
+        libstagefright \
+        libstagefright_foundation \
+        libutils \
+        libamhttplive
+
+LOCAL_STATIC_LIBRARIES := libstagefright_rtsp
+
+LOCAL_MODULE:= libamnuplayer
+
+LOCAL_MODULE_TAGS := eng
+
+ifeq ($(TARGET_ARCH),arm)
+    LOCAL_CFLAGS += -Wno-psabi
+endif
+
+include $(BUILD_SHARED_LIBRARY)

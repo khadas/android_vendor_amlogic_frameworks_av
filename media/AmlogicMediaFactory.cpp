@@ -24,6 +24,7 @@
 
 #include "AmSuperPlayer.h"
 #include "AmlogicPlayer.h"
+#include "AmNuPlayerDriver.h"
 
 #include "../libmediaplayerservice/MediaPlayerFactory.h"
 namespace android
@@ -125,7 +126,51 @@ public:
     }
 };
 
+class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
+  public:
+    virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
+                               const char* url,
+                               float curScore) {
+        static const float kOurScore = 1.0;
 
+        char value[PROPERTY_VALUE_MAX];
+        if (property_get("media.hls.disable-nuplayer", value, NULL)
+            && (!strcasecmp(value, "true") || !strcmp(value, "1"))) {
+            return 0.0;
+        }
+
+        if (kOurScore <= curScore)
+            return 0.0;
+
+        // use nuplayer to play hls.
+        // add other stream type afterwards.
+        if (!strncasecmp("http://", url, 7)
+            || !strncasecmp("https://", url, 8)) {
+            size_t len = strlen(url);
+
+            // skip over DASH & MS-SS.
+            if ((len >= 4 && !strcasecmp(".mpd", &url[len - 4]))
+                || (strstr(url, ".ism/") || strstr(url, ".isml/"))) {
+                return 0.0;
+            }
+
+            return kOurScore;
+        }
+
+        return 0.0;
+    }
+
+    virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
+                               const sp<IStreamSource>& /*source*/,
+                               float /*curScore*/) {
+        return 0.8;
+    }
+
+    virtual sp<MediaPlayerBase> createPlayer() {
+        ALOGV(" create AmNuPlayer");
+        return new NuPlayerDriver();
+    }
+};
 
 int AmlogicMediaFactoryInit(void)
 {
@@ -135,6 +180,8 @@ int AmlogicMediaFactoryInit(void)
     ALOGV("register  AmlogicPlayerFactory err =%d\n", err);
     err = MediaPlayerFactory::registerFactory(new AmSuperPlayerFactory(), AMSUPER_PLAYER);
     ALOGV("register  AmSuperPlayerFactory err =%d\n", err);
+    err = MediaPlayerFactory::registerFactory(new AmNuPlayerFactory(), AMNUPLAYER);
+    ALOGV("register  AmNuPlayerFactory err =%d\n", err);
     return 0;
 }
 
