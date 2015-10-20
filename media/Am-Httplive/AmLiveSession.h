@@ -182,8 +182,8 @@ private:
     sp<IMediaHTTPService> mHTTPService;
 
     uint32_t mBuffTimeSec;
-    uint32_t mFailureWaitSec;
-    uint32_t mAbnormalWaitSec;
+    int32_t mFailureWaitSec;
+    int32_t mAbnormalWaitSec;
 
     bool mFirstSniff;
     bool mDebug;

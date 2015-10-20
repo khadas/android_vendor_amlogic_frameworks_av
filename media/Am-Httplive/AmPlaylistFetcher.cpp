@@ -1094,6 +1094,7 @@ void PlaylistFetcher::onDownloadNext() {
         if (bytesRead == -ENETRESET) {
             ++mSeqNumber;
             ALOGE("fetch file met error! skip to next segment : %d", mSeqNumber);
+            queueDiscontinuity(ATSParser::DISCONTINUITY_DATA_CORRUPTION, NULL);
             postMonitorQueue();
             goto FAIL;
         }

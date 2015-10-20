@@ -584,6 +584,7 @@ bool NuPlayer::Decoder::isStaleReply(const sp<AMessage> &msg) {
 status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     sp<ABuffer> accessUnit;
     bool dropAccessUnit;
+    bool rememberThisTimeStamp = false;
     do {
         status_t err = mSource->dequeueAccessUnit(mIsAudio, &accessUnit);
 
@@ -594,6 +595,8 @@ status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
             if (err == INFO_DISCONTINUITY) {
                 int32_t type;
                 CHECK(accessUnit->meta()->findInt32("discontinuity", &type));
+
+                bool dataCorrupt = (type & ATSParser::DISCONTINUITY_DATA_CORRUPTION) != 0;
 
                 bool formatChange =
                     (mIsAudio &&
@@ -642,6 +645,9 @@ status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
                     // reuse existing decoder and don't flush
                     rememberCodecSpecificData(newFormat);
                     err = OK;
+                } else if (dataCorrupt) {
+                    rememberThisTimeStamp = true;
+                    err = OK;
                 } else {
                     // This stream is unaffected by the discontinuity
                     return -EWOULDBLOCK;
@@ -677,13 +683,13 @@ status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     } while (dropAccessUnit);
 
     // ALOGV("returned a valid buffer of %s data", mIsAudio ? "mIsAudio" : "video");
-#if 0
-    int64_t mediaTimeUs;
-    CHECK(accessUnit->meta()->findInt64("timeUs", &mediaTimeUs));
-    ALOGV("feeding %s input buffer at media time %.2f secs",
-         mIsAudio ? "audio" : "video",
-         mediaTimeUs / 1E6);
-#endif
+
+    if (rememberThisTimeStamp) {
+        int64_t mediaTimeUs;
+        CHECK(accessUnit->meta()->findInt64("timeUs", &mediaTimeUs));
+        ALOGI("Data corrupt ! set render %s timestamp : %lld us", mIsAudio ? "audio" : "video", mediaTimeUs);
+        mRenderer->setTimeStampToRemember(mIsAudio, mediaTimeUs);  // ugly, maybe wrong.
+    }
 
     if (mCCDecoder != NULL) {
         mCCDecoder->decode(accessUnit);

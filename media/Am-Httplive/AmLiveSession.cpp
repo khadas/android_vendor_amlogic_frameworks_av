@@ -418,6 +418,10 @@ status_t LiveSession::dequeueAccessUnit(
               type,
               extra == NULL ? "NULL" : extra->debugString().c_str());
 
+        if ((type & ATSParser::DISCONTINUITY_DATA_CORRUPTION) != 0) {
+            return err;
+        }
+
         int32_t swap;
         if ((*accessUnit)->meta()->findInt32("swapPacketSource", &swap) && swap) {
             int32_t switchGeneration;
@@ -750,7 +754,7 @@ void LiveSession::onMessageReceived(const sp<AMessage> &msg) {
                         }
                     }
 
-                    if (mInPreparationPhase && err != ERROR_UNSUPPORTED) { // ingore err when unsupport.
+                    if (mInPreparationPhase && err != ERROR_UNSUPPORTED) { // ignore err when unsupport.
                         postPrepared(err);
                     }
 
@@ -1085,7 +1089,7 @@ sp<PlaylistFetcher> LiveSession::addFetcher(const char *uri) {
 ssize_t LiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t size) {
     int32_t ret = -1;
     bool wait_flag = false;
-    uint32_t start_waittime_s = 0, waitSec = 0;
+    int32_t start_waittime_s = 0, waitSec = 0;
     int64_t read_seek_size = 0, read_seek_left_size = 0;
     char dummy[4096];
     do {
@@ -1125,8 +1129,9 @@ ssize_t LiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t size
                         waitSec = mAbnormalWaitSec;
                     }
                 }
-                ALOGI("source read met error! ret : %d", ret);
-                if (ALooper::GetNowUs() / 1000000 - start_waittime_s <= waitSec) {
+                ALOGI("source read met error! ret : %d, startTime : %d s, now : %d s, waitTime : %d s",
+                        ret, start_waittime_s, (int32_t)(ALooper::GetNowUs() / 1000000), waitSec);
+                if ((int32_t)(ALooper::GetNowUs() / 1000000 - start_waittime_s) <= waitSec) {
                     if ((cfc->filesize <= 0 || retryCase(ret) == 2) && !read_seek_size) { // try to do read seek in chunked mode.
                         read_seek_size = cfc->cwd->size;
                         ALOGI("need to do read seek : %lld", read_seek_size);
@@ -1138,6 +1143,9 @@ ssize_t LiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t size
                     if (read_seek_size > 100 * 1024 * 1024) {
                         ret = -ENETRESET;
                         break;
+                    }
+                    if (retryCase(ret) == 2) { // reset download size, to prevent seek failure.
+                        cfc->cwd->size = 0;
                     }
                     curl_fetch_seek(cfc, cfc->cwd->size, SEEK_SET);
                     threadWaitTimeNs(100000000);

@@ -73,6 +73,8 @@ struct NuPlayer::Renderer : public AHandler {
     int64_t getVideoLateByUs();
     void setPauseStartedTimeRealUs(int64_t realUs);
 
+    void setTimeStampToRemember(bool isAudio, int64_t mediaUs);
+
     status_t openAudioSink(
             const sp<AMessage> &format,
             bool offloadOnly,
@@ -146,6 +148,8 @@ private:
     int64_t mVideoFrameDurationUs;
     int64_t mAudioFrameIntervalUs;
     int64_t mVideoFrameIntervalUs;
+    int64_t mAudioTimeStamp;
+    int64_t mVideoTimeStamp;
     uint32_t mLastAudioFrameSize;
     int32_t mChannel;
     int32_t mSampleRate;

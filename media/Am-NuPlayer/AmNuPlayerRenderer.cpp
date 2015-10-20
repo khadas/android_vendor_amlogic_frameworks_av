@@ -67,6 +67,8 @@ NuPlayer::Renderer::Renderer(
       mVideoFrameDurationUs(-1),
       mAudioFrameIntervalUs(0),
       mVideoFrameIntervalUs(0),
+      mAudioTimeStamp(-1),
+      mVideoTimeStamp(-1),
       mLastAudioFrameSize(0),
       mChannel(0),
       mSampleRate(0),
@@ -174,6 +176,8 @@ void NuPlayer::Renderer::signalTimeDiscontinuity() {
     mLastVideoQueueTimeUs = -1;
     mAudioFrameIntervalUs = 0;
     mVideoFrameIntervalUs = 0;
+    mAudioTimeStamp = -1;
+    mVideoTimeStamp = -1;
     mLastAudioFrameSize = 0;
     mSyncQueues = false;
 }
@@ -330,6 +334,15 @@ int64_t NuPlayer::Renderer::getVideoLateByUs() {
 void NuPlayer::Renderer::setPauseStartedTimeRealUs(int64_t realUs) {
     Mutex::Autolock autoLock(mTimeLock);
     mPauseStartedTimeRealUs = realUs;
+}
+
+void NuPlayer::Renderer::setTimeStampToRemember(bool isAudio, int64_t mediaUs) {
+    Mutex::Autolock autoLock(mLock);
+    if (isAudio) {
+        mAudioTimeStamp = mediaUs;
+    } else {
+        mVideoTimeStamp = mediaUs;
+    }
 }
 
 status_t NuPlayer::Renderer::openAudioSink(
@@ -1015,6 +1028,22 @@ void NuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t is
     buffer->meta()->findInt64("timeUs", &timeUs);
     if (mDebug) {
         ALOGI("[%s] queued buffer timeUs : %lld us \n", isAudio ? "audio" : "video", timeUs);
+    }
+    if (isAudio && mAudioTimeStamp >= 0 && mAudioTimeStamp == timeUs) {
+        // reset, no need to correct pts.
+        ALOGI("[%:%d] Audio timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        mAudioTimeStamp = -1;
+        mLastAudioQueueTimeUs = -1;
+        mAudioFrameIntervalUs = 0;
+        return;
+    }
+    if (!isAudio && mVideoTimeStamp >= 0 && mVideoTimeStamp == timeUs) {
+        // reset, no need to correct pts.
+        ALOGI("[%:%d] Video timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        mVideoTimeStamp = -1;
+        mLastVideoQueueTimeUs = -1;
+        mVideoFrameIntervalUs = 0;
+        return;
     }
     if (isAudio && mLastAudioQueueTimeUs >= 0 && timeUs > mLastAudioQueueTimeUs && mAudioFrameDurationUs <= 0) {
         mAudioFrameDurationUs = timeUs - mLastAudioQueueTimeUs;
