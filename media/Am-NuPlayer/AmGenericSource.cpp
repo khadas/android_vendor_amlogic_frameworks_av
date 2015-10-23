@@ -317,7 +317,7 @@ status_t NuPlayer::GenericSource::setBuffers(
 
 NuPlayer::GenericSource::~GenericSource() {
     if (mLooper != NULL) {
-        mLooper->unregisterHandler(id());
+        //mLooper->unregisterHandler(this);
         mLooper->stop();
     }
     resetDataSource();
@@ -332,7 +332,7 @@ void NuPlayer::GenericSource::prepareAsync() {
         mLooper->registerHandler(this);
     }
 
-    sp<AMessage> msg = new AMessage(kWhatPrepareAsync, id());
+    sp<AMessage> msg = new AMessage(kWhatPrepareAsync, this);
     msg->post();
 }
 
@@ -391,7 +391,7 @@ void NuPlayer::GenericSource::onPrepareAsync() {
     status_t err = prefillCacheIfNecessary();
     if (err != OK) {
         if (err == -EAGAIN) {
-            (new AMessage(kWhatPrepareAsync, id()))->post(200000);
+            (new AMessage(kWhatPrepareAsync, this))->post(200000);
         } else {
             ALOGE("Failed to prefill data cache!");
             notifyPreparedAndCleanup(UNKNOWN_ERROR);
@@ -429,7 +429,7 @@ void NuPlayer::GenericSource::onPrepareAsync() {
 
     if (mIsSecure) {
         // secure decoders must be instantiated before starting widevine source
-        sp<AMessage> reply = new AMessage(kWhatSecureDecodersInstantiated, id());
+        sp<AMessage> reply = new AMessage(kWhatSecureDecodersInstantiated, this);
         notifyInstantiateSecureDecoders(reply);
     } else {
         finishPrepareAsync();
@@ -563,7 +563,7 @@ void NuPlayer::GenericSource::start() {
     setDrmPlaybackStatusIfNeeded(Playback::START, getLastReadPosition() / 1000);
     mStarted = true;
 
-    (new AMessage(kWhatStart, id()))->post();
+    (new AMessage(kWhatStart, this))->post();
 }
 
 void NuPlayer::GenericSource::stop() {
@@ -572,7 +572,7 @@ void NuPlayer::GenericSource::stop() {
     mStarted = false;
     if (mIsWidevine || mIsSecure) {
         // For widevine or secure sources we need to prevent any further reads.
-        sp<AMessage> msg = new AMessage(kWhatStopWidevine, id());
+        sp<AMessage> msg = new AMessage(kWhatStopWidevine, this);
         sp<AMessage> response;
         (void) msg->postAndAwaitResponse(&response);
     }
@@ -589,7 +589,7 @@ void NuPlayer::GenericSource::resume() {
     setDrmPlaybackStatusIfNeeded(Playback::START, getLastReadPosition() / 1000);
     mStarted = true;
 
-    (new AMessage(kWhatResume, id()))->post();
+    (new AMessage(kWhatResume, this))->post();
 }
 
 void NuPlayer::GenericSource::disconnect() {
@@ -616,7 +616,7 @@ status_t NuPlayer::GenericSource::feedMoreTSData() {
 }
 
 void NuPlayer::GenericSource::schedulePollBuffering() {
-    sp<AMessage> msg = new AMessage(kWhatPollBuffering, id());
+    sp<AMessage> msg = new AMessage(kWhatPollBuffering, this);
     msg->setInt32("generation", mPollBufferingGeneration);
     msg->post(1000000ll);
 }
@@ -918,7 +918,7 @@ void NuPlayer::GenericSource::onMessageReceived(const sp<AMessage> &msg) {
               mVideoTrack.mPackets->clear();
           }
           sp<AMessage> response = new AMessage;
-          uint32_t replyID;
+          sp<AReplyToken> replyID;
           CHECK(msg->senderAwaitsResponse(&replyID));
           response->postReply(replyID);
           break;
@@ -958,7 +958,7 @@ void NuPlayer::GenericSource::fetchTextData(
         const int64_t oneSecUs = 1000000ll;
         delayUs -= oneSecUs;
     }
-    sp<AMessage> msg2 = new AMessage(sendWhat, id());
+    sp<AMessage> msg2 = new AMessage(sendWhat, this);
     msg2->setInt32("generation", msgGeneration);
     msg2->post(delayUs < 0 ? 0 : delayUs);
 }
@@ -998,7 +998,7 @@ void NuPlayer::GenericSource::sendTextData(
 }
 
 sp<MetaData> NuPlayer::GenericSource::getFormatMeta(bool audio) {
-    sp<AMessage> msg = new AMessage(kWhatGetFormat, id());
+    sp<AMessage> msg = new AMessage(kWhatGetFormat, this);
     msg->setInt32("audio", audio);
 
     sp<AMessage> response;
@@ -1020,7 +1020,7 @@ void NuPlayer::GenericSource::onGetFormatMeta(sp<AMessage> msg) const {
     sp<MetaData> format = doGetFormatMeta(audio);
     response->setPointer("format", format.get());
 
-    uint32_t replyID;
+    sp<AReplyToken> replyID;
     CHECK(msg->senderAwaitsResponse(&replyID));
     response->postReply(replyID);
 }
@@ -1087,7 +1087,7 @@ status_t NuPlayer::GenericSource::dequeueAccessUnit(
 
     if (mSubtitleTrack.mSource != NULL
             && !mSubtitleTrack.mPackets->hasBufferAvailable(&eosResult)) {
-        sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, id());
+        sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
         msg->setInt64("timeUs", timeUs);
         msg->setInt32("generation", mFetchSubtitleDataGeneration);
         msg->post();
@@ -1095,7 +1095,7 @@ status_t NuPlayer::GenericSource::dequeueAccessUnit(
 
     if (mTimedTextTrack.mSource != NULL
             && !mTimedTextTrack.mPackets->hasBufferAvailable(&eosResult)) {
-        sp<AMessage> msg = new AMessage(kWhatFetchTimedTextData, id());
+        sp<AMessage> msg = new AMessage(kWhatFetchTimedTextData, this);
         msg->setInt64("timeUs", timeUs);
         msg->setInt32("generation", mFetchTimedTextDataGeneration);
         msg->post();
@@ -1160,7 +1160,7 @@ sp<AMessage> NuPlayer::GenericSource::getTrackInfo(size_t trackIndex) const {
 }
 
 ssize_t NuPlayer::GenericSource::getSelectedTrack(media_track_type type) const {
-    sp<AMessage> msg = new AMessage(kWhatGetSelectedTrack, id());
+    sp<AMessage> msg = new AMessage(kWhatGetSelectedTrack, this);
     msg->setInt32("type", type);
 
     sp<AMessage> response;
@@ -1183,7 +1183,7 @@ void NuPlayer::GenericSource::onGetSelectedTrack(sp<AMessage> msg) const {
     ssize_t index = doGetSelectedTrack(type);
     response->setInt32("index", index);
 
-    uint32_t replyID;
+    sp<AReplyToken> replyID;
     CHECK(msg->senderAwaitsResponse(&replyID));
     response->postReply(replyID);
 }
@@ -1216,7 +1216,7 @@ ssize_t NuPlayer::GenericSource::doGetSelectedTrack(media_track_type type) const
 
 status_t NuPlayer::GenericSource::selectTrack(size_t trackIndex, bool select, int64_t timeUs) {
     ALOGV("%s track: %zu", select ? "select" : "deselect", trackIndex);
-    sp<AMessage> msg = new AMessage(kWhatSelectTrack, id());
+    sp<AMessage> msg = new AMessage(kWhatSelectTrack, this);
     msg->setInt32("trackIndex", trackIndex);
     msg->setInt32("select", select);
     msg->setInt64("timeUs", timeUs);
@@ -1241,7 +1241,7 @@ void NuPlayer::GenericSource::onSelectTrack(sp<AMessage> msg) {
     status_t err = doSelectTrack(trackIndex, select, timeUs);
     response->setInt32("err", err);
 
-    uint32_t replyID;
+    sp<AReplyToken> replyID;
     CHECK(msg->senderAwaitsResponse(&replyID));
     response->postReply(replyID);
 }
@@ -1302,7 +1302,7 @@ status_t NuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select, 
         status_t eosResult; // ignored
         if (mSubtitleTrack.mSource != NULL
                 && !mSubtitleTrack.mPackets->hasBufferAvailable(&eosResult)) {
-            sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, id());
+            sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
             msg->setInt64("timeUs", timeUs);
             msg->setInt32("generation", mFetchSubtitleDataGeneration);
             msg->post();
@@ -1310,7 +1310,7 @@ status_t NuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select, 
 
         if (mTimedTextTrack.mSource != NULL
                 && !mTimedTextTrack.mPackets->hasBufferAvailable(&eosResult)) {
-            sp<AMessage> msg = new AMessage(kWhatFetchTimedTextData, id());
+            sp<AMessage> msg = new AMessage(kWhatFetchTimedTextData, this);
             msg->setInt64("timeUs", timeUs);
             msg->setInt32("generation", mFetchTimedTextDataGeneration);
             msg->post();
@@ -1324,7 +1324,7 @@ status_t NuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select, 
             return OK;
         }
 
-        sp<AMessage> msg = new AMessage(kWhatChangeAVSource, id());
+        sp<AMessage> msg = new AMessage(kWhatChangeAVSource, this);
         msg->setInt32("trackIndex", trackIndex);
         msg->post();
         return OK;
@@ -1334,7 +1334,7 @@ status_t NuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select, 
 }
 
 status_t NuPlayer::GenericSource::seekTo(int64_t seekTimeUs) {
-    sp<AMessage> msg = new AMessage(kWhatSeek, id());
+    sp<AMessage> msg = new AMessage(kWhatSeek, this);
     msg->setInt64("seekTimeUs", seekTimeUs);
 
     sp<AMessage> response;
@@ -1354,7 +1354,7 @@ void NuPlayer::GenericSource::onSeek(sp<AMessage> msg) {
     status_t err = doSeek(seekTimeUs);
     response->setInt32("err", err);
 
-    uint32_t replyID;
+    sp<AReplyToken> replyID;
     CHECK(msg->senderAwaitsResponse(&replyID));
     response->postReply(replyID);
 }
@@ -1474,7 +1474,7 @@ void NuPlayer::GenericSource::postReadBuffer(media_track_type trackType) {
 
     if ((mPendingReadBufferTypes & (1 << trackType)) == 0) {
         mPendingReadBufferTypes |= (1 << trackType);
-        sp<AMessage> msg = new AMessage(kWhatReadBuffer, id());
+        sp<AMessage> msg = new AMessage(kWhatReadBuffer, this);
         msg->setInt32("trackType", trackType);
         msg->post();
     }

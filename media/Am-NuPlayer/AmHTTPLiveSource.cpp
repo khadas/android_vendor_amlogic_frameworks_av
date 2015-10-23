@@ -68,7 +68,7 @@ NuPlayer::HTTPLiveSource::~HTTPLiveSource() {
         mLiveSession->disconnect();
 
         mLiveLooper->unregisterHandler(mLiveSession->id());
-        mLiveLooper->unregisterHandler(id());
+        //mLiveLooper->unregisterHandler(this);
         mLiveLooper->stop();
 
         mLiveSession.clear();
@@ -86,7 +86,7 @@ void NuPlayer::HTTPLiveSource::prepareAsync() {
         mLiveLooper->registerHandler(this);
     }
 
-    sp<AMessage> notify = new AMessage(kWhatSessionNotify, id());
+    sp<AMessage> notify = new AMessage(kWhatSessionNotify, this);
 
     mLiveSession = new LiveSession(
             notify,

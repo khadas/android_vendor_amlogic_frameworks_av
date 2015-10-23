@@ -33,17 +33,19 @@ class AmlogicMetadataRetrieverFactory : public MediaMetadataRetrieverFactory::RF
 public:
     virtual sp<MediaMetadataRetrieverBase> createRetriever() {
         ALOGV("Create Amlogic MetadataRetriever");
-        return new AmlPlayerMetadataRetriever();
+        return NULL;//new AmlPlayerMetadataRetriever();
     }
 };
 
 int AmlogicMetadataRetrieverFactoryInit(void)
 {
+/*
     status_t err;
     err = MediaMetadataRetrieverFactory::registerFactory(new AmlogicMetadataRetrieverFactory(), AMLOGIC_PLAYER);
     ALOGV("register  AmlogicMetadataRetrieverFactory err =%d\n", err);
     err = MediaMetadataRetrieverFactory::registerFactory(new AmlogicMetadataRetrieverFactory(), AMSUPER_PLAYER);
     ALOGV("register  AmSuperMetadataRetrieverFactory err =%d\n", err);
+    */
     return 0;
 }
 

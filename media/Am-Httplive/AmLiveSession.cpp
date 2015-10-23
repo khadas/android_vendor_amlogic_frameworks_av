@@ -91,8 +91,8 @@ LiveSession::LiveSession(
       mRealTimeBaseUs(0ll),
       mReconfigurationInProgress(false),
       mSwitchInProgress(false),
-      mDisconnectReplyID(0),
-      mSeekReplyID(0),
+      mDisconnectReplyID(NULL),
+      mSeekReplyID(NULL),
       mFirstTimeUsValid(false),
       mFirstTimeUs(0),
       mLastSeekTimeUs(0),
@@ -127,7 +127,7 @@ LiveSession::LiveSession(
         mBuffering[i] = false;
     }
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    //curl_global_init(CURL_GLOBAL_ALL);
 }
 
 LiveSession::~LiveSession() {
@@ -135,7 +135,7 @@ LiveSession::~LiveSession() {
         free(mCodecSpecificData);
         mCodecSpecificData = NULL;
     }
-    curl_global_cleanup();
+    //curl_global_cleanup();
 }
 
 void LiveSession::setParentThreadId(android_thread_id_t thread_id) {
@@ -334,7 +334,7 @@ status_t LiveSession::dequeueAccessUnit(
     if (mBuffering[idx]) {
         if (mSwitchInProgress
                 || packetSource->isFinished(0)
-                || packetSource->getEstimatedDurationUs() > targetDurationUs) {
+                /*|| packetSource->getEstimatedDurationUs() > targetDurationUs*/) {
             mBuffering[idx] = false;
         }
     }
@@ -430,7 +430,7 @@ status_t LiveSession::dequeueAccessUnit(
                 Mutex::Autolock lock(mSwapMutex);
                 if (switchGeneration == mSwitchGeneration) {
                     swapPacketSource(stream);
-                    sp<AMessage> msg = new AMessage(kWhatSwapped, id());
+                    sp<AMessage> msg = new AMessage(kWhatSwapped, this);
                     msg->setInt32("stream", stream);
                     msg->setInt32("switchGeneration", switchGeneration);
                     msg->post();
@@ -567,7 +567,7 @@ status_t LiveSession::getStreamFormat(StreamType stream, sp<AMessage> *format) {
 
 void LiveSession::connectAsync(
         const char *url, const KeyedVector<String8, String8> *headers) {
-    sp<AMessage> msg = new AMessage(kWhatConnect, id());
+    sp<AMessage> msg = new AMessage(kWhatConnect, this);
     msg->setString("url", url);
 
     if (headers != NULL) {
@@ -587,7 +587,7 @@ status_t LiveSession::disconnect() {
     }
 
     mNeedExit = true;
-    sp<AMessage> msg = new AMessage(kWhatDisconnect, id());
+    sp<AMessage> msg = new AMessage(kWhatDisconnect, this);
 
     sp<AMessage> response;
     status_t err = msg->postAndAwaitResponse(&response);
@@ -604,7 +604,7 @@ status_t LiveSession::seekTo(int64_t timeUs) {
     }
 
     mSeeked = true;
-    sp<AMessage> msg = new AMessage(kWhatSeek, id());
+    sp<AMessage> msg = new AMessage(kWhatSeek, this);
     msg->setInt64("timeUs", timeUs);
 
     sp<AMessage> response;
@@ -635,7 +635,7 @@ void LiveSession::onMessageReceived(const sp<AMessage> &msg) {
 
         case kWhatSeek:
         {
-            uint32_t seekReplyID;
+            sp<AReplyToken> seekReplyID;
             CHECK(msg->senderAwaitsResponse(&seekReplyID));
             mSeekReplyID = seekReplyID;
             mSeekReply = new AMessage;
@@ -698,11 +698,11 @@ void LiveSession::onMessageReceived(const sp<AMessage> &msg) {
                         if (--mContinuationCounter == 0) {
                             mContinuation->post();
 
-                            if (mSeekReplyID != 0) {
+                            if (mSeekReplyID != NULL) {
                                 CHECK(mSeekReply != NULL);
                                 mSeekReply->setInt32("err", OK);
                                 mSeekReply->postReply(mSeekReplyID);
-                                mSeekReplyID = 0;
+                                mSeekReplyID.clear();
                                 mSeekReply.clear();
                             }
                         }
@@ -1026,7 +1026,7 @@ void LiveSession::finishDisconnect() {
         mFetcherInfos.valueAt(i).mFetcher->stopAsync();
     }
 
-    sp<AMessage> msg = new AMessage(kWhatFinishDisconnect2, id());
+    sp<AMessage> msg = new AMessage(kWhatFinishDisconnect2, this);
 
     mContinuationCounter = mFetcherInfos.size();
     mContinuation = msg;
@@ -1051,7 +1051,7 @@ void LiveSession::onFinishDisconnect2() {
     response->setInt32("err", OK);
 
     response->postReply(mDisconnectReplyID);
-    mDisconnectReplyID = 0;
+    mDisconnectReplyID.clear();
     ALOGI("[%s:%d] end !", __FUNCTION__, __LINE__);
 }
 
@@ -1068,7 +1068,7 @@ sp<PlaylistFetcher> LiveSession::addFetcher(const char *uri) {
     fetcherLooper->setName("playlist fetcher");
     fetcherLooper->start();
 
-    sp<AMessage> notify = new AMessage(kWhatFetcherNotify, id());
+    sp<AMessage> notify = new AMessage(kWhatFetcherNotify, this);
     notify->setString("uri", uri);
     notify->setInt32("switchGeneration", mSwitchGeneration);
 
@@ -1222,13 +1222,13 @@ ssize_t LiveSession::fetchFile(
     if (*cfc == NULL) {
         String8 headers;
         if (range_offset > 0 || range_length >= 0) {
-            headers.append(StringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : StringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
+            //headers.append(StringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : StringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
         }
         ssize_t i = mExtraHeaders.indexOfKey(String8("User-Agent"));
         if (i >= 0) {
-            headers.append(StringPrintf("User-Agent: %s\r\n", mExtraHeaders.valueAt(i).string()).c_str());
+            //headers.append(StringPrintf("User-Agent: %s\r\n", mExtraHeaders.valueAt(i).string()).c_str());
         } else {
-            headers.append(StringPrintf("User-Agent: %s\r\n", kHTTPUserAgentDefault.string()).c_str());
+            //headers.append(StringPrintf("User-Agent: %s\r\n", kHTTPUserAgentDefault.string()).c_str());
         }
         CFContext * temp_cfc = curl_fetch_init(url, headers.string(), 0);
         if (!temp_cfc) {
@@ -1637,7 +1637,7 @@ status_t LiveSession::selectTrack(size_t index, bool select) {
     ++mSubtitleGeneration;
     status_t err = mPlaylist->selectTrack(index, select);
     if (err == OK) {
-        sp<AMessage> msg = new AMessage(kWhatChangeConfiguration, id());
+        sp<AMessage> msg = new AMessage(kWhatChangeConfiguration, this);
         msg->setInt32("bandwidthIndex", mCurBandwidthIndex);
         msg->setInt32("pickTrack", select);
         msg->post();
@@ -1727,9 +1727,9 @@ void LiveSession::changeConfiguration(
     sp<AMessage> msg;
     if (timeUs < 0ll) {
         // skip onChangeConfiguration2 (decoder destruction) if not seeking.
-        msg = new AMessage(kWhatChangeConfiguration3, id());
+        msg = new AMessage(kWhatChangeConfiguration3, this);
     } else {
-        msg = new AMessage(kWhatChangeConfiguration2, id());
+        msg = new AMessage(kWhatChangeConfiguration2, this);
     }
     msg->setInt32("streamMask", streamMask);
     msg->setInt32("resumeMask", resumeMask);
@@ -1751,11 +1751,11 @@ void LiveSession::changeConfiguration(
     if (mContinuationCounter == 0) {
         msg->post();
 
-        if (mSeekReplyID != 0) {
+        if (mSeekReplyID != NULL) {
             CHECK(mSeekReply != NULL);
             mSeekReply->setInt32("err", OK);
             mSeekReply->postReply(mSeekReplyID);
-            mSeekReplyID = 0;
+            mSeekReplyID.clear();
             mSeekReply.clear();
         }
     }
@@ -1826,7 +1826,7 @@ void LiveSession::onChangeConfiguration2(const sp<AMessage> &msg) {
     notify->setInt32("changedMask", changedMask);
 
     msg->setWhat(kWhatChangeConfiguration3);
-    msg->setTarget(id());
+    msg->setTarget(this);
 
     notify->setMessage("reply", msg);
     notify->post();
@@ -2032,7 +2032,7 @@ void LiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
         mStreamMask = mNewStreamMask;
     }
 
-    if (mDisconnectReplyID != 0) {
+    if (mDisconnectReplyID != NULL) {
         finishDisconnect();
     }
 }
@@ -2097,11 +2097,11 @@ void LiveSession::onCheckSwitchDown() {
         sp<AMessage> meta = packetSource->getLatestDequeuedMeta();
 
         if (meta != NULL && meta->findInt32("targetDuration", &targetDuration) ) {
-            int64_t bufferedDurationUs = packetSource->getEstimatedDurationUs();
+            int64_t bufferedDurationUs = 0;//packetSource->getEstimatedDurationUs();
             int64_t targetDurationUs = targetDuration * 1000000ll;
 
             if (bufferedDurationUs < targetDurationUs / 3) {
-                (new AMessage(kWhatSwitchDown, id()))->post();
+                (new AMessage(kWhatSwitchDown, this))->post();
                 break;
             }
         }
@@ -2146,7 +2146,7 @@ void LiveSession::tryToFinishBandwidthSwitch() {
 }
 
 void LiveSession::scheduleCheckBandwidthEvent() {
-    sp<AMessage> msg = new AMessage(kWhatCheckBandwidth, id());
+    sp<AMessage> msg = new AMessage(kWhatCheckBandwidth, this);
     msg->setInt32("generation", mCheckBandwidthGeneration);
     msg->post(10000000ll);
 }
@@ -2336,7 +2336,7 @@ void LiveSession::postPrepared(status_t err) {
 
     mInPreparationPhase = false;
 
-    //mSwitchDownMonitor = new AMessage(kWhatCheckSwitchDown, id());
+    //mSwitchDownMonitor = new AMessage(kWhatCheckSwitchDown, this);
     //mSwitchDownMonitor->post();
 }
 

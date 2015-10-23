@@ -55,7 +55,8 @@ public:
         Parcel data, reply;
         data.writeInterfaceToken(IScreenMediaSourceClient::getInterfaceDescriptor());
 
-		    data.writeStrongBinder(buffer->asBinder());
+        //data.writeStrongBinder(buffer->asBinder());
+        data.writeStrongBinder(IInterface::asBinder(buffer));
 
         remote()->transact(DATACALLBACK, data, &reply, IBinder::FLAG_ONEWAY);
 

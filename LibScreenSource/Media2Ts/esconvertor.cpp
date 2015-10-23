@@ -805,11 +805,11 @@ status_t ESConvertor::start(MetaData *params) {
         ALOGV("[%s %d] ESConvertor get audio info mAudioChannelCount:%d mAudioSampleRate:%d mIsPCMAudio:%d isADTS:%d\n", __FUNCTION__, __LINE__,
             mAudioChannelCount, mAudioSampleRate, mIsPCMAudio, isADTS);
 
-        AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_IN_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_AVAILABLE, 0);
-        AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_OUT_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_AVAILABLE, 0);
+        //AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_IN_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_AVAILABLE, 0);
+        //AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_OUT_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_AVAILABLE, 0);
 
         //create audio source
-        mAudioSource = new AudioSource(AUDIO_SOURCE_REMOTE_SUBMIX,mAudioSampleRate /* sampleRate */,mAudioChannelCount /* channelCount */);
+        //mAudioSource = new AudioSource(AUDIO_SOURCE_REMOTE_SUBMIX,mAudioSampleRate /* sampleRate */,mAudioChannelCount /* channelCount */);
 
         if (mAudioSource == NULL) {
             ALOGE("[%s %d] mAudioSource calloc fail:%x\n", __FUNCTION__, __LINE__, &mAudioSource);
@@ -902,8 +902,8 @@ status_t ESConvertor::stop()
     } else {
         mAudioSource->stop();
         mAudioSource.clear();
-        AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_IN_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE, 0);
-        AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_OUT_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE, 0);
+        //AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_IN_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE, 0);
+        //AudioSystem::setDeviceConnectionState(AUDIO_DEVICE_OUT_REMOTE_SUBMIX, AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE, 0);
     }
 
     if (mEncoder != NULL) {

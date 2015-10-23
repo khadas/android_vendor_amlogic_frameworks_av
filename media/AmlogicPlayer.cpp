@@ -567,7 +567,7 @@ int AmlogicPlayer::GetCallingAPKName(char *name, int size)
     char path[64];
     int ret = -1;
     strcpy(name, "NA");
-    snprintf(path, 64, "/proc/%d/comm", IPCThreadState::self()->getCallingPid());
+    snprintf(path, 64, "/proc/%d/cmdline", IPCThreadState::self()->getCallingPid());
     ret = amsysfs_get_sysfs_str(path, name, 64);
     LOGI("GetCallingAPKName %s,name=[%s]", path, name);
     return ret;
@@ -2429,7 +2429,8 @@ status_t AmlogicPlayer::initVideoSurface(void)
                          strcasestr(CallingAPkName,"android.youtube")||//for android.youtube apk
                          strcasestr(CallingAPkName,"android.browser")|| //for android.browser,4.4need it now apk
                          strcasestr(CallingAPkName,".mobile.news.ww")||//for bbc news
-                         strcasestr(CallingAPkName,"roid.youtube.tv") //for youtube tv apk
+                         strcasestr(CallingAPkName,"roid.youtube.tv") || //for youtube tv apk
+                         strcasestr(CallingAPkName,"com.android.cts.verifier") //for com.android.cts.verifier
                          )
                 {
                     needosdvideo=1;

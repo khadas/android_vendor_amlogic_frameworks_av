@@ -63,6 +63,7 @@ LOCAL_SHARED_LIBRARIES :=       \
     
 LOCAL_C_INCLUDES :=                                                 \
     $(call include-path-for, graphics corecg)                       \
+    $(TOP)/frameworks/av/media/libstagefright                       \
     $(TOP)/frameworks/av/media/libstagefright/include               \
     $(TOP)/frameworks/av/media/libstagefright/rtsp                  \
     $(TOP)/frameworks/av/media/libstagefright/wifi-display          \

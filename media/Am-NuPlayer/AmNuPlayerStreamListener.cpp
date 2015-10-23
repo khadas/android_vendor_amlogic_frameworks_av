@@ -66,7 +66,7 @@ void NuPlayer::NuPlayerStreamListener::queueBuffer(size_t index, size_t size) {
         mSendDataNotification = false;
 
         if (mTargetID != 0) {
-            (new AMessage(kWhatMoreDataQueued, mTargetID))->post();
+            //(new AMessage(kWhatMoreDataQueued, mTargetID))->post();
         }
     }
 }
@@ -87,7 +87,7 @@ void NuPlayer::NuPlayerStreamListener::issueCommand(
         mSendDataNotification = false;
 
         if (mTargetID != 0) {
-            (new AMessage(kWhatMoreDataQueued, mTargetID))->post();
+            //(new AMessage(kWhatMoreDataQueued, mTargetID))->post();
         }
     }
 }

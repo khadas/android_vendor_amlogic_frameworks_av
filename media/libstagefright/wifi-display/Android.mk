@@ -14,6 +14,8 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright/mpeg2ts \
         $(TOP)/vendor/amlogic/frameworks/services/systemcontrol \
         $(TOP)/frameworks/native/include/media/hardware \
+        $(TOP)/system/core/base/include/ \
+
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \

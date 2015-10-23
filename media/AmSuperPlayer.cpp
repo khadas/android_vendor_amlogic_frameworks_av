@@ -39,10 +39,10 @@
 #include "AmSuperPlayer.h"
 #include "AmlogicPlayer.h"
 
-#include "MidiFile.h"
+//#include "MidiFile.h"
 #include "TestPlayerStub.h"
 #include "StagefrightPlayer.h"
-#include "nuplayer/NuPlayerDriver.h"
+#include "Am-NuPlayer/AmNuPlayerDriver.h"
 
 #include <media/IMediaHTTPService.h>
 
@@ -764,7 +764,7 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
             break;
         case SONIVOX_PLAYER:
             LOGV(" create MidiFile");
-            p = new MidiFile();
+            p = new NuPlayerDriver();
             break;
         case STAGEFRIGHT_PLAYER:
             LOGV(" create StagefrightPlayer");

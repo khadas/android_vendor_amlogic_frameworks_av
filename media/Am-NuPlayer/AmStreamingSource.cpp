@@ -43,7 +43,7 @@ NuPlayer::StreamingSource::StreamingSource(
 
 NuPlayer::StreamingSource::~StreamingSource() {
     if (mLooper != NULL) {
-        mLooper->unregisterHandler(id());
+        //mLooper->unregisterHandler(this);
         mLooper->stop();
     }
 }
@@ -163,7 +163,7 @@ status_t NuPlayer::StreamingSource::postReadBuffer() {
         mBuffering = true;
     }
 
-    (new AMessage(kWhatReadBuffer, id()))->post();
+    (new AMessage(kWhatReadBuffer, this))->post();
     return OK;
 }
 

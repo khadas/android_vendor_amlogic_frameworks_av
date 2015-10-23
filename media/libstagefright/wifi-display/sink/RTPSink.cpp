@@ -310,7 +310,7 @@ namespace android
 
         if (mRenderer != NULL)
         {
-            looper()->unregisterHandler(mRenderer->id());
+            //looper()->unregisterHandler(mRenderer->this);
             mRenderer.clear();
         }
     }
@@ -324,8 +324,8 @@ namespace android
 
         int clientRtp;
 
-        sp<AMessage> rtpNotify = new AMessage(kWhatRTPNotify, id());
-        sp<AMessage> rtcpNotify = new AMessage(kWhatRTCPNotify, id());
+        sp<AMessage> rtpNotify = new AMessage(kWhatRTPNotify, this);
+        sp<AMessage> rtcpNotify = new AMessage(kWhatRTCPNotify, this);
         for (clientRtp = 15550;; clientRtp += 2)
         {
             int32_t rtpSession;
@@ -495,7 +495,7 @@ namespace android
 
     status_t RTPSink::injectPacket(bool isRTP, const sp<ABuffer> &buffer)
     {
-        sp<AMessage> msg = new AMessage(kWhatInject, id());
+        sp<AMessage> msg = new AMessage(kWhatInject, this);
         msg->setInt32("isRTP", isRTP);
         msg->setBuffer("buffer", buffer);
         msg->post();
@@ -682,7 +682,7 @@ namespace android
         {
             if (mRenderer == NULL)
             {
-                sp<AMessage> notifyLost = new AMessage(kWhatPacketLost, id());
+                sp<AMessage> notifyLost = new AMessage(kWhatPacketLost, this);
                 notifyLost->setInt32("ssrc", srcId);
 
                 mRenderer = new TunnelRenderer(notifyLost, mBufferProducer, mStopNotify);
@@ -691,11 +691,11 @@ namespace android
                 mRenderer->setIsHDCP(mIsHDCP);
             }
 
-            sp<AMessage> queueBufferMsg =
-                new AMessage(TunnelRenderer::kWhatQueueBuffer, mRenderer->id());
+            //sp<AMessage> queueBufferMsg =
+            //    new AMessage(TunnelRenderer::kWhatQueueBuffer, mRenderer->this);
 
-            sp<Source> source = new Source(seqNo, buffer, queueBufferMsg);
-            mSources.add(srcId, source);
+            //sp<Source> source = new Source(seqNo, buffer, queueBufferMsg);
+            //mSources.add(srcId, source);
         }
         else
         {
@@ -861,7 +861,7 @@ namespace android
 
     void RTPSink::scheduleSendRR()
     {
-        (new AMessage(kWhatSendRR, id()))->post(2000000ll);
+        (new AMessage(kWhatSendRR, this))->post(2000000ll);
     }
 
     void RTPSink::addSDES(const sp<ABuffer> &buffer)

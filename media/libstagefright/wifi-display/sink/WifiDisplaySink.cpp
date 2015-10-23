@@ -31,6 +31,8 @@
 #include <media/stagefright/MediaErrors.h>
 #include <cutils/properties.h>
 
+#include <base/stringprintf.h>
+#include <base/strings.h>
 
 #define CEA_HIGH_RESOLUTION 			"0001DEFF"
 #define CEA_NORMAL_RESOLUTION 	"00008C7F"
@@ -75,7 +77,7 @@ namespace android
     {
         prepareHDCP();
         mConnectionRetry = 0;
-        sp<AMessage> msg = new AMessage(kWhatStart, id());
+        sp<AMessage> msg = new AMessage(kWhatStart, this);
         msg->setString("sourceHost", sourceHost);
         msg->setInt32("sourcePort", sourcePort);
         ALOGI("post msg kWhatStart.");
@@ -86,14 +88,14 @@ namespace android
     {
         prepareHDCP();
         mConnectionRetry = 0;
-        sp<AMessage> msg = new AMessage(kWhatStart, id());
+        sp<AMessage> msg = new AMessage(kWhatStart, this);
         msg->setString("setupURI", uri);
         msg->post();
     }
 
     void WifiDisplaySink::retryStart(int32_t uDelay)
     {
-        sp<AMessage> msg = new AMessage(kWhatStart, id());
+        sp<AMessage> msg = new AMessage(kWhatStart, this);
         msg->setString("sourceHost", mRTSPHost.c_str());
         msg->setInt32("sourcePort", mRTSPPort);
         ALOGI("post msg kWhatStart.");
@@ -103,7 +105,7 @@ namespace android
 
     void WifiDisplaySink::stop(void)
     {
-        sp<AMessage> msg = new AMessage(kWhatStop, id());
+        sp<AMessage> msg = new AMessage(kWhatStop, this);
         msg->post();
     }
     // static
@@ -216,7 +218,7 @@ namespace android
         case kWhatStart:
         {
             ALOGI("Received msg kWhatStart.");
-            mNotifyStop = new AMessage(kWhatNoPacket, id());
+            mNotifyStop = new AMessage(kWhatNoPacket, this);
             if (msg->findString("setupURI", &mSetupURI))
             {
                 AString path, user, pass;
@@ -231,17 +233,17 @@ namespace android
                 CHECK(msg->findInt32("sourcePort", &mRTSPPort));
             }
 
-            sp<AMessage> notify = new AMessage(kWhatRTSPNotify, id());
+            sp<AMessage> notify = new AMessage(kWhatRTSPNotify, this);
 
             ALOGI("Create RTSPClient.");
             status_t err = mNetSession->createRTSPClient(
                                mRTSPHost.c_str(), mRTSPPort, notify, &mSessionID);
             if (err)	//network not ready
             {
-                sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
                 ALOGI("post msg kWhatSinkNotify - RTSP_ERROR x1");
-                msg->setString("reason", "RTSP_ERROR x1");
-                msg->post();
+                //msg->setString("reason", "RTSP_ERROR x1");
+                //msg->post();
                 break;
             }
             CHECK_EQ(err, (status_t)OK);
@@ -288,7 +290,7 @@ namespace android
 
                     if (mRTPSink != NULL)
                     {
-                        looper()->unregisterHandler(mRTPSink->id());
+                        looper()->unregisterHandler(mRTPSink->this);
                         mRTPSink.clear();
                     }
 #endif
@@ -304,18 +306,18 @@ namespace android
                         }
                         else
                         {
-                            sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                            //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
                             ALOGI("Post msg kWhatSinkNotify - RTSP_ERROR x2");
-                            msg->setString("reason", "RTSP_ERROR x2");
-                            msg->post();
+                            //msg->setString("reason", "RTSP_ERROR x2");
+                            //msg->post();
                         }
                     }
                     else if(err == -104)    //connection reset by peer
                     {
-                        sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                        //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
                         ALOGI("post msg kWhatSinkNotify - connection reset by peer");
-                        msg->setString("reason", "RTSP_RESET");
-                        msg->post();
+                        //msg->setString("reason", "RTSP_RESET");
+                        //msg->post();
                     }
                     //looper()->stop();
                 }
@@ -400,7 +402,7 @@ namespace android
                     // HDCPObserver::notify is completely handled before
                     // we clear the HDCP instance and unload the shared
                     // library :(
-                    (new AMessage(kWhatFinishStop2, id()))->post(300000ll);
+                    (new AMessage(kWhatFinishStop2, this))->post(300000ll);
                     break;
                 }
 #endif
@@ -409,7 +411,7 @@ namespace android
                 ALOGE("HDCP failure, shutting down.");
                 // TODO: Is this error handling correct?
                 // If any error occured, we should send M8 to terminate RTSP.
-                sp<AMessage> msg = new AMessage(kWhatStop, id());
+                sp<AMessage> msg = new AMessage(kWhatStop, this);
                 msg->post();
                 break;
             }
@@ -427,7 +429,7 @@ namespace android
             }
             if (mRTPSink != NULL)
             {
-                looper()->unregisterHandler(mRTPSink->id());
+                //looper()->unregisterHandler(mRTPSink->this);
                 mRTPSink.clear();
             }
 
@@ -444,10 +446,10 @@ namespace android
         }
         case kWhatNoPacket:
         {
-            sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+            //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
             ALOGI("post msg kWhatSinkNotify - RTP no packets");
-            msg->setString("reason", "RTP_NO_PACKET");
-            msg->post();
+            //msg->setString("reason", "RTP_NO_PACKET");
+            //msg->post();
 
             break;
         }
@@ -580,7 +582,7 @@ namespace android
 
         mState = PAUSED;
 
-        AString url = StringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+        AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
 
         ALOGI("%s: send PLAY Request", __FUNCTION__);
 
@@ -686,10 +688,10 @@ namespace android
             return ERROR_UNSUPPORTED;
         }
 
-        sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mHandlerId);
+        //sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mHandlerId);
         ALOGI("post msg kWhatSinkNotify - received msg teardown Response");
-        msg1->setString("reason", "RTSP_TEARDOWN");
-        msg1->post();
+        //msg1->setString("reason", "RTSP_TEARDOWN");
+        //msg1->post();
 
         mState = UNDEFINED;
 
@@ -886,7 +888,7 @@ namespace android
 
             if (err != OK)
             {
-                looper()->unregisterHandler(mRTPSink->id());
+                //looper()->unregisterHandler(mRTPSink->this);
                 mRTPSink.clear();
                 return;
             }
@@ -945,7 +947,7 @@ namespace android
         AString response = "RTSP/1.0 200 OK\r\n";
         AppendCommonResponse(&response, cseq);
         response.append("Content-Type: text/parameters\r\n");
-        response.append(StringPrintf("Content-Length: %d\r\n", strlen(body)));
+        response.append(AStringPrintf("Content-Length: %d\r\n", strlen(body)));
         response.append("\r\n");
         response.append(body);
 
@@ -956,7 +958,7 @@ namespace android
 
     status_t WifiDisplaySink::sendDescribe(int32_t sessionID, const char *uri)
     {
-        AString request = StringPrintf("DESCRIBE %s RTSP/1.0\r\n", uri);
+        AString request = AStringPrintf("DESCRIBE %s RTSP/1.0\r\n", uri);
         AppendCommonResponse(&request, mNextCSeq);
 
         request.append("Accept: application/sdp\r\n");
@@ -995,13 +997,13 @@ namespace android
 
             if (err != OK)
             {
-                looper()->unregisterHandler(mRTPSink->id());
+                //looper()->unregisterHandler(mRTPSink->this);
                 mRTPSink.clear();
                 return err;
             }
         }
 
-        AString request = StringPrintf("SETUP %s RTSP/1.0\r\n", uri);
+        AString request = AStringPrintf("SETUP %s RTSP/1.0\r\n", uri);
 
         AppendCommonResponse(&request, mNextCSeq);
 
@@ -1014,7 +1016,7 @@ namespace android
             int32_t rtpPort = mRTPSink->getRTPPort();
 
             request.append(
-                StringPrintf(
+                AStringPrintf(
                     "Transport: RTP/AVP/UDP;unicast;client_port=%d-%d\r\n",
                     rtpPort, rtpPort + 1));
         }
@@ -1041,11 +1043,11 @@ namespace android
 
     status_t WifiDisplaySink::sendPlay(int32_t sessionID, const char *uri)
     {
-        AString request = StringPrintf("PLAY %s RTSP/1.0\r\n", uri);
+        AString request = AStringPrintf("PLAY %s RTSP/1.0\r\n", uri);
 
         AppendCommonResponse(&request, mNextCSeq);
 
-        request.append(StringPrintf("Session: %s\r\n", mPlaybackSessionID.c_str()));
+        request.append(AStringPrintf("Session: %s\r\n", mPlaybackSessionID.c_str()));
         request.append("\r\n");
 
         ALOGI("\nSend Request:\n%s", request.c_str());
@@ -1069,7 +1071,7 @@ namespace android
 
     status_t WifiDisplaySink::sendTeardown(int32_t sessionID, const char *uri)
     {
-        AString request = StringPrintf("TEARDOWN %s RTSP/1.0\r\n", uri);
+        AString request = AStringPrintf("TEARDOWN %s RTSP/1.0\r\n", uri);
         AppendCommonResponse(&request, mNextCSeq);
         request.append("\r\n");
 
@@ -1109,14 +1111,14 @@ namespace android
         CHECK_EQ(err, (status_t)OK);
 
         if (strstr(content, "wfd_trigger_method: SETUP\r\n") != NULL) {
-            AString url = StringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+            AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
             status_t err = sendSetup( sessionID, url.c_str());
 
             CHECK_EQ(err, (status_t)OK);
         }
         else if (strstr(content, "wfd_trigger_method: TEARDOWN\r\n") != NULL)
         {
-            AString url = StringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+            AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
             status_t err = sendTeardown(sessionID, url.c_str());
             CHECK_EQ(err, (status_t)OK);
         }
@@ -1157,7 +1159,7 @@ namespace android
 
         if (cseq >= 0)
         {
-            response->append(StringPrintf("CSeq: %d\r\n", cseq));
+            response->append(AStringPrintf("CSeq: %d\r\n", cseq));
         }
     }
 
@@ -1204,7 +1206,7 @@ namespace android
             return ERROR_UNSUPPORTED;
         }
 
-        sp<AMessage> notify = new AMessage(kWhatHDCPNotify, id());
+        sp<AMessage> notify = new AMessage(kWhatHDCPNotify, this);
         mHDCPObserver = new HDCPObserver(notify);
 
         status_t err = mHDCP->setObserver(mHDCPObserver);

@@ -13,6 +13,8 @@
 ** See the License for the specific language governing permissions and
 ** limitations under the License.
 */
+#define LOG_NDEBUG 0
+
 #define LOG_TAG "AmlogicMediaFactory"
 #include <utils/Log.h>
 #include <cutils/properties.h>
@@ -54,7 +56,7 @@ public:
        return 0.0;
     }
 
-    virtual sp<MediaPlayerBase> createPlayer() {
+    virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
         ALOGV("Create AmlogicPlayer stub");
         return new AmlogicPlayer();
     }
@@ -83,7 +85,7 @@ public:
         read(fd, buf, sizeof(buf));
         lseek(fd, offset, SEEK_SET);
         long ident = *((long*)buf);
-        /* Ogg vorbis?
+    /* Ogg vorbis?
          * ogm header syntax:
          * number_page_segments:1 byte -----> buf[28]
          * egment_table : buf[29] .....
@@ -94,6 +96,7 @@ public:
                 return 0.0;  //ogg
             }
         }
+        /*
         // Some kind of MIDI?
         EAS_DATA_HANDLE easdata;
         if (EAS_Init(&easdata) == EAS_SUCCESS) {
@@ -110,6 +113,7 @@ public:
             }
             EAS_Shutdown(easdata);
         }
+        */
 
         return 0.9;
     }
@@ -120,7 +124,7 @@ public:
         return 1.0;
     }
 
-    virtual sp<MediaPlayerBase> createPlayer() {
+    virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
         ALOGV("Create Amsuperplayer stub");
         return new AmSuperPlayer();
     }
@@ -131,7 +135,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const char* url,
                                float curScore) {
-        static const float kOurScore = 1.0;
+        static const float kOurScore = 0.85;
 
         char value[PROPERTY_VALUE_MAX];
         if (property_get("media.hls.disable-nuplayer", value, NULL)
@@ -166,7 +170,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
         return 0.8;
     }
 
-    virtual sp<MediaPlayerBase> createPlayer() {
+    virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
         ALOGV(" create AmNuPlayer");
         return new NuPlayerDriver();
     }
@@ -174,6 +178,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
 
 int AmlogicMediaFactoryInit(void)
 {
+
     status_t err;
     AmlogicPlayer::BasicInit();
     err = MediaPlayerFactory::registerFactory(new AmlogicPlayerFactory(), AMLOGIC_PLAYER);
@@ -182,6 +187,7 @@ int AmlogicMediaFactoryInit(void)
     ALOGV("register  AmSuperPlayerFactory err =%d\n", err);
     err = MediaPlayerFactory::registerFactory(new AmNuPlayerFactory(), AMNUPLAYER);
     ALOGV("register  AmNuPlayerFactory err =%d\n", err);
+
     return 0;
 }
 

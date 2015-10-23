@@ -20,7 +20,7 @@
 
 #include <media/MediaPlayerInterface.h>
 #include <media/stagefright/foundation/AHandler.h>
-#include <media/stagefright/NativeWindowWrapper.h>
+#include <NativeWindowWrapper.h>
 
 namespace android {
 

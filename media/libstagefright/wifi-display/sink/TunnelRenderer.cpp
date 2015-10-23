@@ -525,7 +525,7 @@ namespace android
         //mPlayer = service->create(getpid(), mPlayerClient, 0);
         mPlayer = service->create( mPlayerClient, 0);
         CHECK(mPlayer != NULL);
-        CHECK_EQ(mPlayer->setDataSource(mStreamSource), (status_t)OK);
+        //CHECK_EQ(mPlayer->setDataSource(mStreamSource), (status_t)OK);
 
 
         mSystemControlService->setProperty(String16("media.libplayer.wfd"), String16("1"));

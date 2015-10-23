@@ -60,40 +60,42 @@ struct BpScreenMediaSource : public BpInterface<IScreenMediaSource> {
     }
 
     virtual status_t registerClient(const sp<IScreenMediaSourceClient> &client,
-                                          int32_t width,
-                                          int32_t height,
-                                          int32_t framerate,
-                                          SCREENMEDIASOURCEDATATYPE data_type,
-                                          int32_t* client_id,
-                                          const sp<IGraphicBufferProducer> &gbp) {
+                                int32_t width,
+                                int32_t height,
+                                int32_t framerate,
+                                SCREENMEDIASOURCEDATATYPE data_type,
+                                int32_t* client_id,
+                                const sp<IGraphicBufferProducer> &gbp) {
 
 
         ALOGV("[%s %d] client:0x%x, width:%d height:%d framerate:%d data_type:%d", __FUNCTION__, __LINE__, client.get(), width, height, framerate, data_type);
 
         Parcel data, reply;
         data.writeInterfaceToken(IScreenMediaSource::getInterfaceDescriptor());
-		    data.writeStrongBinder(client->asBinder());
-		    data.writeInt32(width);
-		    data.writeInt32(height);
-		    data.writeInt32(framerate);
-		    data.writeInt32((int32_t)data_type);
-	        if (data_type == SCREENMEDIASOURC_HANDLE_TYPE && gbp != NULL) {
-	            ALOGV("[%s %d] gbp: 0x%x", __FUNCTION__, __LINE__, gbp.get());
-	            data.writeStrongBinder(gbp->asBinder());
-	        }
-
-	        remote()->transact(REGISTERCLIENT, data, &reply);
-
-	        status_t err = reply.readInt32();
-	        if (err == OK) {
-	            *client_id = reply.readInt32();
-	        } else {
-	            *client_id = -1;
-	        }
-
-		    ALOGV("[%s %d] client_id:%d", __FUNCTION__, __LINE__, *client_id);
-            return err;
+        //data.writeStrongBinder(client->asBinder());
+        data.writeStrongBinder(IInterface::asBinder(client));
+        data.writeInt32(width);
+        data.writeInt32(height);
+        data.writeInt32(framerate);
+        data.writeInt32((int32_t)data_type);
+        if (data_type == SCREENMEDIASOURC_HANDLE_TYPE && gbp != NULL) {
+            ALOGV("[%s %d] gbp: 0x%x", __FUNCTION__, __LINE__, gbp.get());
+            //data.writeStrongBinder(gbp->asBinder());
+            data.writeStrongBinder(IInterface::asBinder(gbp));
         }
+
+        remote()->transact(REGISTERCLIENT, data, &reply);
+
+        status_t err = reply.readInt32();
+        if (err == OK) {
+            *client_id = reply.readInt32();
+        } else {
+            *client_id = -1;
+        }
+
+        ALOGV("[%s %d] client_id:%d", __FUNCTION__, __LINE__, *client_id);
+        return err;
+    }
 
     virtual status_t unregisterClient(int32_t client_id) {
         Parcel data, reply;
@@ -153,7 +155,8 @@ struct BpScreenMediaSource : public BpInterface<IScreenMediaSource> {
         Parcel data, reply;
         data.writeInterfaceToken(IScreenMediaSource::getInterfaceDescriptor());
         data.writeInt32(client_id);
-        data.writeStrongBinder(buffer->asBinder());
+        //data.writeStrongBinder(buffer->asBinder());
+        data.writeStrongBinder(IInterface::asBinder(buffer));
 
         remote()->transact(READBUFFER, data, &reply);
 
@@ -170,7 +173,8 @@ struct BpScreenMediaSource : public BpInterface<IScreenMediaSource> {
         Parcel data, reply;
         data.writeInterfaceToken(IScreenMediaSource::getInterfaceDescriptor());
         data.writeInt32(client_id);
-        data.writeStrongBinder(buffer->asBinder());
+        //data.writeStrongBinder(buffer->asBinder());
+        data.writeStrongBinder(IInterface::asBinder(buffer));
 
         remote()->transact(FREEBUFFER, data, &reply);
         return OK;

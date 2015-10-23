@@ -126,7 +126,7 @@ void NuPlayer::Renderer::queueBuffer(
         bool audio,
         const sp<ABuffer> &buffer,
         const sp<AMessage> &notifyConsumed) {
-    sp<AMessage> msg = new AMessage(kWhatQueueBuffer, id());
+    sp<AMessage> msg = new AMessage(kWhatQueueBuffer, this);
     msg->setInt32("audio", static_cast<int32_t>(audio));
     msg->setBuffer("buffer", buffer);
     msg->setMessage("notifyConsumed", notifyConsumed);
@@ -136,7 +136,7 @@ void NuPlayer::Renderer::queueBuffer(
 void NuPlayer::Renderer::queueEOS(bool audio, status_t finalResult) {
     CHECK_NE(finalResult, (status_t)OK);
 
-    sp<AMessage> msg = new AMessage(kWhatQueueEOS, id());
+    sp<AMessage> msg = new AMessage(kWhatQueueEOS, this);
     msg->setInt32("audio", static_cast<int32_t>(audio));
     msg->setInt32("finalResult", finalResult);
     msg->post();
@@ -160,7 +160,7 @@ void NuPlayer::Renderer::flush(bool audio, bool notifyComplete) {
         }
     }
 
-    sp<AMessage> msg = new AMessage(kWhatFlush, id());
+    sp<AMessage> msg = new AMessage(kWhatFlush, this);
     msg->setInt32("audio", static_cast<int32_t>(audio));
     msg->post();
 }
@@ -183,27 +183,27 @@ void NuPlayer::Renderer::signalTimeDiscontinuity() {
 }
 
 void NuPlayer::Renderer::signalAudioSinkChanged() {
-    (new AMessage(kWhatAudioSinkChanged, id()))->post();
+    (new AMessage(kWhatAudioSinkChanged, this))->post();
 }
 
 void NuPlayer::Renderer::signalDisableOffloadAudio() {
-    (new AMessage(kWhatDisableOffloadAudio, id()))->post();
+    (new AMessage(kWhatDisableOffloadAudio, this))->post();
 }
 
 void NuPlayer::Renderer::signalEnableOffloadAudio() {
-    (new AMessage(kWhatEnableOffloadAudio, id()))->post();
+    (new AMessage(kWhatEnableOffloadAudio, this))->post();
 }
 
 void NuPlayer::Renderer::pause() {
-    (new AMessage(kWhatPause, id()))->post();
+    (new AMessage(kWhatPause, this))->post();
 }
 
 void NuPlayer::Renderer::resume() {
-    (new AMessage(kWhatResume, id()))->post();
+    (new AMessage(kWhatResume, this))->post();
 }
 
 void NuPlayer::Renderer::setVideoFrameRate(float fps) {
-    sp<AMessage> msg = new AMessage(kWhatSetVideoFrameRate, id());
+    sp<AMessage> msg = new AMessage(kWhatSetVideoFrameRate, this);
     msg->setFloat("frame-rate", fps);
     msg->post();
 }
@@ -351,7 +351,7 @@ status_t NuPlayer::Renderer::openAudioSink(
         bool hasVideo,
         uint32_t flags,
         bool *isOffloaded) {
-    sp<AMessage> msg = new AMessage(kWhatOpenAudioSink, id());
+    sp<AMessage> msg = new AMessage(kWhatOpenAudioSink, this);
     msg->setMessage("format", format);
     msg->setInt32("offload-only", offloadOnly);
     msg->setInt32("has-video", hasVideo);
@@ -372,7 +372,7 @@ status_t NuPlayer::Renderer::openAudioSink(
 }
 
 void NuPlayer::Renderer::closeAudioSink() {
-    sp<AMessage> msg = new AMessage(kWhatCloseAudioSink, id());
+    sp<AMessage> msg = new AMessage(kWhatCloseAudioSink, this);
 
     sp<AMessage> response;
     msg->postAndAwaitResponse(&response);
@@ -400,7 +400,7 @@ void NuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
             response->setInt32("err", err);
             response->setInt32("offload", offloadingAudio());
 
-            uint32_t replyID;
+            sp<AReplyToken> replyID;
             CHECK(msg->senderAwaitsResponse(&replyID));
             response->postReply(replyID);
 
@@ -409,7 +409,7 @@ void NuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
 
         case kWhatCloseAudioSink:
         {
-            uint32_t replyID;
+            sp<AReplyToken> replyID;
             CHECK(msg->senderAwaitsResponse(&replyID));
 
             onCloseAudioSink();
@@ -582,7 +582,7 @@ void NuPlayer::Renderer::postDrainAudioQueue_l(int64_t delayUs) {
     }
 
     mDrainAudioQueuePending = true;
-    sp<AMessage> msg = new AMessage(kWhatDrainAudioQueue, id());
+    sp<AMessage> msg = new AMessage(kWhatDrainAudioQueue, this);
     msg->setInt32("generation", mAudioQueueGeneration);
     msg->post(delayUs);
 }
@@ -694,7 +694,7 @@ size_t NuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     mAnchorMaxMediaUs = -1;
 
     if (hasEOS) {
-        (new AMessage(kWhatStopAudioSink, id()))->post();
+        (new AMessage(kWhatStopAudioSink, this))->post();
     }
 
     return sizeCopied;
@@ -859,7 +859,7 @@ void NuPlayer::Renderer::postDrainVideoQueue_l() {
 
     QueueEntry &entry = *mVideoQueue.begin();
 
-    sp<AMessage> msg = new AMessage(kWhatDrainVideoQueue, id());
+    sp<AMessage> msg = new AMessage(kWhatDrainVideoQueue, this);
     msg->setInt32("generation", mVideoQueueGeneration);
     if (entry.mBuffer == NULL) {
         // EOS doesn't carry a timestamp.
@@ -1019,7 +1019,7 @@ void NuPlayer::Renderer::notifyEOS(bool audio, status_t finalResult, int64_t del
 }
 
 void NuPlayer::Renderer::notifyAudioOffloadTearDown() {
-    (new AMessage(kWhatAudioOffloadTearDown, id()))->post();
+    (new AMessage(kWhatAudioOffloadTearDown, this))->post();
 }
 
 void NuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t isAudio) {
@@ -1527,7 +1527,7 @@ void NuPlayer::Renderer::onAudioOffloadTearDown(AudioOffloadTearDownReason reaso
 void NuPlayer::Renderer::startAudioOffloadPauseTimeout() {
     if (offloadingAudio()) {
         mWakeLock->acquire();
-        sp<AMessage> msg = new AMessage(kWhatAudioOffloadPauseTimeout, id());
+        sp<AMessage> msg = new AMessage(kWhatAudioOffloadPauseTimeout, this);
         msg->setInt32("generation", mAudioOffloadPauseTimeoutGeneration);
         msg->post(kOffloadPauseMaxUs);
     }

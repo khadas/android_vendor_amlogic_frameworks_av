@@ -672,7 +672,7 @@ void NuPlayerDriver::notifyListener_l(
                     }
                 }
                 if (mLooping || (mAutoLoop
-                        && (mAudioSink == NULL || mAudioSink->realtime()))) {
+                        && (mAudioSink == NULL /*|| mAudioSink->realtime()*/))) {
                     mPlayer->seekToAsync(0);
                     if (mAudioSink != NULL) {
                         // The renderer has stopped the sink at the end in order to play out
