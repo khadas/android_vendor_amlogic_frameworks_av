@@ -56,7 +56,8 @@ LOCAL_SHARED_LIBRARIES :=       \
     libstagefright              \
     libstagefright_foundation \
     libion \
-    libamnuplayer
+    libamnuplayer \
+    libsystemcontrolservice
     
 LOCAL_C_INCLUDES :=                                                 \
     $(call include-path-for, graphics corecg)                       \
@@ -72,7 +73,8 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/external/icu/icu4c/source/i18n					\
     $(TOP)/$(MESON_GRALLOC_DIR) \
     $(TOP)/system/core/libion/include/\
-    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer
+    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer \
+    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol
 
 
 ifeq ($(BOARD_PLAYREADY_LP_IN_SS), true)
