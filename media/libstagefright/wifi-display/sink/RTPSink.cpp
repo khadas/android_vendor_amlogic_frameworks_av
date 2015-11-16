@@ -310,7 +310,7 @@ namespace android
 
         if (mRenderer != NULL)
         {
-            //looper()->unregisterHandler(mRenderer->this);
+            looper()->unregisterHandler(mRenderer->id());
             mRenderer.clear();
         }
     }
@@ -691,11 +691,11 @@ namespace android
                 mRenderer->setIsHDCP(mIsHDCP);
             }
 
-            //sp<AMessage> queueBufferMsg =
-            //    new AMessage(TunnelRenderer::kWhatQueueBuffer, mRenderer->this);
+            sp<AMessage> queueBufferMsg =
+                new AMessage(TunnelRenderer::kWhatQueueBuffer, mRenderer);
 
-            //sp<Source> source = new Source(seqNo, buffer, queueBufferMsg);
-            //mSources.add(srcId, source);
+            sp<Source> source = new Source(seqNo, buffer, queueBufferMsg);
+            mSources.add(srcId, source);
         }
         else
         {

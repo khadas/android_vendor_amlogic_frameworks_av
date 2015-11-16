@@ -31,8 +31,6 @@
 #include <media/stagefright/MediaErrors.h>
 #include <cutils/properties.h>
 
-#include <base/stringprintf.h>
-#include <base/strings.h>
 
 #define CEA_HIGH_RESOLUTION 			"0001DEFF"
 #define CEA_NORMAL_RESOLUTION 	"00008C7F"
@@ -55,7 +53,6 @@ namespace android
           mUsingHDCP(false),
           mNeedHDCP(false),
           mNextCSeq(1),
-          mHandlerId(0),
           mConnectionRetry(0),
           mResolution(Normal)
     {
@@ -68,9 +65,9 @@ namespace android
     {
     }
 
-    void WifiDisplaySink::setHandlerId(int32_t id)
+    void WifiDisplaySink::setSinkHandler(const sp<AHandler> &handler)
     {
-        mHandlerId = id;
+        mSinkHandler = handler;
     }
 
     void WifiDisplaySink::start(const char *sourceHost, int32_t sourcePort)
@@ -240,10 +237,10 @@ namespace android
                                mRTSPHost.c_str(), mRTSPPort, notify, &mSessionID);
             if (err)	//network not ready
             {
-                //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
                 ALOGI("post msg kWhatSinkNotify - RTSP_ERROR x1");
-                //msg->setString("reason", "RTSP_ERROR x1");
-                //msg->post();
+                msg->setString("reason", "RTSP_ERROR x1");
+                msg->post();
                 break;
             }
             CHECK_EQ(err, (status_t)OK);
@@ -290,7 +287,7 @@ namespace android
 
                     if (mRTPSink != NULL)
                     {
-                        looper()->unregisterHandler(mRTPSink->this);
+                        looper()->unregisterHandler(mRTPSink->id());
                         mRTPSink.clear();
                     }
 #endif
@@ -306,18 +303,18 @@ namespace android
                         }
                         else
                         {
-                            //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                            sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
                             ALOGI("Post msg kWhatSinkNotify - RTSP_ERROR x2");
-                            //msg->setString("reason", "RTSP_ERROR x2");
-                            //msg->post();
+                            msg->setString("reason", "RTSP_ERROR x2");
+                            msg->post();
                         }
                     }
                     else if(err == -104)    //connection reset by peer
                     {
-                        //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+                        sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
                         ALOGI("post msg kWhatSinkNotify - connection reset by peer");
-                        //msg->setString("reason", "RTSP_RESET");
-                        //msg->post();
+                        msg->setString("reason", "RTSP_RESET");
+                        msg->post();
                     }
                     //looper()->stop();
                 }
@@ -429,7 +426,7 @@ namespace android
             }
             if (mRTPSink != NULL)
             {
-                //looper()->unregisterHandler(mRTPSink->this);
+                looper()->unregisterHandler(mRTPSink->id());
                 mRTPSink.clear();
             }
 
@@ -446,10 +443,10 @@ namespace android
         }
         case kWhatNoPacket:
         {
-            //sp<AMessage> msg = new AMessage(kWhatSinkNotify, mHandlerId);
+            sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
             ALOGI("post msg kWhatSinkNotify - RTP no packets");
-            //msg->setString("reason", "RTP_NO_PACKET");
-            //msg->post();
+            msg->setString("reason", "RTP_NO_PACKET");
+            msg->post();
 
             break;
         }
@@ -688,10 +685,10 @@ namespace android
             return ERROR_UNSUPPORTED;
         }
 
-        //sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mHandlerId);
+        sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mSinkHandler);
         ALOGI("post msg kWhatSinkNotify - received msg teardown Response");
-        //msg1->setString("reason", "RTSP_TEARDOWN");
-        //msg1->post();
+        msg1->setString("reason", "RTSP_TEARDOWN");
+        msg1->post();
 
         mState = UNDEFINED;
 
@@ -888,7 +885,7 @@ namespace android
 
             if (err != OK)
             {
-                //looper()->unregisterHandler(mRTPSink->this);
+                looper()->unregisterHandler(mRTPSink->id());
                 mRTPSink.clear();
                 return;
             }
@@ -997,7 +994,7 @@ namespace android
 
             if (err != OK)
             {
-                //looper()->unregisterHandler(mRTPSink->this);
+                looper()->unregisterHandler(mRTPSink->id());
                 mRTPSink.clear();
                 return err;
             }

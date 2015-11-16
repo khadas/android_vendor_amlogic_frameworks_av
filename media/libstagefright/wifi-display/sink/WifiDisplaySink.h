@@ -49,7 +49,7 @@ namespace android
         void start(const char *uri);
         void retryStart(int32_t uDelay);
         void stop(void);
-        void setHandlerId(int32_t id);
+        void setSinkHandler(const sp<AHandler> &handler);
         void setResolution(int resolution);
         int getResolution();
     protected:
@@ -114,7 +114,7 @@ namespace android
         sp<RTPSink> mRTPSink;
         AString mPlaybackSessionID;
         int32_t mPlaybackSessionTimeoutSecs;
-        int32_t mHandlerId;
+        sp<AHandler> mSinkHandler;
         sp<AMessage> mNotifyStop;
         int32_t mRTSPPort;
         int32_t mConnectionRetry;
