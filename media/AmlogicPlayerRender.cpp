@@ -247,7 +247,7 @@ status_t AmlogicPlayerRender::NativeWindowInit(void)
     }
     native_window_set_buffer_count(mNativeWindow.get(), BUFFERNUM);
     if (ionvideo_dev) {
-        native_window_set_usage(mNativeWindow.get(), GRALLOC_USAGE_PRIVATE_1 | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
+        native_window_set_usage(mNativeWindow.get(), GRALLOC_USAGE_AML_DMA_BUFFER | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
         native_window_set_buffers_geometry(mNativeWindow.get(), ALIGN(nativeWidth, 32), nativeHeight, mNativeFormat);
         int err = mNativeWindow->query(mNativeWindow.get(), NATIVE_WINDOW_MIN_UNDEQUEUED_BUFFERS, &mMinUndequeuedBufs);
         if (err != 0) {
