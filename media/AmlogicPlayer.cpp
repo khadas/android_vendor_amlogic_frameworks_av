@@ -1933,6 +1933,11 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
 
     //size_t trackCount = mStreamInfo.stream_info.nb_streams-mStreamInfo.stream_info.total_sub_num;
     size_t trackCount = mStreamInfo.stream_info.nb_streams;
+    size_t totalTrack = mStreamInfo.stream_info.total_video_num +
+                    mStreamInfo.stream_info.total_audio_num +
+                    mStreamInfo.stream_info.total_sub_num;
+    if (trackCount > totalTrack)
+        trackCount = totalTrack;
     if (mTextDriver != NULL) {
         trackCount += mTextDriver->countExternalTracks();
     }
@@ -1941,11 +1946,15 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
     LOGE("track_count:%d \n", trackCount);
     reply->writeInt32(trackCount);
     for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
-        reply->writeInt32(2); // 2 fields
+
+
         if (mhasVideo) {
             for (int j = 0; j < mStreamInfo.stream_info.total_video_num; j++) {
                 if (i == mStreamInfo.video_info[j]->index) {
+                    reply->writeInt32(2); // 2 fields
                     reply->writeInt32(MEDIA_TRACK_TYPE_VIDEO);
+                    reply->writeString16(String16("video/"));
+                    reply->writeString16(String16("und"));
                     //continue;
                     break;
                 }
@@ -1954,7 +1963,10 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         if (mhasAudio) {
             for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
                 if (i == mStreamInfo.audio_info[m]->index) {
+                    reply->writeInt32(2); // 2 fields
                     reply->writeInt32(MEDIA_TRACK_TYPE_AUDIO);
+                    reply->writeString16(String16("audio/"));
+                    reply->writeString16(String16("und"));
                     //continue;
                     break;
                 }
@@ -1964,23 +1976,21 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         if (mhasSub) {
             for (int m = 0; m < mStreamInfo.stream_info.total_sub_num; m++) {
                 if (i == mStreamInfo.sub_info[m]->index) {
+                    reply->writeInt32(2); // 2 fields
                     reply->writeInt32(MEDIA_TRACK_TYPE_TIMEDTEXT);
                     LOGE("we found 3gpp sub index:%d  id:%d  i:%d \n", mStreamInfo.sub_info[m]->index, mStreamInfo.sub_info[m]->id, i);
+                    reply->writeString16(String16("text/"));
+                    reply->writeString16(String16("und"));
                     break;
                     //continue;
                 }
             }
         }
-        const char *lang;
-        //fixed it;
-        lang = "und";
-        reply->writeString16(String16(lang));
 
     }
     if (mTextDriver != NULL) {
         mTextDriver->getExternalTrackInfo(reply);
     }
-
     return OK;
 }
 
