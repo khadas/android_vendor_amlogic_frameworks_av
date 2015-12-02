@@ -31,7 +31,7 @@ struct ABuffer;
 struct MetaData;
 struct MediaBuffer;
 
-struct NuPlayer::Source : public AHandler {
+struct AmNuPlayer::Source : public AHandler {
     enum Flags {
         FLAG_CAN_PAUSE          = 1,
         FLAG_CAN_SEEK_BACKWARD  = 2,  // the "10 sec back button"

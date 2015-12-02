@@ -35,14 +35,14 @@
 #include <media/stagefright/MediaErrors.h>
 
 #include "avc_utils.h"
-#include "ATSParser.h"
+#include "AmATSParser.h"
 
 #define ES_AUDIO_DUMP_PATH    "/data/tmp/nuplayer_audio_es.bit"
 #define ES_VIDEO_DUMP_PATH    "/data/tmp/nuplayer_video_es.bit"
 
 namespace android {
 
-NuPlayer::Decoder::Decoder(
+AmNuPlayer::Decoder::Decoder(
         const sp<AMessage> &notify,
         const sp<Source> &source,
         const sp<Renderer> &renderer,
@@ -82,7 +82,7 @@ NuPlayer::Decoder::Decoder(
     }
 }
 
-NuPlayer::Decoder::~Decoder() {
+AmNuPlayer::Decoder::~Decoder() {
     releaseAndResetMediaBuffers();
     if (mAudioHandle) {
         fclose(mAudioHandle);
@@ -92,19 +92,29 @@ NuPlayer::Decoder::~Decoder() {
     }
 }
 
-void NuPlayer::Decoder::getStats(
+void AmNuPlayer::Decoder::getStats(
         int64_t *numFramesTotal,
         int64_t *numFramesDropped) const {
     *numFramesTotal = mNumFramesTotal;
     *numFramesDropped = mNumFramesDropped;
 }
 
-void NuPlayer::Decoder::onMessageReceived(const sp<AMessage> &msg) {
+void AmNuPlayer::Decoder::onMessageReceived(const sp<AMessage> &msg) {
     ALOGV("[%s] onMessage: %s", mComponentName.c_str(), msg->debugString().c_str());
 
     switch (msg->what()) {
         case kWhatCodecNotify:
         {
+            int32_t what;
+            if (msg->findInt32("what", &what) && what == MediaCodec::NU_AUDIO_RECONFIG) {
+                sp<AMessage> audio_para;
+                msg->findMessage("audio-msg", &audio_para);
+                if (mRenderer != NULL) {
+                    mRenderer->setAudioParameter(audio_para);
+                }
+                break;
+            }
+
             if (!isStaleReply(msg)) {
                 int32_t numInput, numOutput;
 
@@ -141,7 +151,7 @@ void NuPlayer::Decoder::onMessageReceived(const sp<AMessage> &msg) {
     }
 }
 
-void NuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
+void AmNuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
     CHECK(mCodec == NULL);
 
     mFormatChangePending = false;
@@ -184,6 +194,9 @@ void NuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
     mIsSecure = secure;
 
     mCodec->getName(&mComponentName);
+
+    sp<AMessage> notify = new AMessage(kWhatCodecNotify, this);
+    mCodec->setNuplayerNotify(notify);
 
     status_t err;
     if (mNativeWindow != NULL) {
@@ -235,7 +248,7 @@ void NuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
     mResumePending = false;
 }
 
-void NuPlayer::Decoder::onSetRenderer(const sp<Renderer> &renderer) {
+void AmNuPlayer::Decoder::onSetRenderer(const sp<Renderer> &renderer) {
     bool hadNoRenderer = (mRenderer == NULL);
     mRenderer = renderer;
     if (hadNoRenderer && mRenderer != NULL) {
@@ -243,7 +256,7 @@ void NuPlayer::Decoder::onSetRenderer(const sp<Renderer> &renderer) {
     }
 }
 
-void NuPlayer::Decoder::onGetInputBuffers(
+void AmNuPlayer::Decoder::onGetInputBuffers(
         Vector<sp<ABuffer> > *dstBuffers) {
     dstBuffers->clear();
     for (size_t i = 0; i < mInputBuffers.size(); i++) {
@@ -251,7 +264,7 @@ void NuPlayer::Decoder::onGetInputBuffers(
     }
 }
 
-void NuPlayer::Decoder::onResume(bool notifyComplete) {
+void AmNuPlayer::Decoder::onResume(bool notifyComplete) {
     mPaused = false;
 
     if (notifyComplete) {
@@ -259,7 +272,7 @@ void NuPlayer::Decoder::onResume(bool notifyComplete) {
     }
 }
 
-void NuPlayer::Decoder::onFlush(bool notifyComplete) {
+void AmNuPlayer::Decoder::onFlush(bool notifyComplete) {
     ALOGI("[%s:%d] %s flushing ", __FUNCTION__, __LINE__, mIsAudio ? "audio" : "video");
     if (mCCDecoder != NULL) {
         mCCDecoder->flush();
@@ -293,7 +306,7 @@ void NuPlayer::Decoder::onFlush(bool notifyComplete) {
     }
 }
 
-void NuPlayer::Decoder::onShutdown(bool notifyComplete) {
+void AmNuPlayer::Decoder::onShutdown(bool notifyComplete) {
     status_t err = OK;
 
     // if there is a pending resume request, notify complete now
@@ -333,7 +346,7 @@ void NuPlayer::Decoder::onShutdown(bool notifyComplete) {
     }
 }
 
-void NuPlayer::Decoder::doRequestBuffers() {
+void AmNuPlayer::Decoder::doRequestBuffers() {
     if (mFormatChangePending) {
         return;
     }
@@ -360,7 +373,7 @@ void NuPlayer::Decoder::doRequestBuffers() {
     }
 }
 
-bool NuPlayer::Decoder::handleAnInputBuffer() {
+bool AmNuPlayer::Decoder::handleAnInputBuffer() {
     if (mFormatChangePending) {
         return false;
     }
@@ -415,7 +428,7 @@ bool NuPlayer::Decoder::handleAnInputBuffer() {
     return true;
 }
 
-bool NuPlayer::Decoder::handleAnOutputBuffer() {
+bool AmNuPlayer::Decoder::handleAnOutputBuffer() {
     if (mFormatChangePending) {
         return false;
     }
@@ -442,7 +455,7 @@ bool NuPlayer::Decoder::handleAnOutputBuffer() {
             handleError(res);
             return false;
         }
-        // NuPlayer ignores this
+        // AmNuPlayer ignores this
         return true;
     } else if (res == INFO_FORMAT_CHANGED) {
         sp<AMessage> format = new AMessage();
@@ -484,13 +497,6 @@ bool NuPlayer::Decoder::handleAnOutputBuffer() {
         return true;
     } else if (res == INFO_DISCONTINUITY) {
         // nothing to do
-        return true;
-    } else if (res == INFO_AUDIO_RECONFIG) {
-        sp<AMessage> audio_para;
-        mCodec->getAudioParameter(audio_para);
-        if (mRenderer != NULL) {
-            mRenderer->setAudioParameter(audio_para);
-        }
         return true;
     } else if (res != OK) {
         if (res != -EAGAIN) {
@@ -542,7 +548,7 @@ bool NuPlayer::Decoder::handleAnOutputBuffer() {
     return true;
 }
 
-void NuPlayer::Decoder::releaseAndResetMediaBuffers() {
+void AmNuPlayer::Decoder::releaseAndResetMediaBuffers() {
     for (size_t i = 0; i < mMediaBuffers.size(); i++) {
         if (mMediaBuffers[i] != NULL) {
             mMediaBuffers[i]->release();
@@ -564,7 +570,7 @@ void NuPlayer::Decoder::releaseAndResetMediaBuffers() {
     mSkipRenderingUntilMediaTimeUs = -1;
 }
 
-void NuPlayer::Decoder::requestCodecNotification() {
+void AmNuPlayer::Decoder::requestCodecNotification() {
     if (mFormatChangePending) {
         return;
     }
@@ -575,13 +581,13 @@ void NuPlayer::Decoder::requestCodecNotification() {
     }
 }
 
-bool NuPlayer::Decoder::isStaleReply(const sp<AMessage> &msg) {
+bool AmNuPlayer::Decoder::isStaleReply(const sp<AMessage> &msg) {
     int32_t generation;
     CHECK(msg->findInt32("generation", &generation));
     return generation != mBufferGeneration;
 }
 
-status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
+status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     sp<ABuffer> accessUnit;
     bool dropAccessUnit;
     bool rememberThisTimeStamp = false;
@@ -596,15 +602,15 @@ status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
                 int32_t type;
                 CHECK(accessUnit->meta()->findInt32("discontinuity", &type));
 
-                bool dataCorrupt = (type & ATSParser::DISCONTINUITY_DATA_CORRUPTION) != 0;
+                bool dataCorrupt = (type & AmATSParser::DISCONTINUITY_DATA_CORRUPTION) != 0;
 
                 bool formatChange =
                     (mIsAudio &&
-                     (type & ATSParser::DISCONTINUITY_AUDIO_FORMAT))
+                     (type & AmATSParser::DISCONTINUITY_AUDIO_FORMAT))
                     || (!mIsAudio &&
-                            (type & ATSParser::DISCONTINUITY_VIDEO_FORMAT));
+                            (type & AmATSParser::DISCONTINUITY_VIDEO_FORMAT));
 
-                bool timeChange = (type & ATSParser::DISCONTINUITY_TIME) != 0;
+                bool timeChange = (type & AmATSParser::DISCONTINUITY_TIME) != 0;
 
                 ALOGI("%s discontinuity (format=%d, time=%d)",
                         mIsAudio ? "audio" : "video", formatChange, timeChange);
@@ -709,7 +715,7 @@ status_t NuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     return OK;
 }
 
-bool NuPlayer::Decoder::onInputBufferFetched(const sp<AMessage> &msg) {
+bool AmNuPlayer::Decoder::onInputBufferFetched(const sp<AMessage> &msg) {
     size_t bufferIx;
     CHECK(msg->findSize("buffer-ix", &bufferIx));
     CHECK_LT(bufferIx, mInputBuffers.size());
@@ -836,7 +842,7 @@ bool NuPlayer::Decoder::onInputBufferFetched(const sp<AMessage> &msg) {
     return true;
 }
 
-void NuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
+void AmNuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
     status_t err;
     int32_t render;
     size_t bufferIx;
@@ -866,7 +872,7 @@ void NuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
     }
 }
 
-bool NuPlayer::Decoder::supportsSeamlessAudioFormatChange(
+bool AmNuPlayer::Decoder::supportsSeamlessAudioFormatChange(
         const sp<AMessage> &targetFormat) const {
     if (targetFormat == NULL) {
         return true;
@@ -901,7 +907,7 @@ bool NuPlayer::Decoder::supportsSeamlessAudioFormatChange(
     return false;
 }
 
-bool NuPlayer::Decoder::supportsSeamlessFormatChange(const sp<AMessage> &targetFormat) const {
+bool AmNuPlayer::Decoder::supportsSeamlessFormatChange(const sp<AMessage> &targetFormat) const {
     if (mInputFormat == NULL) {
         return false;
     }
@@ -932,7 +938,7 @@ bool NuPlayer::Decoder::supportsSeamlessFormatChange(const sp<AMessage> &targetF
     return seamless;
 }
 
-void NuPlayer::Decoder::rememberCodecSpecificData(const sp<AMessage> &format) {
+void AmNuPlayer::Decoder::rememberCodecSpecificData(const sp<AMessage> &format) {
     if (format == NULL) {
         return;
     }
@@ -948,7 +954,7 @@ void NuPlayer::Decoder::rememberCodecSpecificData(const sp<AMessage> &format) {
     }
 }
 
-void NuPlayer::Decoder::notifyResumeCompleteIfNecessary() {
+void AmNuPlayer::Decoder::notifyResumeCompleteIfNecessary() {
     if (mResumePending) {
         mResumePending = false;
 

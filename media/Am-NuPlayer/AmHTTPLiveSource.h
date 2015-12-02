@@ -23,9 +23,9 @@
 
 namespace android {
 
-struct LiveSession;
+struct AmLiveSession;
 
-struct NuPlayer::HTTPLiveSource : public NuPlayer::Source {
+struct AmNuPlayer::HTTPLiveSource : public AmNuPlayer::Source {
     HTTPLiveSource(
             const sp<AMessage> &notify,
             const sp<IMediaHTTPService> &httpService,
@@ -72,7 +72,7 @@ private:
     status_t mFinalResult;
     off64_t mOffset;
     sp<ALooper> mLiveLooper;
-    sp<LiveSession> mLiveSession;
+    sp<AmLiveSession> mLiveSession;
     int32_t mFetchSubtitleDataGeneration;
 
     interruptcallback mInterruptCallback;

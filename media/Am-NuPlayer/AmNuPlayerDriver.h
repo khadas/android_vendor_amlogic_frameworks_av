@@ -21,10 +21,10 @@
 namespace android {
 
 struct ALooper;
-struct NuPlayer;
+struct AmNuPlayer;
 
-struct NuPlayerDriver : public MediaPlayerInterface {
-    NuPlayerDriver();
+struct AmNuPlayerDriver : public MediaPlayerInterface {
+    AmNuPlayerDriver();
 
     virtual status_t initCheck();
 
@@ -74,7 +74,7 @@ struct NuPlayerDriver : public MediaPlayerInterface {
     void notifyFlagsChanged(uint32_t flags);
 
 protected:
-    virtual ~NuPlayerDriver();
+    virtual ~AmNuPlayerDriver();
 
 private:
     enum State {
@@ -108,7 +108,7 @@ private:
     // <<<
 
     sp<ALooper> mLooper;
-    sp<NuPlayer> mPlayer;
+    sp<AmNuPlayer> mPlayer;
     sp<AudioSink> mAudioSink;
     uint32_t mPlayerFlags;
 
@@ -122,7 +122,7 @@ private:
     status_t prepare_l();
     void notifyListener_l(int msg, int ext1 = 0, int ext2 = 0, const Parcel *in = NULL);
 
-    DISALLOW_EVIL_CONSTRUCTORS(NuPlayerDriver);
+    DISALLOW_EVIL_CONSTRUCTORS(AmNuPlayerDriver);
 };
 
 }  // namespace android

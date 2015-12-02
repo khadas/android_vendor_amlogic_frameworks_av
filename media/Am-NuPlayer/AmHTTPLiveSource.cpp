@@ -20,7 +20,7 @@
 
 #include "AmHTTPLiveSource.h"
 
-#include "AnotherPacketSource.h"
+#include "AmAnotherPacketSource.h"
 #include "AmLiveDataSource.h"
 #include "AmLiveSession.h"
 
@@ -33,7 +33,7 @@
 
 namespace android {
 
-NuPlayer::HTTPLiveSource::HTTPLiveSource(
+AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
         const sp<AMessage> &notify,
         const sp<IMediaHTTPService> &httpService,
         const char *url,
@@ -62,7 +62,7 @@ NuPlayer::HTTPLiveSource::HTTPLiveSource(
     }
 }
 
-NuPlayer::HTTPLiveSource::~HTTPLiveSource() {
+AmNuPlayer::HTTPLiveSource::~HTTPLiveSource() {
     ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
     if (mLiveSession != NULL) {
         mLiveSession->disconnect();
@@ -77,7 +77,7 @@ NuPlayer::HTTPLiveSource::~HTTPLiveSource() {
     ALOGI("[%s:%d] end !", __FUNCTION__, __LINE__);
 }
 
-void NuPlayer::HTTPLiveSource::prepareAsync() {
+void AmNuPlayer::HTTPLiveSource::prepareAsync() {
     if (mLiveLooper == NULL) {
         mLiveLooper = new ALooper;
         mLiveLooper->setName("http live");
@@ -88,9 +88,9 @@ void NuPlayer::HTTPLiveSource::prepareAsync() {
 
     sp<AMessage> notify = new AMessage(kWhatSessionNotify, this);
 
-    mLiveSession = new LiveSession(
+    mLiveSession = new AmLiveSession(
             notify,
-            (mFlags & kFlagIncognito) ? LiveSession::kFlagIncognito : 0,
+            (mFlags & kFlagIncognito) ? AmLiveSession::kFlagIncognito : 0,
             mHTTPService,
             mInterruptCallback);
 
@@ -103,22 +103,22 @@ void NuPlayer::HTTPLiveSource::prepareAsync() {
 
 }
 
-void NuPlayer::HTTPLiveSource::start() {
+void AmNuPlayer::HTTPLiveSource::start() {
 }
 
-void NuPlayer::HTTPLiveSource::setParentThreadId(android_thread_id_t thread_id) {
+void AmNuPlayer::HTTPLiveSource::setParentThreadId(android_thread_id_t thread_id) {
     mParentThreadId = thread_id;
 }
 
-sp<AMessage> NuPlayer::HTTPLiveSource::getFormat(bool audio) {
+sp<AMessage> AmNuPlayer::HTTPLiveSource::getFormat(bool audio) {
     if (mLiveSession == NULL) {
         return NULL;
     }
 
     sp<AMessage> format;
     status_t err = mLiveSession->getStreamFormat(
-            audio ? LiveSession::STREAMTYPE_AUDIO
-                  : LiveSession::STREAMTYPE_VIDEO,
+            audio ? AmLiveSession::STREAMTYPE_AUDIO
+                  : AmLiveSession::STREAMTYPE_VIDEO,
             &format);
 
     if (err != OK) {
@@ -128,11 +128,11 @@ sp<AMessage> NuPlayer::HTTPLiveSource::getFormat(bool audio) {
     return format;
 }
 
-status_t NuPlayer::HTTPLiveSource::feedMoreTSData() {
+status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {
     return OK;
 }
 
-status_t NuPlayer::HTTPLiveSource::dequeueAccessUnit(
+status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         bool audio, sp<ABuffer> *accessUnit) {
     if (mBuffering) {
         if (!mLiveSession->haveSufficientDataOnAVTracks()) {
@@ -161,24 +161,24 @@ status_t NuPlayer::HTTPLiveSource::dequeueAccessUnit(
     }
 
     return mLiveSession->dequeueAccessUnit(
-            audio ? LiveSession::STREAMTYPE_AUDIO
-                  : LiveSession::STREAMTYPE_VIDEO,
+            audio ? AmLiveSession::STREAMTYPE_AUDIO
+                  : AmLiveSession::STREAMTYPE_VIDEO,
             accessUnit);
 }
 
-status_t NuPlayer::HTTPLiveSource::getDuration(int64_t *durationUs) {
+status_t AmNuPlayer::HTTPLiveSource::getDuration(int64_t *durationUs) {
     return mLiveSession->getDuration(durationUs);
 }
 
-size_t NuPlayer::HTTPLiveSource::getTrackCount() const {
+size_t AmNuPlayer::HTTPLiveSource::getTrackCount() const {
     return mLiveSession->getTrackCount();
 }
 
-sp<AMessage> NuPlayer::HTTPLiveSource::getTrackInfo(size_t trackIndex) const {
+sp<AMessage> AmNuPlayer::HTTPLiveSource::getTrackInfo(size_t trackIndex) const {
     return mLiveSession->getTrackInfo(trackIndex);
 }
 
-ssize_t NuPlayer::HTTPLiveSource::getSelectedTrack(media_track_type type) const {
+ssize_t AmNuPlayer::HTTPLiveSource::getSelectedTrack(media_track_type type) const {
     if (mLiveSession == NULL) {
         return -1;
     } else {
@@ -186,7 +186,7 @@ ssize_t NuPlayer::HTTPLiveSource::getSelectedTrack(media_track_type type) const 
     }
 }
 
-status_t NuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select, int64_t /*timeUs*/) {
+status_t AmNuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select, int64_t /*timeUs*/) {
     status_t err = mLiveSession->selectTrack(trackIndex, select);
 
 #if 0
@@ -199,17 +199,17 @@ status_t NuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select, i
         }
     }
 #endif
-    // LiveSession::selectTrack returns BAD_VALUE when selecting the currently
+    // AmLiveSession::selectTrack returns BAD_VALUE when selecting the currently
     // selected track, or unselecting a non-selected track. In this case it's an
     // no-op so we return OK.
     return (err == OK || err == BAD_VALUE) ? (status_t)OK : err;
 }
 
-status_t NuPlayer::HTTPLiveSource::seekTo(int64_t seekTimeUs) {
+status_t AmNuPlayer::HTTPLiveSource::seekTo(int64_t seekTimeUs) {
     return mLiveSession->seekTo(seekTimeUs);
 }
 
-void NuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
+void AmNuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
     switch (msg->what()) {
         case kWhatSessionNotify:
         {
@@ -229,7 +229,7 @@ void NuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
 
             sp<ABuffer> buffer;
             if (mLiveSession->dequeueAccessUnit(
-                    LiveSession::STREAMTYPE_SUBTITLES, &buffer) == OK) {
+                    AmLiveSession::STREAMTYPE_SUBTITLES, &buffer) == OK) {
                 sp<AMessage> notify = dupNotify();
                 notify->setInt32("what", kWhatSubtitleData);
                 notify->setBuffer("buffer", buffer);
@@ -256,13 +256,13 @@ void NuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
     }
 }
 
-void NuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
+void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
     int32_t what;
     CHECK(msg->findInt32("what", &what));
     ALOGI("session notify : %d\n", what);
 
     switch (what) {
-        case LiveSession::kWhatPrepared:
+        case AmLiveSession::kWhatPrepared:
         {
             // notify the current size here if we have it, otherwise report an initial size of (0,0)
             ALOGI("session notify prepared!\n");
@@ -299,7 +299,7 @@ void NuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             break;
         }
 
-        case LiveSession::kWhatPreparationFailed:
+        case AmLiveSession::kWhatPreparationFailed:
         {
             ALOGI("session notify preparation failed!\n");
             status_t err;
@@ -309,15 +309,15 @@ void NuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             break;
         }
 
-        case LiveSession::kWhatStreamsChanged:
+        case AmLiveSession::kWhatStreamsChanged:
         {
             ALOGI("session notify streams changed!\n");
             uint32_t changedMask;
             CHECK(msg->findInt32(
                         "changedMask", (int32_t *)&changedMask));
 
-            bool audio = changedMask & LiveSession::STREAMTYPE_AUDIO;
-            bool video = changedMask & LiveSession::STREAMTYPE_VIDEO;
+            bool audio = changedMask & AmLiveSession::STREAMTYPE_AUDIO;
+            bool video = changedMask & AmLiveSession::STREAMTYPE_VIDEO;
 
             sp<AMessage> reply;
             CHECK(msg->findMessage("reply", &reply));
@@ -331,7 +331,7 @@ void NuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             break;
         }
 
-        case LiveSession::kWhatError:
+        case AmLiveSession::kWhatError:
         {
             int32_t err;
             CHECK(msg->findInt32("err", &err));
@@ -344,7 +344,7 @@ void NuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             break;
         }
 
-        case LiveSession::kWhatSourceReady:
+        case AmLiveSession::kWhatSourceReady:
         {
             sp<AMessage> notify = dupNotify();
             notify->setInt32("what", kWhatSourceReady);

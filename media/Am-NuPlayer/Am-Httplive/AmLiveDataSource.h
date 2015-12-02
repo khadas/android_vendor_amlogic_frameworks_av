@@ -27,8 +27,8 @@ namespace android {
 
 struct ABuffer;
 
-struct LiveDataSource : public DataSource {
-    LiveDataSource();
+struct AmLiveDataSource : public DataSource {
+    AmLiveDataSource();
 
     virtual status_t initCheck() const;
 
@@ -42,7 +42,7 @@ struct LiveDataSource : public DataSource {
     size_t countQueuedBuffers();
 
 protected:
-    virtual ~LiveDataSource();
+    virtual ~AmLiveDataSource();
 
 private:
     Mutex mLock;
@@ -56,7 +56,7 @@ private:
 
     ssize_t readAt_l(off64_t offset, void *data, size_t size);
 
-    DISALLOW_EVIL_CONSTRUCTORS(LiveDataSource);
+    DISALLOW_EVIL_CONSTRUCTORS(AmLiveDataSource);
 };
 
 }  // namespace android

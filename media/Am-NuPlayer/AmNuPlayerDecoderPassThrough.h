@@ -24,7 +24,7 @@
 
 namespace android {
 
-struct NuPlayer::DecoderPassThrough : public DecoderBase {
+struct AmNuPlayer::DecoderPassThrough : public DecoderBase {
     DecoderPassThrough(const sp<AMessage> &notify,
                        const sp<Source> &source,
                        const sp<Renderer> &renderer);

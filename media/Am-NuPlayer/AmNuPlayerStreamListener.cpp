@@ -27,7 +27,7 @@
 
 namespace android {
 
-NuPlayer::NuPlayerStreamListener::NuPlayerStreamListener(
+AmNuPlayer::NuPlayerStreamListener::NuPlayerStreamListener(
         const sp<IStreamSource> &source,
         ALooper::handler_id id)
     : mSource(source),
@@ -46,13 +46,13 @@ NuPlayer::NuPlayerStreamListener::NuPlayerStreamListener(
     mSource->setBuffers(mBuffers);
 }
 
-void NuPlayer::NuPlayerStreamListener::start() {
+void AmNuPlayer::NuPlayerStreamListener::start() {
     for (size_t i = 0; i < kNumBuffers; ++i) {
         mSource->onBufferAvailable(i);
     }
 }
 
-void NuPlayer::NuPlayerStreamListener::queueBuffer(size_t index, size_t size) {
+void AmNuPlayer::NuPlayerStreamListener::queueBuffer(size_t index, size_t size) {
     QueueEntry entry;
     entry.mIsCommand = false;
     entry.mIndex = index;
@@ -71,7 +71,7 @@ void NuPlayer::NuPlayerStreamListener::queueBuffer(size_t index, size_t size) {
     }
 }
 
-void NuPlayer::NuPlayerStreamListener::issueCommand(
+void AmNuPlayer::NuPlayerStreamListener::issueCommand(
         Command cmd, bool synchronous, const sp<AMessage> &extra) {
     CHECK(!synchronous);
 
@@ -92,7 +92,7 @@ void NuPlayer::NuPlayerStreamListener::issueCommand(
     }
 }
 
-ssize_t NuPlayer::NuPlayerStreamListener::read(
+ssize_t AmNuPlayer::NuPlayerStreamListener::read(
         void *data, size_t size, sp<AMessage> *extra) {
     CHECK_GT(size, 0u);
 

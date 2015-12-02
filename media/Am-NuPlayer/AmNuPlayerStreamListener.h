@@ -26,7 +26,7 @@ namespace android {
 
 struct MemoryDealer;
 
-struct NuPlayer::NuPlayerStreamListener : public BnStreamListener {
+struct AmNuPlayer::NuPlayerStreamListener : public BnStreamListener {
     NuPlayerStreamListener(
             const sp<IStreamSource> &source,
             ALooper::handler_id targetID);

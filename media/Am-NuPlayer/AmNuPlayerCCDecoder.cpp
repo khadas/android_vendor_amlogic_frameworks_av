@@ -112,7 +112,7 @@ static void dumpBytePair(const sp<ABuffer> &ccBuf) {
     ALOGI("%s", out.c_str());
 }
 
-NuPlayer::CCDecoder::CCDecoder(const sp<AMessage> &notify)
+AmNuPlayer::CCDecoder::CCDecoder(const sp<AMessage> &notify)
     : mNotify(notify),
       mCurrentChannel(0),
       mSelectedTrack(-1) {
@@ -121,11 +121,11 @@ NuPlayer::CCDecoder::CCDecoder(const sp<AMessage> &notify)
       }
 }
 
-size_t NuPlayer::CCDecoder::getTrackCount() const {
+size_t AmNuPlayer::CCDecoder::getTrackCount() const {
     return mFoundChannels.size();
 }
 
-sp<AMessage> NuPlayer::CCDecoder::getTrackInfo(size_t index) const {
+sp<AMessage> AmNuPlayer::CCDecoder::getTrackInfo(size_t index) const {
     if (!isTrackValid(index)) {
         return NULL;
     }
@@ -144,7 +144,7 @@ sp<AMessage> NuPlayer::CCDecoder::getTrackInfo(size_t index) const {
     return format;
 }
 
-status_t NuPlayer::CCDecoder::selectTrack(size_t index, bool select) {
+status_t AmNuPlayer::CCDecoder::selectTrack(size_t index, bool select) {
     if (!isTrackValid(index)) {
         return BAD_VALUE;
     }
@@ -168,15 +168,15 @@ status_t NuPlayer::CCDecoder::selectTrack(size_t index, bool select) {
     return OK;
 }
 
-bool NuPlayer::CCDecoder::isSelected() const {
+bool AmNuPlayer::CCDecoder::isSelected() const {
     return mSelectedTrack >= 0 && mSelectedTrack < (int32_t) getTrackCount();
 }
 
-bool NuPlayer::CCDecoder::isTrackValid(size_t index) const {
+bool AmNuPlayer::CCDecoder::isTrackValid(size_t index) const {
     return index < getTrackCount();
 }
 
-int32_t NuPlayer::CCDecoder::getTrackIndex(size_t channel) const {
+int32_t AmNuPlayer::CCDecoder::getTrackIndex(size_t channel) const {
     if (channel < sizeof(mTrackIndices)/sizeof(mTrackIndices[0])) {
         return mTrackIndices[channel];
     }
@@ -184,7 +184,7 @@ int32_t NuPlayer::CCDecoder::getTrackIndex(size_t channel) const {
 }
 
 // returns true if a new CC track is found
-bool NuPlayer::CCDecoder::extractFromSEI(const sp<ABuffer> &accessUnit) {
+bool AmNuPlayer::CCDecoder::extractFromSEI(const sp<ABuffer> &accessUnit) {
     int64_t timeUs;
     accessUnit->meta()->findInt64("timeUs", &timeUs);
 
@@ -288,7 +288,7 @@ bool NuPlayer::CCDecoder::extractFromSEI(const sp<ABuffer> &accessUnit) {
     return trackAdded;
 }
 
-sp<ABuffer> NuPlayer::CCDecoder::filterCCBuf(
+sp<ABuffer> AmNuPlayer::CCDecoder::filterCCBuf(
         const sp<ABuffer> &ccBuf, size_t index) {
     sp<ABuffer> filteredCCBuf = new ABuffer(ccBuf->size());
     filteredCCBuf->setRange(0, 0);
@@ -310,7 +310,7 @@ sp<ABuffer> NuPlayer::CCDecoder::filterCCBuf(
     return filteredCCBuf;
 }
 
-void NuPlayer::CCDecoder::decode(const sp<ABuffer> &accessUnit) {
+void AmNuPlayer::CCDecoder::decode(const sp<ABuffer> &accessUnit) {
     if (extractFromSEI(accessUnit)) {
         ALOGI("Found CEA-608 track");
         sp<AMessage> msg = mNotify->dup();
@@ -320,7 +320,7 @@ void NuPlayer::CCDecoder::decode(const sp<ABuffer> &accessUnit) {
     // TODO: extract CC from other sources
 }
 
-void NuPlayer::CCDecoder::display(int64_t timeUs) {
+void AmNuPlayer::CCDecoder::display(int64_t timeUs) {
     if (!isTrackValid(mSelectedTrack)) {
         ALOGE("Could not find current track(index=%d)", mSelectedTrack);
         return;
@@ -353,7 +353,7 @@ void NuPlayer::CCDecoder::display(int64_t timeUs) {
     mCCMap.removeItemsAt(0, index + 1);
 }
 
-void NuPlayer::CCDecoder::flush() {
+void AmNuPlayer::CCDecoder::flush() {
     mCCMap.clear();
 }
 

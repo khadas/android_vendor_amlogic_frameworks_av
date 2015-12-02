@@ -15,7 +15,7 @@
  */
 
 #define LOG_NDEBUG 0
-#define LOG_TAG "NU-PlaylistFetcher"
+#define LOG_TAG "NU-AmPlaylistFetcher"
 #include <utils/Log.h>
 
 #include "AmPlaylistFetcher.h"
@@ -27,7 +27,7 @@
 #include "include/avc_utils.h"
 #include "include/HTTPBase.h"
 #include "include/ID3.h"
-#include "mpeg2ts/AnotherPacketSource.h"
+#include "AmAnotherPacketSource.h"
 
 #include <cutils/properties.h>
 #include <media/IStreamSource.h>
@@ -50,17 +50,17 @@
 namespace android {
 
 // static
-const int64_t PlaylistFetcher::kMinBufferedDurationUs = 10000000ll;
-const int64_t PlaylistFetcher::kMaxMonitorDelayUs = 3000000ll;
+const int64_t AmPlaylistFetcher::kMinBufferedDurationUs = 10000000ll;
+const int64_t AmPlaylistFetcher::kMaxMonitorDelayUs = 3000000ll;
 // LCM of 188 (size of a TS packet) & 1k works well
-const int32_t PlaylistFetcher::kDownloadBlockSize = 47 * 1024;
-const int32_t PlaylistFetcher::kNumSkipFrames = 5;
+const int32_t AmPlaylistFetcher::kDownloadBlockSize = 47 * 1024;
+const int32_t AmPlaylistFetcher::kNumSkipFrames = 5;
 
-const AString PlaylistFetcher::DumpPath = "/data/tmp/";
+const AString AmPlaylistFetcher::DumpPath = "/data/tmp/";
 
-PlaylistFetcher::PlaylistFetcher(
+AmPlaylistFetcher::AmPlaylistFetcher(
         const sp<AMessage> &notify,
-        const sp<LiveSession> &session,
+        const sp<AmLiveSession> &session,
         const char *uri,
         int32_t subtitleGeneration)
     : mDumpMode(-1),
@@ -92,7 +92,7 @@ PlaylistFetcher::PlaylistFetcher(
       mRefreshState(INITIAL_MINIMUM_RELOAD_DELAY),
       mFirstPTSValid(false),
       mAbsoluteTimeAnchorUs(0ll),
-      mVideoBuffer(new AnotherPacketSource(NULL)) {
+      mVideoBuffer(new AmAnotherPacketSource(NULL)) {
     memset(mPlaylistHash, 0, sizeof(mPlaylistHash));
     mStartTimeUsNotify->setInt32("what", kWhatStartedAt);
     mStartTimeUsNotify->setInt32("streamMask", 0);
@@ -107,13 +107,13 @@ PlaylistFetcher::PlaylistFetcher(
     }
 }
 
-PlaylistFetcher::~PlaylistFetcher() {
+AmPlaylistFetcher::~AmPlaylistFetcher() {
     if (mDumpHandle) {
         fclose(mDumpHandle);
     }
 }
 
-int64_t PlaylistFetcher::getSegmentStartTimeUs(int32_t seqNumber) const {
+int64_t AmPlaylistFetcher::getSegmentStartTimeUs(int32_t seqNumber) const {
     CHECK(mPlaylist != NULL);
 
     int32_t firstSeqNumberInPlaylist;
@@ -149,7 +149,7 @@ int64_t PlaylistFetcher::getSegmentStartTimeUs(int32_t seqNumber) const {
     return segmentStartUs;
 }
 
-int64_t PlaylistFetcher::delayUsToRefreshPlaylist() const {
+int64_t AmPlaylistFetcher::delayUsToRefreshPlaylist() const {
     int64_t nowUs = ALooper::GetNowUs();
 
     if (mPlaylist == NULL || mLastPlaylistFetchTimeUs < 0ll) {
@@ -213,7 +213,7 @@ int64_t PlaylistFetcher::delayUsToRefreshPlaylist() const {
     return delayUs > 0ll ? delayUs : 0ll;
 }
 
-status_t PlaylistFetcher::decryptBuffer(
+status_t AmPlaylistFetcher::decryptBuffer(
         size_t playlistIndex, const sp<ABuffer> &buffer,
         bool first) {
     sp<AMessage> itemMeta;
@@ -328,7 +328,7 @@ status_t PlaylistFetcher::decryptBuffer(
     return OK;
 }
 
-status_t PlaylistFetcher::checkDecryptPadding(const sp<ABuffer> &buffer) {
+status_t AmPlaylistFetcher::checkDecryptPadding(const sp<ABuffer> &buffer) {
     status_t err;
     AString method;
     CHECK(buffer->meta()->findString("cipher-method", &method));
@@ -355,7 +355,7 @@ status_t PlaylistFetcher::checkDecryptPadding(const sp<ABuffer> &buffer) {
     return OK;
 }
 
-void PlaylistFetcher::postMonitorQueue(int64_t delayUs, int64_t minDelayUs) {
+void AmPlaylistFetcher::postMonitorQueue(int64_t delayUs, int64_t minDelayUs) {
     int64_t maxDelayUs = delayUsToRefreshPlaylist();
     if (maxDelayUs < minDelayUs) {
         maxDelayUs = minDelayUs;
@@ -369,14 +369,14 @@ void PlaylistFetcher::postMonitorQueue(int64_t delayUs, int64_t minDelayUs) {
     msg->post(delayUs);
 }
 
-void PlaylistFetcher::cancelMonitorQueue() {
+void AmPlaylistFetcher::cancelMonitorQueue() {
     ++mMonitorQueueGeneration;
 }
 
-void PlaylistFetcher::startAsync(
-        const sp<AnotherPacketSource> &audioSource,
-        const sp<AnotherPacketSource> &videoSource,
-        const sp<AnotherPacketSource> &subtitleSource,
+void AmPlaylistFetcher::startAsync(
+        const sp<AmAnotherPacketSource> &audioSource,
+        const sp<AmAnotherPacketSource> &videoSource,
+        const sp<AmAnotherPacketSource> &subtitleSource,
         int64_t startTimeUs,
         int64_t segmentStartTimeUs,
         int32_t startDiscontinuitySeq,
@@ -387,17 +387,17 @@ void PlaylistFetcher::startAsync(
 
     if (audioSource != NULL) {
         msg->setPointer("audioSource", audioSource.get());
-        streamTypeMask |= LiveSession::STREAMTYPE_AUDIO;
+        streamTypeMask |= AmLiveSession::STREAMTYPE_AUDIO;
     }
 
     if (videoSource != NULL) {
         msg->setPointer("videoSource", videoSource.get());
-        streamTypeMask |= LiveSession::STREAMTYPE_VIDEO;
+        streamTypeMask |= AmLiveSession::STREAMTYPE_VIDEO;
     }
 
     if (subtitleSource != NULL) {
         msg->setPointer("subtitleSource", subtitleSource.get());
-        streamTypeMask |= LiveSession::STREAMTYPE_SUBTITLES;
+        streamTypeMask |= AmLiveSession::STREAMTYPE_SUBTITLES;
     }
 
     msg->setInt32("streamTypeMask", streamTypeMask);
@@ -408,36 +408,36 @@ void PlaylistFetcher::startAsync(
     msg->post();
 }
 
-void PlaylistFetcher::pauseAsync() {
+void AmPlaylistFetcher::pauseAsync() {
     (new AMessage(kWhatPause, this))->post();
 }
 
-void PlaylistFetcher::stopAsync(bool clear) {
+void AmPlaylistFetcher::stopAsync(bool clear) {
     ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
     sp<AMessage> msg = new AMessage(kWhatStop, this);
     msg->setInt32("clear", clear);
     msg->post();
 }
 
-void PlaylistFetcher::changeURI(AString uri) {
+void AmPlaylistFetcher::changeURI(AString uri) {
     mURI = uri;
 }
 
-uint32_t PlaylistFetcher::getStreamTypeMask() {
+uint32_t AmPlaylistFetcher::getStreamTypeMask() {
     return mStreamTypeMask;
 }
 
-void PlaylistFetcher::setStreamTypeMask(uint32_t streamMask) {
+void AmPlaylistFetcher::setStreamTypeMask(uint32_t streamMask) {
     mStreamTypeMask = streamMask;
 }
 
-void PlaylistFetcher::resumeUntilAsync(const sp<AMessage> &params) {
+void AmPlaylistFetcher::resumeUntilAsync(const sp<AMessage> &params) {
     AMessage* msg = new AMessage(kWhatResumeUntil, this);
     msg->setMessage("params", params);
     msg->post();
 }
 
-void PlaylistFetcher::onMessageReceived(const sp<AMessage> &msg) {
+void AmPlaylistFetcher::onMessageReceived(const sp<AMessage> &msg) {
     switch (msg->what()) {
         case kWhatCodecSpecificData:
         {
@@ -513,7 +513,7 @@ void PlaylistFetcher::onMessageReceived(const sp<AMessage> &msg) {
     }
 }
 
-status_t PlaylistFetcher::onStart(const sp<AMessage> &msg) {
+status_t AmPlaylistFetcher::onStart(const sp<AMessage> &msg) {
     mPacketSources.clear();
     mDownloadedNum = 0;
     uint32_t streamTypeMask;
@@ -528,31 +528,31 @@ status_t PlaylistFetcher::onStart(const sp<AMessage> &msg) {
     CHECK(msg->findInt32("startDiscontinuitySeq", &startDiscontinuitySeq));
     CHECK(msg->findInt32("adaptive", &adaptive));
 
-    if (streamTypeMask & LiveSession::STREAMTYPE_AUDIO) {
+    if (streamTypeMask & AmLiveSession::STREAMTYPE_AUDIO) {
         void *ptr;
         CHECK(msg->findPointer("audioSource", &ptr));
 
         mPacketSources.add(
-                LiveSession::STREAMTYPE_AUDIO,
-                static_cast<AnotherPacketSource *>(ptr));
+                AmLiveSession::STREAMTYPE_AUDIO,
+                static_cast<AmAnotherPacketSource *>(ptr));
     }
 
-    if (streamTypeMask & LiveSession::STREAMTYPE_VIDEO) {
+    if (streamTypeMask & AmLiveSession::STREAMTYPE_VIDEO) {
         void *ptr;
         CHECK(msg->findPointer("videoSource", &ptr));
 
         mPacketSources.add(
-                LiveSession::STREAMTYPE_VIDEO,
-                static_cast<AnotherPacketSource *>(ptr));
+                AmLiveSession::STREAMTYPE_VIDEO,
+                static_cast<AmAnotherPacketSource *>(ptr));
     }
 
-    if (streamTypeMask & LiveSession::STREAMTYPE_SUBTITLES) {
+    if (streamTypeMask & AmLiveSession::STREAMTYPE_SUBTITLES) {
         void *ptr;
         CHECK(msg->findPointer("subtitleSource", &ptr));
 
         mPacketSources.add(
-                LiveSession::STREAMTYPE_SUBTITLES,
-                static_cast<AnotherPacketSource *>(ptr));
+                AmLiveSession::STREAMTYPE_SUBTITLES,
+                static_cast<AmAnotherPacketSource *>(ptr));
     }
 
     mStreamTypeMask = streamTypeMask;
@@ -573,11 +573,11 @@ status_t PlaylistFetcher::onStart(const sp<AMessage> &msg) {
     return OK;
 }
 
-void PlaylistFetcher::onPause() {
+void AmPlaylistFetcher::onPause() {
     cancelMonitorQueue();
 }
 
-void PlaylistFetcher::onStop(const sp<AMessage> &msg) {
+void AmPlaylistFetcher::onStop(const sp<AMessage> &msg) {
     ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
     cancelMonitorQueue();
 
@@ -585,7 +585,7 @@ void PlaylistFetcher::onStop(const sp<AMessage> &msg) {
     CHECK(msg->findInt32("clear", &clear));
     if (clear) {
         for (size_t i = 0; i < mPacketSources.size(); i++) {
-            sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+            sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
             packetSource->clear();
         }
     }
@@ -597,26 +597,26 @@ void PlaylistFetcher::onStop(const sp<AMessage> &msg) {
 // Resume until we have reached the boundary timestamps listed in `msg`; when
 // the remaining time is too short (within a resume threshold) stop immediately
 // instead.
-status_t PlaylistFetcher::onResumeUntil(const sp<AMessage> &msg) {
+status_t AmPlaylistFetcher::onResumeUntil(const sp<AMessage> &msg) {
     sp<AMessage> params;
     CHECK(msg->findMessage("params", &params));
 
     bool stop = false;
     for (size_t i = 0; i < mPacketSources.size(); i++) {
-        sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+        sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
 
         const char *stopKey;
         int streamType = mPacketSources.keyAt(i);
         switch (streamType) {
-        case LiveSession::STREAMTYPE_VIDEO:
+        case AmLiveSession::STREAMTYPE_VIDEO:
             stopKey = "timeUsVideo";
             break;
 
-        case LiveSession::STREAMTYPE_AUDIO:
+        case AmLiveSession::STREAMTYPE_AUDIO:
             stopKey = "timeUsAudio";
             break;
 
-        case LiveSession::STREAMTYPE_SUBTITLES:
+        case AmLiveSession::STREAMTYPE_SUBTITLES:
             stopKey = "timeUsSubtitle";
             break;
 
@@ -652,15 +652,15 @@ status_t PlaylistFetcher::onResumeUntil(const sp<AMessage> &msg) {
     return OK;
 }
 
-void PlaylistFetcher::notifyError(status_t err) {
+void AmPlaylistFetcher::notifyError(status_t err) {
     sp<AMessage> notify = mNotify->dup();
     notify->setInt32("what", kWhatError);
     notify->setInt32("err", err);
     notify->post();
 }
 
-void PlaylistFetcher::queueDiscontinuity(
-        ATSParser::DiscontinuityType type, const sp<AMessage> &extra) {
+void AmPlaylistFetcher::queueDiscontinuity(
+        AmATSParser::DiscontinuityType type, const sp<AMessage> &extra) {
     for (size_t i = 0; i < mPacketSources.size(); ++i) {
         // do not discard buffer upon #EXT-X-DISCONTINUITY tag
         // (seek will discard buffer by abandoning old fetchers)
@@ -669,7 +669,7 @@ void PlaylistFetcher::queueDiscontinuity(
     }
 }
 
-void PlaylistFetcher::onMonitorQueue() {
+void AmPlaylistFetcher::onMonitorQueue() {
     bool downloadMore = false;
     //refreshPlaylist();
 
@@ -694,9 +694,9 @@ void PlaylistFetcher::onMonitorQueue() {
     int64_t bufferedDurationUs = 0ll;
     int64_t bufferedDataSize = 0ll;
     status_t finalResult = NOT_ENOUGH_DATA;
-    if (mStreamTypeMask == LiveSession::STREAMTYPE_SUBTITLES) {
-        sp<AnotherPacketSource> packetSource =
-            mPacketSources.valueFor(LiveSession::STREAMTYPE_SUBTITLES);
+    if (mStreamTypeMask == AmLiveSession::STREAMTYPE_SUBTITLES) {
+        sp<AmAnotherPacketSource> packetSource =
+            mPacketSources.valueFor(AmLiveSession::STREAMTYPE_SUBTITLES);
 
         bufferedDurationUs =
                 packetSource->getBufferedDurationUs(&finalResult);
@@ -766,7 +766,7 @@ void PlaylistFetcher::onMonitorQueue() {
     }
 }
 
-status_t PlaylistFetcher::refreshPlaylist() {
+status_t AmPlaylistFetcher::refreshPlaylist() {
     bool needRefresh = false;
     if (mSession->mBandwidthItems.size() > 1 && mDownloadedNum > 1) {
         mSession->checkBandwidth(&needRefresh);
@@ -775,7 +775,7 @@ status_t PlaylistFetcher::refreshPlaylist() {
         bool unchanged;
         status_t err = OK;
         CFContext * cfc_handle = NULL;
-        sp<M3UParser> playlist = mSession->fetchPlaylist(
+        sp<AmM3UParser> playlist = mSession->fetchPlaylist(
                 mURI.c_str(), mPlaylistHash, &unchanged, err, &cfc_handle);
         if (cfc_handle) {
             curl_fetch_close(cfc_handle);
@@ -825,11 +825,11 @@ status_t PlaylistFetcher::refreshPlaylist() {
 }
 
 // static
-bool PlaylistFetcher::bufferStartsWithTsSyncByte(const sp<ABuffer>& buffer) {
+bool AmPlaylistFetcher::bufferStartsWithTsSyncByte(const sp<ABuffer>& buffer) {
     return buffer->size() > 0 && buffer->data()[0] == 0x47;
 }
 
-void PlaylistFetcher::onDownloadNext() {
+void AmPlaylistFetcher::onDownloadNext() {
     mDownloadedNum++;
     status_t err = refreshPlaylist();
     int32_t firstSeqNumberInPlaylist = 0;
@@ -1027,12 +1027,12 @@ void PlaylistFetcher::onDownloadNext() {
     FILE * dumpHandle = NULL;
     if (mDumpMode == 1 && !mDumpHandle) {
         AString dumppath = DumpPath;
-        if ((mStreamTypeMask & LiveSession::STREAMTYPE_AUDIO)
-            && (mStreamTypeMask & LiveSession::STREAMTYPE_VIDEO)) {
+        if ((mStreamTypeMask & AmLiveSession::STREAMTYPE_AUDIO)
+            && (mStreamTypeMask & AmLiveSession::STREAMTYPE_VIDEO)) {
             dumppath.append("nuplayer_hls_dump.dat");
-        } else if (mStreamTypeMask & LiveSession::STREAMTYPE_AUDIO) {
+        } else if (mStreamTypeMask & AmLiveSession::STREAMTYPE_AUDIO) {
             dumppath.append("nuplayer_hls_audio_dump.dat");
-        } else if (mStreamTypeMask & LiveSession::STREAMTYPE_VIDEO) {
+        } else if (mStreamTypeMask & AmLiveSession::STREAMTYPE_VIDEO) {
             dumppath.append("nuplayer_hls_video_dump.dat");
         } else {
             dumppath.append("nuplayer_hls_subtitle_dump.dat");
@@ -1041,12 +1041,12 @@ void PlaylistFetcher::onDownloadNext() {
     }
     if (mDumpMode == 2) {
         char dumpFile[256] = {'\0'};
-        if ((mStreamTypeMask & LiveSession::STREAMTYPE_AUDIO)
-            && (mStreamTypeMask & LiveSession::STREAMTYPE_VIDEO)) {
+        if ((mStreamTypeMask & AmLiveSession::STREAMTYPE_AUDIO)
+            && (mStreamTypeMask & AmLiveSession::STREAMTYPE_VIDEO)) {
             snprintf(dumpFile, sizeof(dumpFile), "%sdump_%d.ts", DumpPath.c_str(), mSeqNumber);
-        } else if (mStreamTypeMask & LiveSession::STREAMTYPE_AUDIO) {
+        } else if (mStreamTypeMask & AmLiveSession::STREAMTYPE_AUDIO) {
             snprintf(dumpFile, sizeof(dumpFile), "%sdump_audio_%d.ts", DumpPath.c_str(), mSeqNumber);
-        } else if (mStreamTypeMask & LiveSession::STREAMTYPE_VIDEO) {
+        } else if (mStreamTypeMask & AmLiveSession::STREAMTYPE_VIDEO) {
             snprintf(dumpFile, sizeof(dumpFile), "%sdump_video_%d.ts", DumpPath.c_str(), mSeqNumber);
         } else {
             snprintf(dumpFile, sizeof(dumpFile), "%sdump_subtitle_%d.ts", DumpPath.c_str(), mSeqNumber);
@@ -1094,7 +1094,7 @@ void PlaylistFetcher::onDownloadNext() {
         if (bytesRead == -ENETRESET) {
             ++mSeqNumber;
             ALOGE("fetch file met error! skip to next segment : %d", mSeqNumber);
-            queueDiscontinuity(ATSParser::DISCONTINUITY_DATA_CORRUPTION, NULL);
+            queueDiscontinuity(AmATSParser::DISCONTINUITY_DATA_CORRUPTION, NULL);
             postMonitorQueue();
             goto FAIL;
         }
@@ -1164,7 +1164,7 @@ void PlaylistFetcher::onDownloadNext() {
 
                 // do not queue discontinuity, prevent flushing decoder.
                 queueDiscontinuity(
-                        ATSParser::DISCONTINUITY_TIME,
+                        AmATSParser::DISCONTINUITY_TIME,
                         NULL /* extra */);
 
                 discontinuity = false;
@@ -1194,7 +1194,7 @@ void PlaylistFetcher::onDownloadNext() {
             // starting sequence number too low/high
             mTSParser.clear();
             for (size_t i = 0; i < mPacketSources.size(); i++) {
-                sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+                sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
                 packetSource->clear();
             }
             postMonitorQueue();
@@ -1203,7 +1203,7 @@ void PlaylistFetcher::onDownloadNext() {
             // try to reset ts parser.
             mTSParser.clear();
             for (size_t i = 0; i < mPacketSources.size(); i++) {
-                sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+                sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
                 packetSource->clear();
             }
             ++mSeqNumber;
@@ -1242,23 +1242,23 @@ void PlaylistFetcher::onDownloadNext() {
     if (bufferStartsWithTsSyncByte(buffer)) {
         // If we don't see a stream in the program table after fetching a full ts segment
         // mark it as nonexistent.
-        const size_t kNumTypes = ATSParser::NUM_SOURCE_TYPES;
-        ATSParser::SourceType srcTypes[kNumTypes] =
-                { ATSParser::VIDEO, ATSParser::AUDIO };
-        LiveSession::StreamType streamTypes[kNumTypes] =
-                { LiveSession::STREAMTYPE_VIDEO, LiveSession::STREAMTYPE_AUDIO };
+        const size_t kNumTypes = AmATSParser::NUM_SOURCE_TYPES;
+        AmATSParser::SourceType srcTypes[kNumTypes] =
+                { AmATSParser::VIDEO, AmATSParser::AUDIO };
+        AmLiveSession::StreamType streamTypes[kNumTypes] =
+                { AmLiveSession::STREAMTYPE_VIDEO, AmLiveSession::STREAMTYPE_AUDIO };
 
         for (size_t i = 0; i < kNumTypes; i++) {
-            ATSParser::SourceType srcType = srcTypes[i];
-            LiveSession::StreamType streamType = streamTypes[i];
+            AmATSParser::SourceType srcType = srcTypes[i];
+            AmLiveSession::StreamType streamType = streamTypes[i];
 
-            sp<AnotherPacketSource> source =
-                static_cast<AnotherPacketSource *>(
+            sp<AmAnotherPacketSource> source =
+                static_cast<AmAnotherPacketSource *>(
                     mTSParser->getSource(srcType).get());
 
             if (!mTSParser->hasSource(srcType)) {
                 ALOGW("MPEG2 Transport stream does not contain %s data.",
-                      srcType == ATSParser::VIDEO ? "video" : "audio");
+                      srcType == AmATSParser::VIDEO ? "video" : "audio");
 
                 mStreamTypeMask &= ~streamType;
                 mPacketSources.removeItem(streamType);
@@ -1320,7 +1320,7 @@ FAIL:
     }
 }
 
-int32_t PlaylistFetcher::getSeqNumberWithAnchorTime(int64_t anchorTimeUs) const {
+int32_t AmPlaylistFetcher::getSeqNumberWithAnchorTime(int64_t anchorTimeUs) const {
     int32_t firstSeqNumberInPlaylist, lastSeqNumberInPlaylist;
     if (mPlaylist->meta() == NULL
             || !mPlaylist->meta()->findInt32("media-sequence", &firstSeqNumberInPlaylist)) {
@@ -1348,7 +1348,7 @@ int32_t PlaylistFetcher::getSeqNumberWithAnchorTime(int64_t anchorTimeUs) const 
     }
 }
 
-int32_t PlaylistFetcher::getSeqNumberForDiscontinuity(size_t discontinuitySeq) const {
+int32_t AmPlaylistFetcher::getSeqNumberForDiscontinuity(size_t discontinuitySeq) const {
     int32_t firstSeqNumberInPlaylist;
     if (mPlaylist->meta() == NULL
             || !mPlaylist->meta()->findInt32("media-sequence", &firstSeqNumberInPlaylist)) {
@@ -1380,7 +1380,7 @@ int32_t PlaylistFetcher::getSeqNumberForDiscontinuity(size_t discontinuitySeq) c
     return firstSeqNumberInPlaylist + mPlaylist->size();
 }
 
-int32_t PlaylistFetcher::getSeqNumberForTime(int64_t timeUs) const {
+int32_t AmPlaylistFetcher::getSeqNumberForTime(int64_t timeUs) const {
     int32_t firstSeqNumberInPlaylist;
     if (mPlaylist->meta() == NULL || !mPlaylist->meta()->findInt32(
                 "media-sequence", &firstSeqNumberInPlaylist)) {
@@ -1412,8 +1412,8 @@ int32_t PlaylistFetcher::getSeqNumberForTime(int64_t timeUs) const {
     return firstSeqNumberInPlaylist + index;
 }
 
-const sp<ABuffer> &PlaylistFetcher::setAccessUnitProperties(
-        const sp<ABuffer> &accessUnit, const sp<AnotherPacketSource> &source, bool discard) {
+const sp<ABuffer> &AmPlaylistFetcher::setAccessUnitProperties(
+        const sp<ABuffer> &accessUnit, const sp<AmAnotherPacketSource> &source, bool discard) {
     sp<MetaData> format = source->getFormat();
     if (format != NULL) {
         // for simplicity, store a reference to the format in each unit
@@ -1434,20 +1434,20 @@ const sp<ABuffer> &PlaylistFetcher::setAccessUnitProperties(
     return accessUnit;
 }
 
-status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer) {
+status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer) {
     if (mTSParser == NULL) {
         // Use TS_TIMESTAMPS_ARE_ABSOLUTE so pts carry over between fetchers.
-        mTSParser = new ATSParser(ATSParser::TS_TIMESTAMPS_ARE_ABSOLUTE);
+        mTSParser = new AmATSParser(AmATSParser::TS_TIMESTAMPS_ARE_ABSOLUTE);
     }
 
     if (mNextPTSTimeUs >= 0ll) {
         sp<AMessage> extra = new AMessage;
         // Since we are using absolute timestamps, signal an offset of 0 to prevent
-        // ATSParser from skewing the timestamps of access units.
+        // AmATSParser from skewing the timestamps of access units.
         extra->setInt64(IStreamListener::kKeyMediaTimeUs, 0);
 
         mTSParser->signalDiscontinuity(
-                ATSParser::DISCONTINUITY_TIME, extra);
+                AmATSParser::DISCONTINUITY_TIME, extra);
 
         mAbsoluteTimeAnchorUs = mNextPTSTimeUs;
         mNextPTSTimeUs = -1ll;
@@ -1470,23 +1470,23 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
     status_t err = OK;
     size_t source_count = 0;
     for (size_t i = mPacketSources.size(); i-- > 0;) {
-        sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+        sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
 
         const char *key;
-        ATSParser::SourceType type;
-        const LiveSession::StreamType stream = mPacketSources.keyAt(i);
+        AmATSParser::SourceType type;
+        const AmLiveSession::StreamType stream = mPacketSources.keyAt(i);
         switch (stream) {
-            case LiveSession::STREAMTYPE_VIDEO:
-                type = ATSParser::VIDEO;
+            case AmLiveSession::STREAMTYPE_VIDEO:
+                type = AmATSParser::VIDEO;
                 key = "timeUsVideo";
                 break;
 
-            case LiveSession::STREAMTYPE_AUDIO:
-                type = ATSParser::AUDIO;
+            case AmLiveSession::STREAMTYPE_AUDIO:
+                type = AmATSParser::AUDIO;
                 key = "timeUsAudio";
                 break;
 
-            case LiveSession::STREAMTYPE_SUBTITLES:
+            case AmLiveSession::STREAMTYPE_SUBTITLES:
             {
                 ALOGE("MPEG2 Transport streams do not contain subtitles.");
                 return ERROR_MALFORMED;
@@ -1497,19 +1497,22 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
                 TRESPASS();
         }
 
-        sp<AnotherPacketSource> source =
-            static_cast<AnotherPacketSource *>(
+        sp<AmAnotherPacketSource> source =
+            static_cast<AmAnotherPacketSource *>(
                     mTSParser->getSource(type).get());
 
         if (source == NULL) {
             continue;
         }
 
-        if (packetSource->getFormat() == NULL) {
+        if (packetSource->getFormat() == NULL && source->getFormat() != NULL) {
             packetSource->setFormat(source->getFormat());
         }
 
-        source_count++;
+        if (source->getFormat() != NULL) {
+            source_count++;
+        }
+
         int64_t timeUs;
         sp<ABuffer> accessUnit;
         status_t finalResult;
@@ -1637,7 +1640,7 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
             }
 
             // Note that we do NOT dequeue any discontinuities except for format change.
-            if (stream == LiveSession::STREAMTYPE_VIDEO) {
+            if (stream == AmLiveSession::STREAMTYPE_VIDEO) {
                 const bool discard = true;
                 status_t status;
                 while (mVideoBuffer->hasBufferAvailable(&status)) {
@@ -1648,16 +1651,18 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
                 }
             }
 
-            // send LiveSession the CodecSpecificData
-            const char *mime;
-            source->getFormat()->findCString(kKeyMIMEType, &mime);
-            if (type == ATSParser::VIDEO && !strcasecmp(MEDIA_MIMETYPE_VIDEO_HEVC, mime)) {
-                int key = 0;
-                accessUnit->meta()->findInt32("findkeyframe", &key);
-                if (key == 1) {
-                    sp<AMessage> msg = new AMessage(kWhatCodecSpecificData, this);
-                    msg->setBuffer("buffer", accessUnit);
-                    msg->post();
+            // send AmLiveSession the CodecSpecificData
+            if (source->getFormat() != NULL) {
+                const char *mime;
+                source->getFormat()->findCString(kKeyMIMEType, &mime);
+                if (type == AmATSParser::VIDEO && !strcasecmp(MEDIA_MIMETYPE_VIDEO_HEVC, mime)) {
+                    int key = 0;
+                    accessUnit->meta()->findInt32("iskeyframe", &key);
+                    if (key == 1) {
+                        sp<AMessage> msg = new AMessage(kWhatCodecSpecificData, this);
+                        msg->setBuffer("buffer", accessUnit);
+                        msg->post();
+                    }
                 }
             }
 
@@ -1681,7 +1686,7 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
 
     if (err != OK) {
         for (size_t i = mPacketSources.size(); i-- > 0;) {
-            sp<AnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+            sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
             packetSource->clear();
         }
         return err;
@@ -1697,7 +1702,7 @@ status_t PlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &bu
 }
 
 /* static */
-bool PlaylistFetcher::bufferStartsWithWebVTTMagicSequence(
+bool AmPlaylistFetcher::bufferStartsWithWebVTTMagicSequence(
         const sp<ABuffer> &buffer) {
     size_t pos = 0;
 
@@ -1722,16 +1727,16 @@ bool PlaylistFetcher::bufferStartsWithWebVTTMagicSequence(
     return sep == ' ' || sep == '\t' || sep == '\n' || sep == '\r';
 }
 
-status_t PlaylistFetcher::extractAndQueueAccessUnits(
+status_t AmPlaylistFetcher::extractAndQueueAccessUnits(
         const sp<ABuffer> &buffer, const sp<AMessage> &itemMeta) {
     if (bufferStartsWithWebVTTMagicSequence(buffer)) {
-        if (mStreamTypeMask != LiveSession::STREAMTYPE_SUBTITLES) {
+        if (mStreamTypeMask != AmLiveSession::STREAMTYPE_SUBTITLES) {
             ALOGE("This stream only contains subtitles.");
             return ERROR_MALFORMED;
         }
 
-        const sp<AnotherPacketSource> packetSource =
-            mPacketSources.valueFor(LiveSession::STREAMTYPE_SUBTITLES);
+        const sp<AmAnotherPacketSource> packetSource =
+            mPacketSources.valueFor(AmLiveSession::STREAMTYPE_SUBTITLES);
 
         int64_t durationUs;
         CHECK(itemMeta->findInt64("durationUs", &durationUs));
@@ -1805,18 +1810,18 @@ status_t PlaylistFetcher::extractAndQueueAccessUnits(
         firstID3Tag = false;
     }
 
-    if (mStreamTypeMask != LiveSession::STREAMTYPE_AUDIO) {
+    if (mStreamTypeMask != AmLiveSession::STREAMTYPE_AUDIO) {
         ALOGW("This stream only contains audio data!");
 
-        mStreamTypeMask &= LiveSession::STREAMTYPE_AUDIO;
+        mStreamTypeMask &= AmLiveSession::STREAMTYPE_AUDIO;
 
         if (mStreamTypeMask == 0) {
             return OK;
         }
     }
 
-    sp<AnotherPacketSource> packetSource =
-        mPacketSources.valueFor(LiveSession::STREAMTYPE_AUDIO);
+    sp<AmAnotherPacketSource> packetSource =
+        mPacketSources.valueFor(AmLiveSession::STREAMTYPE_AUDIO);
 
     if (packetSource->getFormat() == NULL && buffer->size() >= 7) {
         ABitReader bits(buffer->data(), buffer->size());
@@ -1914,7 +1919,7 @@ status_t PlaylistFetcher::extractAndQueueAccessUnits(
 
                 mStartTimeUsNotify->setInt64("timeUsAudio", timeUs);
                 mStartTimeUsNotify->setInt32("discontinuitySeq", mDiscontinuitySeq);
-                mStartTimeUsNotify->setInt32("streamMask", LiveSession::STREAMTYPE_AUDIO);
+                mStartTimeUsNotify->setInt32("streamMask", AmLiveSession::STREAMTYPE_AUDIO);
                 mStartTimeUsNotify->post();
                 mStartTimeUsNotify.clear();
                 mStartup = false;
@@ -1947,7 +1952,7 @@ status_t PlaylistFetcher::extractAndQueueAccessUnits(
     return OK;
 }
 
-void PlaylistFetcher::updateDuration() {
+void AmPlaylistFetcher::updateDuration() {
     int64_t durationUs = 0ll;
     for (size_t index = 0; index < mPlaylist->size(); ++index) {
         sp<AMessage> itemMeta;
@@ -1966,7 +1971,7 @@ void PlaylistFetcher::updateDuration() {
     msg->post();
 }
 
-int64_t PlaylistFetcher::resumeThreshold(const sp<AMessage> &msg) {
+int64_t AmPlaylistFetcher::resumeThreshold(const sp<AMessage> &msg) {
     int64_t durationUs, threshold;
     if (msg->findInt64("durationUs", &durationUs) && durationUs > 0) {
         return kNumSkipFrames * durationUs;

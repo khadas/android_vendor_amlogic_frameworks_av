@@ -28,23 +28,23 @@
 namespace android {
 
 struct ABuffer;
-struct AnotherPacketSource;
+struct AmAnotherPacketSource;
 struct DataSource;
 struct HTTPBase;
 struct IMediaHTTPService;
-struct LiveDataSource;
-struct M3UParser;
-struct PlaylistFetcher;
+struct AmLiveDataSource;
+struct AmM3UParser;
+struct AmPlaylistFetcher;
 struct Parcel;
 
 typedef int32_t (*interruptcallback)(android_thread_id_t thread_id);
 
-struct LiveSession : public AHandler {
+struct AmLiveSession : public AHandler {
     enum Flags {
         // Don't log any URLs.
         kFlagIncognito = 1,
     };
-    LiveSession(
+    AmLiveSession(
             const sp<AMessage> &notify,
             uint32_t flags,
             const sp<IMediaHTTPService> &httpService,
@@ -110,12 +110,12 @@ struct LiveSession : public AHandler {
     //   whether is format-change discontinuity should trigger a buffer swap
     sp<ABuffer> createFormatChangeBuffer(bool swap = true);
 protected:
-    virtual ~LiveSession();
+    virtual ~AmLiveSession();
 
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
-    friend struct PlaylistFetcher;
+    friend struct AmPlaylistFetcher;
 
     enum {
         kWhatConnect                    = 'conn',
@@ -140,7 +140,7 @@ private:
     };
 
     struct FetcherInfo {
-        sp<PlaylistFetcher> mFetcher;
+        sp<AmPlaylistFetcher> mFetcher;
         int64_t mDurationUs;
         FetcherStatus mStatus;
         bool mIsPrepared;
@@ -212,7 +212,7 @@ private:
 
     ssize_t mCurBandwidthIndex;
 
-    sp<M3UParser> mPlaylist;
+    sp<AmM3UParser> mPlaylist;
 
     KeyedVector<AString, FetcherInfo> mFetcherInfos;
     uint32_t mStreamMask;
@@ -226,10 +226,10 @@ private:
     // we use this to track reconfiguration progress.
     uint32_t mSwapMask;
 
-    KeyedVector<StreamType, sp<AnotherPacketSource> > mDiscontinuities;
-    KeyedVector<StreamType, sp<AnotherPacketSource> > mPacketSources;
+    KeyedVector<StreamType, sp<AmAnotherPacketSource> > mDiscontinuities;
+    KeyedVector<StreamType, sp<AmAnotherPacketSource> > mPacketSources;
     // A second set of packet sources that buffer content for the variant we're switching to.
-    KeyedVector<StreamType, sp<AnotherPacketSource> > mPacketSources2;
+    KeyedVector<StreamType, sp<AmAnotherPacketSource> > mPacketSources2;
 
     // A mutex used to serialize two sets of events:
     // * the swapping of packet sources in dequeueAccessUnit on the player thread, AND
@@ -262,7 +262,7 @@ private:
 
     sp<AMessage> mSwitchDownMonitor;
 
-    sp<PlaylistFetcher> addFetcher(const char *uri);
+    sp<AmPlaylistFetcher> addFetcher(const char *uri);
 
     void onConnect(const sp<AMessage> &msg);
     status_t onSeek(const sp<AMessage> &msg);
@@ -293,7 +293,7 @@ private:
             CFContext ** cfc = NULL,
             String8 *actualUrl = NULL, bool isPlaylist = false);
 
-    sp<M3UParser> fetchPlaylist(
+    sp<AmM3UParser> fetchPlaylist(
             const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err, CFContext ** cfc = NULL);
 
     size_t getBandwidthIndex();
@@ -339,7 +339,7 @@ private:
 
     void threadWaitTimeNs(int64_t timeNs);
 
-    DISALLOW_EVIL_CONSTRUCTORS(LiveSession);
+    DISALLOW_EVIL_CONSTRUCTORS(AmLiveSession);
 };
 
 }  // namespace android

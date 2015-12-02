@@ -20,20 +20,20 @@
 
 #include <media/stagefright/foundation/AHandler.h>
 
-#include "mpeg2ts/ATSParser.h"
+#include "AmATSParser.h"
 #include "AmLiveSession.h"
 
 namespace android {
 
 struct ABuffer;
-struct AnotherPacketSource;
+struct AmAnotherPacketSource;
 struct DataSource;
 struct HTTPBase;
-struct LiveDataSource;
-struct M3UParser;
+struct AmLiveDataSource;
+struct AmM3UParser;
 struct String8;
 
-struct PlaylistFetcher : public AHandler {
+struct AmPlaylistFetcher : public AHandler {
     static const int64_t kMinBufferedDurationUs;
     static const int32_t kDownloadBlockSize;
 
@@ -50,18 +50,18 @@ struct PlaylistFetcher : public AHandler {
         kWhatCodecSpecificData,
     };
 
-    PlaylistFetcher(
+    AmPlaylistFetcher(
             const sp<AMessage> &notify,
-            const sp<LiveSession> &session,
+            const sp<AmLiveSession> &session,
             const char *uri,
             int32_t subtitleGeneration);
 
     sp<DataSource> getDataSource();
 
     void startAsync(
-            const sp<AnotherPacketSource> &audioSource,
-            const sp<AnotherPacketSource> &videoSource,
-            const sp<AnotherPacketSource> &subtitleSource,
+            const sp<AmAnotherPacketSource> &audioSource,
+            const sp<AmAnotherPacketSource> &videoSource,
+            const sp<AmAnotherPacketSource> &subtitleSource,
             int64_t startTimeUs = -1ll,         // starting timestamps
             int64_t segmentStartTimeUs = -1ll, // starting position within playlist
             // startTimeUs!=segmentStartTimeUs only when playlist is live
@@ -88,7 +88,7 @@ struct PlaylistFetcher : public AHandler {
     int64_t getSegmentStartTimeUs(int32_t seqNumber) const;
 
 protected:
-    virtual ~PlaylistFetcher();
+    virtual ~AmPlaylistFetcher();
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
@@ -124,7 +124,7 @@ private:
     sp<AMessage> mNotify;
     sp<AMessage> mStartTimeUsNotify;
 
-    sp<LiveSession> mSession;
+    sp<AmLiveSession> mSession;
     AString mURI;
 
     uint32_t mStreamTypeMask;
@@ -139,13 +139,13 @@ private:
     bool mStartTimeUsRelative;
     sp<AMessage> mStopParams; // message containing the latest timestamps we should fetch.
 
-    KeyedVector<LiveSession::StreamType, sp<AnotherPacketSource> >
+    KeyedVector<AmLiveSession::StreamType, sp<AmAnotherPacketSource> >
         mPacketSources;
 
     KeyedVector<AString, sp<ABuffer> > mAESKeyForURI;
 
     int64_t mLastPlaylistFetchTimeUs;
-    sp<M3UParser> mPlaylist;
+    sp<AmM3UParser> mPlaylist;
     int32_t mSeqNumber;
     int32_t mDownloadedNum;
     int32_t mNumRetries;
@@ -169,13 +169,13 @@ private:
 
     uint8_t mPlaylistHash[16];
 
-    sp<ATSParser> mTSParser;
+    sp<AmATSParser> mTSParser;
 
     bool mFirstPTSValid;
     uint64_t mFirstPTS;
     int64_t mFirstTimeUs;
     int64_t mAbsoluteTimeAnchorUs;
-    sp<AnotherPacketSource> mVideoBuffer;
+    sp<AmAnotherPacketSource> mVideoBuffer;
 
     // Stores the initialization vector to decrypt the next block of cipher text, which can
     // either be derived from the sequence number, read from the manifest, or copied from
@@ -212,7 +212,7 @@ private:
 
     const sp<ABuffer> &setAccessUnitProperties(
             const sp<ABuffer> &accessUnit,
-            const sp<AnotherPacketSource> &source,
+            const sp<AmAnotherPacketSource> &source,
             bool discard = false);
     status_t extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer);
 
@@ -222,7 +222,7 @@ private:
     void notifyError(status_t err);
 
     void queueDiscontinuity(
-            ATSParser::DiscontinuityType type, const sp<AMessage> &extra);
+            AmATSParser::DiscontinuityType type, const sp<AMessage> &extra);
 
     int32_t getSeqNumberWithAnchorTime(int64_t anchorTimeUs) const;
     int32_t getSeqNumberForDiscontinuity(size_t discontinuitySeq) const;
@@ -233,7 +233,7 @@ private:
     // returned by resumeThreshold.
     int64_t resumeThreshold(const sp<AMessage> &msg);
 
-    DISALLOW_EVIL_CONSTRUCTORS(PlaylistFetcher);
+    DISALLOW_EVIL_CONSTRUCTORS(AmPlaylistFetcher);
 };
 
 }  // namespace android

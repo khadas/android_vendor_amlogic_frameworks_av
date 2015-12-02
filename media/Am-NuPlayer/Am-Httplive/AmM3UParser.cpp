@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "NU-M3UParser"
+#define LOG_TAG "NU-AmM3UParser"
 #include <utils/Log.h>
 
 #include "AmM3UParser.h"
@@ -30,7 +30,7 @@
 
 namespace android {
 
-struct M3UParser::MediaGroup : public RefBase {
+struct AmM3UParser::MediaGroup : public RefBase {
     enum Type {
         TYPE_AUDIO,
         TYPE_VIDEO,
@@ -68,7 +68,7 @@ protected:
 
 private:
 
-    friend struct M3UParser;
+    friend struct AmM3UParser;
 
     struct Media {
         AString mName;
@@ -85,19 +85,19 @@ private:
     DISALLOW_EVIL_CONSTRUCTORS(MediaGroup);
 };
 
-M3UParser::MediaGroup::MediaGroup(Type type)
+AmM3UParser::MediaGroup::MediaGroup(Type type)
     : mType(type),
       mSelectedIndex(-1) {
 }
 
-M3UParser::MediaGroup::~MediaGroup() {
+AmM3UParser::MediaGroup::~MediaGroup() {
 }
 
-M3UParser::MediaGroup::Type M3UParser::MediaGroup::type() const {
+AmM3UParser::MediaGroup::Type AmM3UParser::MediaGroup::type() const {
     return mType;
 }
 
-status_t M3UParser::MediaGroup::addMedia(
+status_t AmM3UParser::MediaGroup::addMedia(
         const char *name,
         const char *uri,
         const char *language,
@@ -120,7 +120,7 @@ status_t M3UParser::MediaGroup::addMedia(
     return OK;
 }
 
-void M3UParser::MediaGroup::pickRandomMediaItems() {
+void AmM3UParser::MediaGroup::pickRandomMediaItems() {
 #if 1
     switch (mType) {
         case TYPE_AUDIO:
@@ -160,7 +160,7 @@ void M3UParser::MediaGroup::pickRandomMediaItems() {
 #endif
 }
 
-status_t M3UParser::MediaGroup::selectTrack(size_t index, bool select) {
+status_t AmM3UParser::MediaGroup::selectTrack(size_t index, bool select) {
     if (mType != TYPE_SUBS && mType != TYPE_AUDIO) {
         ALOGE("only select subtitile/audio tracks for now!");
         return INVALID_OPERATION;
@@ -189,11 +189,11 @@ status_t M3UParser::MediaGroup::selectTrack(size_t index, bool select) {
     return OK;
 }
 
-size_t M3UParser::MediaGroup::countTracks() const {
+size_t AmM3UParser::MediaGroup::countTracks() const {
     return mMediaItems.size();
 }
 
-sp<AMessage> M3UParser::MediaGroup::getTrackInfo(size_t index) const {
+sp<AMessage> AmM3UParser::MediaGroup::getTrackInfo(size_t index) const {
     if (index >= mMediaItems.size()) {
         return NULL;
     }
@@ -227,7 +227,7 @@ sp<AMessage> M3UParser::MediaGroup::getTrackInfo(size_t index) const {
     return format;
 }
 
-bool M3UParser::MediaGroup::getActiveURI(AString *uri) const {
+bool AmM3UParser::MediaGroup::getActiveURI(AString *uri) const {
     for (size_t i = 0; i < mMediaItems.size(); ++i) {
         if (mSelectedIndex >= 0 && i == (size_t)mSelectedIndex) {
             const Media &item = mMediaItems.itemAt(i);
@@ -242,7 +242,7 @@ bool M3UParser::MediaGroup::getActiveURI(AString *uri) const {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-M3UParser::M3UParser(
+AmM3UParser::AmM3UParser(
         const char *baseURI, const void *data, size_t size)
     : mInitCheck(NO_INIT),
       mBaseURI(baseURI),
@@ -255,42 +255,42 @@ M3UParser::M3UParser(
     mInitCheck = parse(data, size);
 }
 
-M3UParser::~M3UParser() {
+AmM3UParser::~AmM3UParser() {
 }
 
-status_t M3UParser::initCheck() const {
+status_t AmM3UParser::initCheck() const {
     return mInitCheck;
 }
 
-bool M3UParser::isExtM3U() const {
+bool AmM3UParser::isExtM3U() const {
     return mIsExtM3U;
 }
 
-bool M3UParser::isVariantPlaylist() const {
+bool AmM3UParser::isVariantPlaylist() const {
     return mIsVariantPlaylist;
 }
 
-bool M3UParser::isComplete() const {
+bool AmM3UParser::isComplete() const {
     return mIsComplete;
 }
 
-bool M3UParser::isEvent() const {
+bool AmM3UParser::isEvent() const {
     return mIsEvent;
 }
 
-size_t M3UParser::getDiscontinuitySeq() const {
+size_t AmM3UParser::getDiscontinuitySeq() const {
     return mDiscontinuitySeq;
 }
 
-sp<AMessage> M3UParser::meta() {
+sp<AMessage> AmM3UParser::meta() {
     return mMeta;
 }
 
-size_t M3UParser::size() {
+size_t AmM3UParser::size() {
     return mItems.size();
 }
 
-bool M3UParser::itemAt(size_t index, AString *uri, sp<AMessage> *meta) {
+bool AmM3UParser::itemAt(size_t index, AString *uri, sp<AMessage> *meta) {
     if (uri) {
         uri->clear();
     }
@@ -314,13 +314,13 @@ bool M3UParser::itemAt(size_t index, AString *uri, sp<AMessage> *meta) {
     return true;
 }
 
-void M3UParser::pickRandomMediaItems() {
+void AmM3UParser::pickRandomMediaItems() {
     for (size_t i = 0; i < mMediaGroups.size(); ++i) {
         mMediaGroups.valueAt(i)->pickRandomMediaItems();
     }
 }
 
-status_t M3UParser::selectTrack(size_t index, bool select) {
+status_t AmM3UParser::selectTrack(size_t index, bool select) {
     for (size_t i = 0, ii = index; i < mMediaGroups.size(); ++i) {
         sp<MediaGroup> group = mMediaGroups.valueAt(i);
         size_t tracks = group->countTracks();
@@ -336,7 +336,7 @@ status_t M3UParser::selectTrack(size_t index, bool select) {
     return INVALID_OPERATION;
 }
 
-size_t M3UParser::getTrackCount() const {
+size_t AmM3UParser::getTrackCount() const {
     size_t trackCount = 0;
     for (size_t i = 0; i < mMediaGroups.size(); ++i) {
         trackCount += mMediaGroups.valueAt(i)->countTracks();
@@ -344,7 +344,7 @@ size_t M3UParser::getTrackCount() const {
     return trackCount;
 }
 
-sp<AMessage> M3UParser::getTrackInfo(size_t index) const {
+sp<AMessage> AmM3UParser::getTrackInfo(size_t index) const {
     for (size_t i = 0, ii = index; i < mMediaGroups.size(); ++i) {
         sp<MediaGroup> group = mMediaGroups.valueAt(i);
         size_t tracks = group->countTracks();
@@ -356,11 +356,11 @@ sp<AMessage> M3UParser::getTrackInfo(size_t index) const {
     return NULL;
 }
 
-ssize_t M3UParser::getSelectedIndex() const {
+ssize_t AmM3UParser::getSelectedIndex() const {
     return mSelectedIndex;
 }
 
-ssize_t M3UParser::getSelectedTrack(media_track_type type) const {
+ssize_t AmM3UParser::getSelectedTrack(media_track_type type) const {
     MediaGroup::Type groupType;
     switch (type) {
         case MEDIA_TRACK_TYPE_VIDEO:
@@ -392,7 +392,7 @@ ssize_t M3UParser::getSelectedTrack(media_track_type type) const {
     return -1;
 }
 
-bool M3UParser::getTypeURI(size_t index, const char *key, AString *uri) const {
+bool AmM3UParser::getTypeURI(size_t index, const char *key, AString *uri) const {
     if (!mIsVariantPlaylist) {
         *uri = mBaseURI;
 
@@ -515,7 +515,7 @@ static bool MakeURL(const char *baseURL, const char *url, AString *out) {
     return true;
 }
 
-status_t M3UParser::parse(const void *_data, size_t size) {
+status_t AmM3UParser::parse(const void *_data, size_t size) {
     int32_t lineNo = 0;
 
     sp<AMessage> itemMeta;
@@ -648,7 +648,7 @@ status_t M3UParser::parse(const void *_data, size_t size) {
 }
 
 // static
-status_t M3UParser::parseMetaData(
+status_t AmM3UParser::parseMetaData(
         const AString &line, sp<AMessage> *meta, const char *key) {
     ssize_t colonPos = line.find(":");
 
@@ -672,7 +672,7 @@ status_t M3UParser::parseMetaData(
 }
 
 // static
-status_t M3UParser::parseMetaDataDuration(
+status_t AmM3UParser::parseMetaDataDuration(
         const AString &line, sp<AMessage> *meta, const char *key) {
     ssize_t colonPos = line.find(":");
 
@@ -718,7 +718,7 @@ static ssize_t FindNextUnquoted(
     return -1;
 }
 
-status_t M3UParser::parseStreamInf(
+status_t AmM3UParser::parseStreamInf(
         const AString &line, sp<AMessage> *meta) const {
     ssize_t colonPos = line.find(":");
 
@@ -814,7 +814,7 @@ status_t M3UParser::parseStreamInf(
 }
 
 // static
-status_t M3UParser::parseCipherInfo(
+status_t AmM3UParser::parseCipherInfo(
         const AString &line, sp<AMessage> *meta, const AString &baseURI) {
     ssize_t colonPos = line.find(":");
 
@@ -883,7 +883,7 @@ status_t M3UParser::parseCipherInfo(
 }
 
 // static
-status_t M3UParser::parseByteRange(
+status_t AmM3UParser::parseByteRange(
         const AString &line, uint64_t curOffset,
         uint64_t *length, uint64_t *offset) {
     ssize_t colonPos = line.find(":");
@@ -928,7 +928,7 @@ status_t M3UParser::parseByteRange(
     return OK;
 }
 
-status_t M3UParser::parseMedia(const AString &line) {
+status_t AmM3UParser::parseMedia(const AString &line) {
     ssize_t colonPos = line.find(":");
 
     if (colonPos < 0) {
@@ -1166,7 +1166,7 @@ status_t M3UParser::parseMedia(const AString &line) {
 }
 
 // static
-status_t M3UParser::parseDiscontinuitySequence(const AString &line, size_t *seq) {
+status_t AmM3UParser::parseDiscontinuitySequence(const AString &line, size_t *seq) {
     ssize_t colonPos = line.find(":");
 
     if (colonPos < 0) {
@@ -1190,7 +1190,7 @@ status_t M3UParser::parseDiscontinuitySequence(const AString &line, size_t *seq)
 }
 
 // static
-status_t M3UParser::ParseInt32(const char *s, int32_t *x) {
+status_t AmM3UParser::ParseInt32(const char *s, int32_t *x) {
     char *end;
     long lval = strtol(s, &end, 10);
 
@@ -1204,7 +1204,7 @@ status_t M3UParser::ParseInt32(const char *s, int32_t *x) {
 }
 
 // static
-status_t M3UParser::ParseDouble(const char *s, double *x) {
+status_t AmM3UParser::ParseDouble(const char *s, double *x) {
     char *end;
     double dval = strtod(s, &end);
 
@@ -1218,7 +1218,7 @@ status_t M3UParser::ParseDouble(const char *s, double *x) {
 }
 
 // static
-bool M3UParser::isQuotedString(const AString &str) {
+bool AmM3UParser::isQuotedString(const AString &str) {
     if (str.size() < 2
             || str.c_str()[0] != '"'
             || str.c_str()[str.size() - 1] != '"') {
@@ -1228,7 +1228,7 @@ bool M3UParser::isQuotedString(const AString &str) {
 }
 
 // static
-AString M3UParser::unquoteString(const AString &str) {
+AString AmM3UParser::unquoteString(const AString &str) {
      if (!isQuotedString(str)) {
          return str;
      }
@@ -1236,7 +1236,7 @@ AString M3UParser::unquoteString(const AString &str) {
 }
 
 // static
-bool M3UParser::codecIsType(const AString &codec, const char *type) {
+bool AmM3UParser::codecIsType(const AString &codec, const char *type) {
     if (codec.size() < 4) {
         return false;
     }

@@ -21,7 +21,7 @@
 #include "AmNuPlayer.h"
 #include "AmNuPlayerSource.h"
 
-#include "ATSParser.h"
+#include "AmATSParser.h"
 
 #include <media/mediaplayer.h>
 
@@ -29,7 +29,7 @@ namespace android {
 
 class DecryptHandle;
 class DrmManagerClient;
-struct AnotherPacketSource;
+struct AmAnotherPacketSource;
 struct ARTSPController;
 struct DataSource;
 struct IMediaHTTPService;
@@ -38,7 +38,7 @@ class MediaBuffer;
 struct NuCachedSource2;
 struct WVMExtractor;
 
-struct NuPlayer::GenericSource : public NuPlayer::Source {
+struct AmNuPlayer::GenericSource : public AmNuPlayer::Source {
     GenericSource(const sp<AMessage> &notify, bool uidValid, uid_t uid);
 
     status_t setDataSource(
@@ -102,7 +102,7 @@ private:
     struct Track {
         size_t mIndex;
         sp<MediaSource> mSource;
-        sp<AnotherPacketSource> mPackets;
+        sp<AmAnotherPacketSource> mPackets;
     };
 
     Vector<sp<MediaSource> > mSources;
@@ -182,11 +182,11 @@ private:
 
     void fetchTextData(
             uint32_t what, media_track_type type,
-            int32_t curGen, sp<AnotherPacketSource> packets, sp<AMessage> msg);
+            int32_t curGen, sp<AmAnotherPacketSource> packets, sp<AMessage> msg);
 
     void sendTextData(
             uint32_t what, media_track_type type,
-            int32_t curGen, sp<AnotherPacketSource> packets, sp<AMessage> msg);
+            int32_t curGen, sp<AmAnotherPacketSource> packets, sp<AMessage> msg);
 
     sp<ABuffer> mediaBufferToABuffer(
             MediaBuffer *mbuf,

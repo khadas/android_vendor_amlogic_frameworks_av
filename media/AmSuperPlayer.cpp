@@ -42,7 +42,7 @@
 //#include "MidiFile.h"
 #include "TestPlayerStub.h"
 #include "StagefrightPlayer.h"
-#include "Am-NuPlayer/AmNuPlayerDriver.h"
+#include "AmNuPlayerDriver.h"
 
 #include <media/IMediaHTTPService.h>
 
@@ -705,11 +705,11 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
                         || !strncasecmp("https://", muri, 8))) { //if m3u8 file, only NU_Player can handle.
                 size_t len = strlen(muri);
                 if (len >= 5 && !strcasecmp(".m3u8", &muri[len - 5])) {
-                    return NU_PLAYER;
+                    return AMNUPLAYER;
                 }
 
                 if (strstr(muri,"m3u8")) {
-                    return NU_PLAYER;
+                    return AMNUPLAYER;
                 }
             }
             return STAGEFRIGHT_PLAYER;
@@ -764,15 +764,15 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
             break;
         case SONIVOX_PLAYER:
             LOGV(" create MidiFile");
-            p = new NuPlayerDriver();
+            p = new AmNuPlayerDriver();
             break;
         case STAGEFRIGHT_PLAYER:
             LOGV(" create StagefrightPlayer");
             p = new StagefrightPlayer;
             break;
-		case NU_PLAYER:
-            LOGV(" create NuPlayer");
-            p = new NuPlayerDriver;
+        case AMNUPLAYER:
+            LOGV(" create AmNuPlayer");
+            p = new AmNuPlayerDriver;
             break;	
         case TEST_PLAYER:
             LOGV("Create Test Player stub");

@@ -30,7 +30,7 @@
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/MediaErrors.h>
 
-#include "ATSParser.h"
+#include "AmATSParser.h"
 
 namespace android {
 
@@ -39,7 +39,7 @@ namespace android {
 static const size_t kAggregateBufferSizeBytes = 24 * 1024;
 static const size_t kMaxCachedBytes = 200000;
 
-NuPlayer::DecoderPassThrough::DecoderPassThrough(
+AmNuPlayer::DecoderPassThrough::DecoderPassThrough(
         const sp<AMessage> &notify,
         const sp<Source> &source,
         const sp<Renderer> &renderer)
@@ -56,16 +56,16 @@ NuPlayer::DecoderPassThrough::DecoderPassThrough(
     ALOGW_IF(renderer == NULL, "expect a non-NULL renderer");
 }
 
-NuPlayer::DecoderPassThrough::~DecoderPassThrough() {
+AmNuPlayer::DecoderPassThrough::~DecoderPassThrough() {
 }
 
-void NuPlayer::DecoderPassThrough::getStats(
+void AmNuPlayer::DecoderPassThrough::getStats(
         int64_t *numFramesTotal, int64_t *numFramesDropped) const {
     *numFramesTotal = 0;
     *numFramesDropped = 0;
 }
 
-void NuPlayer::DecoderPassThrough::onConfigure(const sp<AMessage> &format) {
+void AmNuPlayer::DecoderPassThrough::onConfigure(const sp<AMessage> &format) {
     ALOGV("[%s] onConfigure", mComponentName.c_str());
     mCachedBytes = 0;
     mPendingBuffersToDrain = 0;
@@ -85,32 +85,32 @@ void NuPlayer::DecoderPassThrough::onConfigure(const sp<AMessage> &format) {
     }
 }
 
-void NuPlayer::DecoderPassThrough::onSetRenderer(
+void AmNuPlayer::DecoderPassThrough::onSetRenderer(
         const sp<Renderer> &renderer) {
     // renderer can't be changed during offloading
     ALOGW_IF(renderer != mRenderer,
             "ignoring request to change renderer");
 }
 
-void NuPlayer::DecoderPassThrough::onGetInputBuffers(
+void AmNuPlayer::DecoderPassThrough::onGetInputBuffers(
         Vector<sp<ABuffer> > * /* dstBuffers */) {
     ALOGE("onGetInputBuffers() called unexpectedly");
 }
 
-bool NuPlayer::DecoderPassThrough::isStaleReply(const sp<AMessage> &msg) {
+bool AmNuPlayer::DecoderPassThrough::isStaleReply(const sp<AMessage> &msg) {
     int32_t generation;
     CHECK(msg->findInt32("generation", &generation));
     return generation != mBufferGeneration;
 }
 
-bool NuPlayer::DecoderPassThrough::isDoneFetching() const {
+bool AmNuPlayer::DecoderPassThrough::isDoneFetching() const {
     ALOGV("[%s] mCachedBytes = %zu, mReachedEOS = %d mPaused = %d",
             mComponentName.c_str(), mCachedBytes, mReachedEOS, mPaused);
 
     return mCachedBytes >= kMaxCachedBytes || mReachedEOS || mPaused;
 }
 
-void NuPlayer::DecoderPassThrough::doRequestBuffers() {
+void AmNuPlayer::DecoderPassThrough::doRequestBuffers() {
     status_t err = OK;
     while (!isDoneFetching()) {
         sp<AMessage> msg = new AMessage();
@@ -129,7 +129,7 @@ void NuPlayer::DecoderPassThrough::doRequestBuffers() {
     }
 }
 
-status_t NuPlayer::DecoderPassThrough::dequeueAccessUnit(sp<ABuffer> *accessUnit) {
+status_t AmNuPlayer::DecoderPassThrough::dequeueAccessUnit(sp<ABuffer> *accessUnit) {
     status_t err;
 
     // Did we save an accessUnit earlier because of a discontinuity?
@@ -156,7 +156,7 @@ status_t NuPlayer::DecoderPassThrough::dequeueAccessUnit(sp<ABuffer> *accessUnit
     return err;
 }
 
-sp<ABuffer> NuPlayer::DecoderPassThrough::aggregateBuffer(
+sp<ABuffer> AmNuPlayer::DecoderPassThrough::aggregateBuffer(
         const sp<ABuffer> &accessUnit) {
     sp<ABuffer> aggregate;
 
@@ -215,7 +215,7 @@ sp<ABuffer> NuPlayer::DecoderPassThrough::aggregateBuffer(
     return aggregate;
 }
 
-status_t NuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
+status_t AmNuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
     sp<ABuffer> accessUnit;
 
     do {
@@ -229,10 +229,10 @@ status_t NuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
                 CHECK(accessUnit->meta()->findInt32("discontinuity", &type));
 
                 bool formatChange =
-                        (type & ATSParser::DISCONTINUITY_AUDIO_FORMAT) != 0;
+                        (type & AmATSParser::DISCONTINUITY_AUDIO_FORMAT) != 0;
 
                 bool timeChange =
-                        (type & ATSParser::DISCONTINUITY_TIME) != 0;
+                        (type & AmATSParser::DISCONTINUITY_TIME) != 0;
 
                 ALOGI("audio discontinuity (formatChange=%d, time=%d)",
                         formatChange, timeChange);
@@ -241,7 +241,7 @@ status_t NuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
                     sp<AMessage> msg = mNotify->dup();
                     msg->setInt32("what", kWhatInputDiscontinuity);
                     // will perform seamless format change,
-                    // only notify NuPlayer to scan sources
+                    // only notify AmNuPlayer to scan sources
                     msg->setInt32("formatChange", false);
                     msg->post();
                 }
@@ -277,7 +277,7 @@ status_t NuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
     return OK;
 }
 
-void NuPlayer::DecoderPassThrough::onInputBufferFetched(
+void AmNuPlayer::DecoderPassThrough::onInputBufferFetched(
         const sp<AMessage> &msg) {
     if (mReachedEOS) {
         return;
@@ -344,7 +344,7 @@ void NuPlayer::DecoderPassThrough::onInputBufferFetched(
             mPendingBuffersToDrain, mCachedBytes);
 }
 
-void NuPlayer::DecoderPassThrough::onBufferConsumed(int32_t size) {
+void AmNuPlayer::DecoderPassThrough::onBufferConsumed(int32_t size) {
     --mPendingBuffersToDrain;
     mCachedBytes -= size;
     ALOGV("onBufferConsumed: #ToDrain = %zu, cachedBytes = %zu",
@@ -352,7 +352,7 @@ void NuPlayer::DecoderPassThrough::onBufferConsumed(int32_t size) {
     onRequestInputBuffers();
 }
 
-void NuPlayer::DecoderPassThrough::onResume(bool notifyComplete) {
+void AmNuPlayer::DecoderPassThrough::onResume(bool notifyComplete) {
     mPaused = false;
 
     onRequestInputBuffers();
@@ -364,7 +364,7 @@ void NuPlayer::DecoderPassThrough::onResume(bool notifyComplete) {
     }
 }
 
-void NuPlayer::DecoderPassThrough::onFlush(bool notifyComplete) {
+void AmNuPlayer::DecoderPassThrough::onFlush(bool notifyComplete) {
     ++mBufferGeneration;
     mSkipRenderingUntilMediaTimeUs = -1;
     mPendingAudioAccessUnit.clear();
@@ -388,7 +388,7 @@ void NuPlayer::DecoderPassThrough::onFlush(bool notifyComplete) {
     mReachedEOS = false;
 }
 
-void NuPlayer::DecoderPassThrough::onShutdown(bool notifyComplete) {
+void AmNuPlayer::DecoderPassThrough::onShutdown(bool notifyComplete) {
     ++mBufferGeneration;
     mSkipRenderingUntilMediaTimeUs = -1;
 
@@ -401,7 +401,7 @@ void NuPlayer::DecoderPassThrough::onShutdown(bool notifyComplete) {
     mReachedEOS = true;
 }
 
-void NuPlayer::DecoderPassThrough::onMessageReceived(const sp<AMessage> &msg) {
+void AmNuPlayer::DecoderPassThrough::onMessageReceived(const sp<AMessage> &msg) {
     ALOGV("[%s] onMessage: %s", mComponentName.c_str(),
             msg->debugString().c_str());
 

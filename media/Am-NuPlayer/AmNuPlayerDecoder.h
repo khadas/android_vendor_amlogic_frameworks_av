@@ -23,7 +23,7 @@
 
 namespace android {
 
-struct NuPlayer::Decoder : public DecoderBase {
+struct AmNuPlayer::Decoder : public DecoderBase {
     Decoder(const sp<AMessage> &notify,
             const sp<Source> &source,
             const sp<Renderer> &renderer = NULL,

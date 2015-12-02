@@ -26,8 +26,8 @@
 
 namespace android {
 
-struct M3UParser : public RefBase {
-    M3UParser(const char *baseURI, const void *data, size_t size);
+struct AmM3UParser : public RefBase {
+    AmM3UParser(const char *baseURI, const void *data, size_t size);
 
     status_t initCheck() const;
 
@@ -52,7 +52,7 @@ struct M3UParser : public RefBase {
     bool getTypeURI(size_t index, const char *key, AString *uri) const;
 
 protected:
-    virtual ~M3UParser();
+    virtual ~AmM3UParser();
 
 private:
     struct MediaGroup;
@@ -107,7 +107,7 @@ private:
     static AString unquoteString(const AString &str);
     static bool codecIsType(const AString &codec, const char *type);
 
-    DISALLOW_EVIL_CONSTRUCTORS(M3UParser);
+    DISALLOW_EVIL_CONSTRUCTORS(AmM3UParser);
 };
 
 }  // namespace android

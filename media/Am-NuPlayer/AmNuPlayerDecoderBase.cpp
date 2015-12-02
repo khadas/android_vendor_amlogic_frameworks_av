@@ -28,18 +28,18 @@
 
 namespace android {
 
-NuPlayer::DecoderBase::DecoderBase(const sp<AMessage> &notify)
+AmNuPlayer::DecoderBase::DecoderBase(const sp<AMessage> &notify)
     :  mNotify(notify),
        mBufferGeneration(0),
        mRequestInputBuffersPending(false) {
     // Every decoder has its own looper because MediaCodec operations
-    // are blocking, but NuPlayer needs asynchronous operations.
+    // are blocking, but AmNuPlayer needs asynchronous operations.
     mDecoderLooper = new ALooper;
     mDecoderLooper->setName("NPDecoder");
     mDecoderLooper->start(false, false, ANDROID_PRIORITY_AUDIO);
 }
 
-NuPlayer::DecoderBase::~DecoderBase() {
+AmNuPlayer::DecoderBase::~DecoderBase() {
     //mDecoderLooper->unregisterHandler(this);
     mDecoderLooper->stop();
 }
@@ -60,23 +60,23 @@ status_t PostAndAwaitResponse(
     return err;
 }
 
-void NuPlayer::DecoderBase::configure(const sp<AMessage> &format) {
+void AmNuPlayer::DecoderBase::configure(const sp<AMessage> &format) {
     sp<AMessage> msg = new AMessage(kWhatConfigure, this);
     msg->setMessage("format", format);
     msg->post();
 }
 
-void NuPlayer::DecoderBase::init() {
+void AmNuPlayer::DecoderBase::init() {
     mDecoderLooper->registerHandler(this);
 }
 
-void NuPlayer::DecoderBase::setRenderer(const sp<Renderer> &renderer) {
+void AmNuPlayer::DecoderBase::setRenderer(const sp<Renderer> &renderer) {
     sp<AMessage> msg = new AMessage(kWhatSetRenderer, this);
     msg->setObject("renderer", renderer);
     msg->post();
 }
 
-status_t NuPlayer::DecoderBase::getInputBuffers(Vector<sp<ABuffer> > *buffers) const {
+status_t AmNuPlayer::DecoderBase::getInputBuffers(Vector<sp<ABuffer> > *buffers) const {
     sp<AMessage> msg = new AMessage(kWhatGetInputBuffers, this);
     msg->setPointer("buffers", buffers);
 
@@ -84,21 +84,21 @@ status_t NuPlayer::DecoderBase::getInputBuffers(Vector<sp<ABuffer> > *buffers) c
     return PostAndAwaitResponse(msg, &response);
 }
 
-void NuPlayer::DecoderBase::signalFlush() {
+void AmNuPlayer::DecoderBase::signalFlush() {
     (new AMessage(kWhatFlush, this))->post();
 }
 
-void NuPlayer::DecoderBase::signalResume(bool notifyComplete) {
+void AmNuPlayer::DecoderBase::signalResume(bool notifyComplete) {
     sp<AMessage> msg = new AMessage(kWhatResume, this);
     msg->setInt32("notifyComplete", notifyComplete);
     msg->post();
 }
 
-void NuPlayer::DecoderBase::initiateShutdown() {
+void AmNuPlayer::DecoderBase::initiateShutdown() {
     (new AMessage(kWhatShutdown, this))->post();
 }
 
-void NuPlayer::DecoderBase::onRequestInputBuffers() {
+void AmNuPlayer::DecoderBase::onRequestInputBuffers() {
     if (mRequestInputBuffersPending) {
         return;
     }
@@ -106,7 +106,7 @@ void NuPlayer::DecoderBase::onRequestInputBuffers() {
     doRequestBuffers();
 }
 
-void NuPlayer::DecoderBase::scheduleRequestBuffers() {
+void AmNuPlayer::DecoderBase::scheduleRequestBuffers() {
     if (mRequestInputBuffersPending) {
         return;
     }
@@ -115,7 +115,7 @@ void NuPlayer::DecoderBase::scheduleRequestBuffers() {
     msg->post(10 * 1000ll);
 }
 
-void NuPlayer::DecoderBase::onMessageReceived(const sp<AMessage> &msg) {
+void AmNuPlayer::DecoderBase::onMessageReceived(const sp<AMessage> &msg) {
 
     switch (msg->what()) {
         case kWhatConfigure:
@@ -182,7 +182,7 @@ void NuPlayer::DecoderBase::onMessageReceived(const sp<AMessage> &msg) {
     }
 }
 
-void NuPlayer::DecoderBase::handleError(int32_t err)
+void AmNuPlayer::DecoderBase::handleError(int32_t err)
 {
     // We cannot immediately release the codec due to buffers still outstanding
     // in the renderer.  We signal to the player the error so it can shutdown/release the

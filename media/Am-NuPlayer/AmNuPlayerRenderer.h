@@ -26,7 +26,7 @@ struct ABuffer;
 class  AWakeLock;
 //struct VideoFrameScheduler;
 
-struct NuPlayer::Renderer : public AHandler {
+struct AmNuPlayer::Renderer : public AHandler {
     enum Flags {
         FLAG_REAL_TIME = 1,
         FLAG_OFFLOAD_AUDIO = 2,

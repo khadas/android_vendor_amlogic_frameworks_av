@@ -27,16 +27,16 @@ namespace android {
 struct ABuffer;
 struct AMessage;
 struct MetaData;
-struct NuPlayerDriver;
+struct AmNuPlayerDriver;
 
 typedef int32_t (*interruptcallback)(android_thread_id_t thread_id);
 
-struct NuPlayer : public AHandler {
-    NuPlayer();
+struct AmNuPlayer : public AHandler {
+    AmNuPlayer();
 
     void setUID(uid_t uid);
 
-    void setDriver(const wp<NuPlayerDriver> &driver);
+    void setDriver(const wp<AmNuPlayerDriver> &driver);
 
     void setDataSourceAsync(const sp<IStreamSource> &source);
 
@@ -78,7 +78,7 @@ struct NuPlayer : public AHandler {
     static int32_t interrupt_callback(android_thread_id_t thread_id);
 
 protected:
-    virtual ~NuPlayer();
+    virtual ~AmNuPlayer();
 
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
@@ -130,7 +130,7 @@ private:
         kWhatSelectTrack                = 'selT',
     };
 
-    wp<NuPlayerDriver> mDriver;
+    wp<AmNuPlayerDriver> mDriver;
     bool mUIDValid;
     uid_t mUID;
     sp<Source> mSource;
@@ -259,7 +259,7 @@ private:
 
     void writeTrackInfo(Parcel* reply, const sp<AMessage> format) const;
 
-    DISALLOW_EVIL_CONSTRUCTORS(NuPlayer);
+    DISALLOW_EVIL_CONSTRUCTORS(AmNuPlayer);
 };
 
 }  // namespace android

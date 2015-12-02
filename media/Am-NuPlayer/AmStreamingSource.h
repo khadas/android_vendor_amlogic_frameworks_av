@@ -24,10 +24,10 @@
 namespace android {
 
 struct ABuffer;
-struct ATSParser;
-struct AnotherPacketSource;
+struct AmATSParser;
+struct AmAnotherPacketSource;
 
-struct NuPlayer::StreamingSource : public NuPlayer::Source {
+struct AmNuPlayer::StreamingSource : public AmNuPlayer::Source {
     StreamingSource(
             const sp<AMessage> &notify,
             const sp<IStreamSource> &source);
@@ -55,14 +55,14 @@ private:
     sp<IStreamSource> mSource;
     status_t mFinalResult;
     sp<NuPlayerStreamListener> mStreamListener;
-    sp<ATSParser> mTSParser;
+    sp<AmATSParser> mTSParser;
 
     bool mBuffering;
     Mutex mBufferingLock;
     sp<ALooper> mLooper;
 
     void setError(status_t err);
-    sp<AnotherPacketSource> getSource(bool audio);
+    sp<AmAnotherPacketSource> getSource(bool audio);
     bool haveSufficientDataOnAllTracks();
     status_t postReadBuffer();
     void onReadBuffer();

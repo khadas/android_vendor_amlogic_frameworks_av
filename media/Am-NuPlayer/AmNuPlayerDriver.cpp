@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "NU-NuPlayerDriver"
+#define LOG_TAG "NU-AmNuPlayerDriver"
 #include <inttypes.h>
 #include <utils/Log.h>
 
@@ -32,7 +32,7 @@
 
 namespace android {
 
-NuPlayerDriver::NuPlayerDriver()
+AmNuPlayerDriver::AmNuPlayerDriver()
     : mState(STATE_IDLE),
       mIsAsyncPrepare(false),
       mAsyncResult(UNKNOWN_ERROR),
@@ -47,36 +47,36 @@ NuPlayerDriver::NuPlayerDriver()
       mAutoLoop(false),
       mStartupSeekTimeUs(-1),
       mSourceReady(-1) {
-    ALOGV("NuPlayerDriver(%p)", this);
-    mLooper->setName("NuPlayerDriver Looper");
+    ALOGV("AmNuPlayerDriver(%p)", this);
+    mLooper->setName("AmNuPlayerDriver Looper");
 
     mLooper->start(
             false, /* runOnCallingThread */
             true,  /* canCallJava */
             PRIORITY_AUDIO);
 
-    mPlayer = new NuPlayer();
+    mPlayer = new AmNuPlayer();
     mLooper->registerHandler(mPlayer);
 
     mPlayer->setDriver(this);
 }
 
-NuPlayerDriver::~NuPlayerDriver() {
-    ALOGV("~NuPlayerDriver(%p)", this);
+AmNuPlayerDriver::~AmNuPlayerDriver() {
+    ALOGV("~AmNuPlayerDriver(%p)", this);
     mLooper->stop();
 }
 
-status_t NuPlayerDriver::initCheck() {
+status_t AmNuPlayerDriver::initCheck() {
     return OK;
 }
 
-status_t NuPlayerDriver::setUID(uid_t uid) {
+status_t AmNuPlayerDriver::setUID(uid_t uid) {
     mPlayer->setUID(uid);
 
     return OK;
 }
 
-status_t NuPlayerDriver::setDataSource(
+status_t AmNuPlayerDriver::setDataSource(
         const sp<IMediaHTTPService> &httpService,
         const char *url,
         const KeyedVector<String8, String8> *headers) {
@@ -98,7 +98,7 @@ status_t NuPlayerDriver::setDataSource(
     return mAsyncResult;
 }
 
-status_t NuPlayerDriver::setDataSource(int fd, int64_t offset, int64_t length) {
+status_t AmNuPlayerDriver::setDataSource(int fd, int64_t offset, int64_t length) {
     ALOGV("setDataSource(%p) file(%d)", this, fd);
     Mutex::Autolock autoLock(mLock);
 
@@ -117,7 +117,7 @@ status_t NuPlayerDriver::setDataSource(int fd, int64_t offset, int64_t length) {
     return mAsyncResult;
 }
 
-status_t NuPlayerDriver::setDataSource(const sp<IStreamSource> &source) {
+status_t AmNuPlayerDriver::setDataSource(const sp<IStreamSource> &source) {
     ALOGV("setDataSource(%p) stream source", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -136,7 +136,7 @@ status_t NuPlayerDriver::setDataSource(const sp<IStreamSource> &source) {
     return mAsyncResult;
 }
 
-status_t NuPlayerDriver::setVideoSurfaceTexture(
+status_t AmNuPlayerDriver::setVideoSurfaceTexture(
         const sp<IGraphicBufferProducer> &bufferProducer) {
     ALOGV("setVideoSurfaceTexture(%p)", this);
     Mutex::Autolock autoLock(mLock);
@@ -165,13 +165,13 @@ status_t NuPlayerDriver::setVideoSurfaceTexture(
     return OK;
 }
 
-status_t NuPlayerDriver::prepare() {
+status_t AmNuPlayerDriver::prepare() {
     ALOGV("prepare(%p)", this);
     Mutex::Autolock autoLock(mLock);
     return prepare_l();
 }
 
-status_t NuPlayerDriver::prepare_l() {
+status_t AmNuPlayerDriver::prepare_l() {
     switch (mState) {
         case STATE_UNPREPARED:
             mState = STATE_PREPARING;
@@ -200,7 +200,7 @@ status_t NuPlayerDriver::prepare_l() {
     };
 }
 
-status_t NuPlayerDriver::prepareAsync() {
+status_t AmNuPlayerDriver::prepareAsync() {
     ALOGV("prepareAsync(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -222,7 +222,7 @@ status_t NuPlayerDriver::prepareAsync() {
     };
 }
 
-status_t NuPlayerDriver::start() {
+status_t AmNuPlayerDriver::start() {
     ALOGD("start(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -282,7 +282,7 @@ status_t NuPlayerDriver::start() {
     return OK;
 }
 
-status_t NuPlayerDriver::stop() {
+status_t AmNuPlayerDriver::stop() {
     ALOGD("stop(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -310,7 +310,7 @@ status_t NuPlayerDriver::stop() {
     return OK;
 }
 
-status_t NuPlayerDriver::pause() {
+status_t AmNuPlayerDriver::pause() {
     // The NuPlayerRenderer may get flushed if pause for long enough, e.g. the pause timeout tear
     // down for audio offload mode. If that happens, the NuPlayerRenderer will no longer know the
     // current position. So similar to seekTo, update |mPositionUs| to the pause position by calling
@@ -338,11 +338,11 @@ status_t NuPlayerDriver::pause() {
     return OK;
 }
 
-bool NuPlayerDriver::isPlaying() {
+bool AmNuPlayerDriver::isPlaying() {
     return mState == STATE_RUNNING && !mAtEOS;
 }
 
-status_t NuPlayerDriver::seekTo(int msec) {
+status_t AmNuPlayerDriver::seekTo(int msec) {
     ALOGD("seekTo(%p) %d ms", this, msec);
     Mutex::Autolock autoLock(mLock);
 
@@ -386,7 +386,7 @@ status_t NuPlayerDriver::seekTo(int msec) {
     return OK;
 }
 
-status_t NuPlayerDriver::getCurrentPosition(int *msec) {
+status_t AmNuPlayerDriver::getCurrentPosition(int *msec) {
     int64_t tempUs = 0;
     {
         Mutex::Autolock autoLock(mLock);
@@ -414,7 +414,7 @@ status_t NuPlayerDriver::getCurrentPosition(int *msec) {
     return OK;
 }
 
-status_t NuPlayerDriver::getDuration(int *msec) {
+status_t AmNuPlayerDriver::getDuration(int *msec) {
     Mutex::Autolock autoLock(mLock);
 
     if (mDurationUs < 0) {
@@ -426,7 +426,7 @@ status_t NuPlayerDriver::getDuration(int *msec) {
     return OK;
 }
 
-status_t NuPlayerDriver::reset() {
+status_t AmNuPlayerDriver::reset() {
     ALOGD("reset(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -469,16 +469,16 @@ status_t NuPlayerDriver::reset() {
     return OK;
 }
 
-status_t NuPlayerDriver::setLooping(int loop) {
+status_t AmNuPlayerDriver::setLooping(int loop) {
     mLooping = loop != 0;
     return OK;
 }
 
-player_type NuPlayerDriver::playerType() {
+player_type AmNuPlayerDriver::playerType() {
     return NU_PLAYER;
 }
 
-status_t NuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
+status_t AmNuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
     if (reply == NULL) {
         ALOGE("reply is a NULL pointer");
         return BAD_VALUE;
@@ -531,21 +531,21 @@ status_t NuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
     }
 }
 
-void NuPlayerDriver::setAudioSink(const sp<AudioSink> &audioSink) {
+void AmNuPlayerDriver::setAudioSink(const sp<AudioSink> &audioSink) {
     mPlayer->setAudioSink(audioSink);
     mAudioSink = audioSink;
 }
 
-status_t NuPlayerDriver::setParameter(
+status_t AmNuPlayerDriver::setParameter(
         int /* key */, const Parcel & /* request */) {
     return INVALID_OPERATION;
 }
 
-status_t NuPlayerDriver::getParameter(int /* key */, Parcel * /* reply */) {
+status_t AmNuPlayerDriver::getParameter(int /* key */, Parcel * /* reply */) {
     return INVALID_OPERATION;
 }
 
-status_t NuPlayerDriver::getMetadata(
+status_t AmNuPlayerDriver::getMetadata(
         const media::Metadata::Filter& /* ids */, Parcel *records) {
     Mutex::Autolock autoLock(mLock);
 
@@ -555,24 +555,24 @@ status_t NuPlayerDriver::getMetadata(
 
     meta.appendBool(
             Metadata::kPauseAvailable,
-            mPlayerFlags & NuPlayer::Source::FLAG_CAN_PAUSE);
+            mPlayerFlags & AmNuPlayer::Source::FLAG_CAN_PAUSE);
 
     meta.appendBool(
             Metadata::kSeekBackwardAvailable,
-            mPlayerFlags & NuPlayer::Source::FLAG_CAN_SEEK_BACKWARD);
+            mPlayerFlags & AmNuPlayer::Source::FLAG_CAN_SEEK_BACKWARD);
 
     meta.appendBool(
             Metadata::kSeekForwardAvailable,
-            mPlayerFlags & NuPlayer::Source::FLAG_CAN_SEEK_FORWARD);
+            mPlayerFlags & AmNuPlayer::Source::FLAG_CAN_SEEK_FORWARD);
 
     meta.appendBool(
             Metadata::kSeekAvailable,
-            mPlayerFlags & NuPlayer::Source::FLAG_CAN_SEEK);
+            mPlayerFlags & AmNuPlayer::Source::FLAG_CAN_SEEK);
 
     return OK;
 }
 
-void NuPlayerDriver::notifyResetComplete() {
+void AmNuPlayerDriver::notifyResetComplete() {
     ALOGD("notifyResetComplete(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -581,7 +581,7 @@ void NuPlayerDriver::notifyResetComplete() {
     mCondition.broadcast();
 }
 
-void NuPlayerDriver::notifySetSurfaceComplete() {
+void AmNuPlayerDriver::notifySetSurfaceComplete() {
     ALOGV("notifySetSurfaceComplete(%p)", this);
     Mutex::Autolock autoLock(mLock);
 
@@ -591,19 +591,19 @@ void NuPlayerDriver::notifySetSurfaceComplete() {
     mCondition.broadcast();
 }
 
-void NuPlayerDriver::notifyDuration(int64_t durationUs) {
+void AmNuPlayerDriver::notifyDuration(int64_t durationUs) {
     Mutex::Autolock autoLock(mLock);
     mDurationUs = durationUs;
 }
 
-void NuPlayerDriver::notifySeekComplete() {
+void AmNuPlayerDriver::notifySeekComplete() {
     ALOGV("notifySeekComplete(%p)", this);
     Mutex::Autolock autoLock(mLock);
     mSeekInProgress = false;
     notifySeekComplete_l();
 }
 
-void NuPlayerDriver::notifySeekComplete_l() {
+void AmNuPlayerDriver::notifySeekComplete_l() {
     bool wasSeeking = true;
     if (mState == STATE_STOPPED_AND_PREPARING) {
         wasSeeking = false;
@@ -620,7 +620,7 @@ void NuPlayerDriver::notifySeekComplete_l() {
     notifyListener_l(wasSeeking ? MEDIA_SEEK_COMPLETE : MEDIA_PREPARED);
 }
 
-status_t NuPlayerDriver::dump(
+status_t AmNuPlayerDriver::dump(
         int fd, const Vector<String16> & /* args */) const {
     int64_t numFramesTotal;
     int64_t numFramesDropped;
@@ -628,7 +628,7 @@ status_t NuPlayerDriver::dump(
 
     FILE *out = fdopen(dup(fd), "w");
 
-    fprintf(out, " NuPlayer\n");
+    fprintf(out, " AmNuPlayer\n");
     fprintf(out, "  numFramesTotal(%" PRId64 "), numFramesDropped(%" PRId64 "), "
                  "percentageDropped(%.2f)\n",
                  numFramesTotal,
@@ -642,13 +642,13 @@ status_t NuPlayerDriver::dump(
     return OK;
 }
 
-void NuPlayerDriver::notifyListener(
+void AmNuPlayerDriver::notifyListener(
         int msg, int ext1, int ext2, const Parcel *in) {
     Mutex::Autolock autoLock(mLock);
     notifyListener_l(msg, ext1, ext2, in);
 }
 
-void NuPlayerDriver::notifyListener_l(
+void AmNuPlayerDriver::notifyListener_l(
         int msg, int ext1, int ext2, const Parcel *in) {
 
     // if need to create new player,
@@ -709,7 +709,7 @@ void NuPlayerDriver::notifyListener_l(
     mLock.lock();
 }
 
-void NuPlayerDriver::notifySetDataSourceCompleted(status_t err) {
+void AmNuPlayerDriver::notifySetDataSourceCompleted(status_t err) {
     Mutex::Autolock autoLock(mLock);
 
     CHECK_EQ(mState, STATE_SET_DATASOURCE_PENDING);
@@ -719,7 +719,7 @@ void NuPlayerDriver::notifySetDataSourceCompleted(status_t err) {
     mCondition.broadcast();
 }
 
-void NuPlayerDriver::notifyPrepareCompleted(status_t err) {
+void AmNuPlayerDriver::notifyPrepareCompleted(status_t err) {
     Mutex::Autolock autoLock(mLock);
 
     if (mState != STATE_PREPARING) {
@@ -735,8 +735,8 @@ void NuPlayerDriver::notifyPrepareCompleted(status_t err) {
     mAsyncResult = err;
 
     if (err == OK) {
-        // update state before notifying client, so that if client calls back into NuPlayerDriver
-        // in response, NuPlayerDriver has the right state
+        // update state before notifying client, so that if client calls back into AmNuPlayerDriver
+        // in response, AmNuPlayerDriver has the right state
         mState = STATE_PREPARED;
         if (mIsAsyncPrepare) {
             notifyListener_l(MEDIA_PREPARED);
@@ -758,7 +758,7 @@ void NuPlayerDriver::notifyPrepareCompleted(status_t err) {
     mCondition.broadcast();
 }
 
-void NuPlayerDriver::notifyFlagsChanged(uint32_t flags) {
+void AmNuPlayerDriver::notifyFlagsChanged(uint32_t flags) {
     Mutex::Autolock autoLock(mLock);
 
     mPlayerFlags = flags;

@@ -28,7 +28,7 @@ struct ABuffer;
 struct MediaCodec;
 struct MediaBuffer;
 
-struct NuPlayer::DecoderBase : public AHandler {
+struct AmNuPlayer::DecoderBase : public AHandler {
     DecoderBase(const sp<AMessage> &notify);
 
     void configure(const sp<AMessage> &format);

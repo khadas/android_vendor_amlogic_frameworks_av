@@ -16,9 +16,9 @@ LOCAL_SRC_FILES:=                       \
         AmStreamingSource.cpp             \
 
 LOCAL_C_INCLUDES := \
-	$(TOP)/vendor/amlogic/frameworks/av/media/Am-Httplive         \
+	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-Httplive \
+    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-mpeg2ts \
 	$(TOP)/frameworks/av/media/libstagefright/include             \
-	$(TOP)/frameworks/av/media/libstagefright/mpeg2ts             \
 	$(TOP)/frameworks/av/media/libstagefright/rtsp                \
 	$(TOP)/frameworks/av/media/libstagefright/timedtext           \
 	$(TOP)/frameworks/av/media/libmediaplayerservice              \
@@ -36,9 +36,16 @@ LOCAL_SHARED_LIBRARIES := \
         libstagefright \
         libstagefright_foundation \
         libutils \
-        libamhttplive
+        libamffmpeg \
+        libcurl
 
-LOCAL_STATIC_LIBRARIES := libstagefright_rtsp
+LOCAL_STATIC_LIBRARIES := \
+        libstagefright_rtsp \
+        libamhttplive \
+        libammpeg2ts \
+        libstagefright_hevcutils \
+        libcurl_base \
+        libcurl_common
 
 LOCAL_MODULE:= libamnuplayer
 
@@ -49,3 +56,7 @@ ifeq ($(TARGET_ARCH),arm)
 endif
 
 include $(BUILD_SHARED_LIBRARY)
+
+################################################
+
+include $(call all-makefiles-under,$(LOCAL_PATH))

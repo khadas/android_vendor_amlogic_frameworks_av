@@ -20,16 +20,16 @@
 
 #include "AmNuPlayerSource.h"
 
-#include "ATSParser.h"
+#include "AmATSParser.h"
 
 namespace android {
 
 struct ALooper;
-struct AnotherPacketSource;
+struct AmAnotherPacketSource;
 struct MyHandler;
 struct SDPLoader;
 
-struct NuPlayer::RTSPSource : public NuPlayer::Source {
+struct AmNuPlayer::RTSPSource : public AmNuPlayer::Source {
     RTSPSource(
             const sp<AMessage> &notify,
             const sp<IMediaHTTPService> &httpService,
@@ -79,7 +79,7 @@ private:
     };
 
     struct TrackInfo {
-        sp<AnotherPacketSource> mSource;
+        sp<AmAnotherPacketSource> mSource;
 
         int32_t mTimeScale;
         uint32_t mRTPTime;
@@ -105,17 +105,17 @@ private:
     sp<SDPLoader> mSDPLoader;
 
     Vector<TrackInfo> mTracks;
-    sp<AnotherPacketSource> mAudioTrack;
-    sp<AnotherPacketSource> mVideoTrack;
+    sp<AmAnotherPacketSource> mAudioTrack;
+    sp<AmAnotherPacketSource> mVideoTrack;
 
-    sp<ATSParser> mTSParser;
+    sp<AmATSParser> mTSParser;
 
     int32_t mSeekGeneration;
 
     int64_t mEOSTimeoutAudio;
     int64_t mEOSTimeoutVideo;
 
-    sp<AnotherPacketSource> getSource(bool audio);
+    sp<AmAnotherPacketSource> getSource(bool audio);
 
     void onConnected();
     void onSDPLoaded(const sp<AMessage> &msg);

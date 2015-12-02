@@ -22,7 +22,7 @@
 
 namespace android {
 
-struct NuPlayer::CCDecoder : public RefBase {
+struct AmNuPlayer::CCDecoder : public RefBase {
     enum {
         kWhatClosedCaptionData,
         kWhatTrackAdded,

@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "NU-LiveDataSource"
+#define LOG_TAG "NU-AmLiveDataSource"
 #include <utils/Log.h>
 
 #include "AmLiveDataSource.h"
@@ -27,7 +27,7 @@
 
 namespace android {
 
-LiveDataSource::LiveDataSource()
+AmLiveDataSource::AmLiveDataSource()
     : mOffset(0),
       mFinalResult(OK),
       mBackupFile(NULL) {
@@ -37,29 +37,29 @@ LiveDataSource::LiveDataSource()
 #endif
 }
 
-LiveDataSource::~LiveDataSource() {
+AmLiveDataSource::~AmLiveDataSource() {
     if (mBackupFile != NULL) {
         fclose(mBackupFile);
         mBackupFile = NULL;
     }
 }
 
-status_t LiveDataSource::initCheck() const {
+status_t AmLiveDataSource::initCheck() const {
     return OK;
 }
 
-size_t LiveDataSource::countQueuedBuffers() {
+size_t AmLiveDataSource::countQueuedBuffers() {
     Mutex::Autolock autoLock(mLock);
 
     return mBufferQueue.size();
 }
 
-ssize_t LiveDataSource::readAtNonBlocking(
+ssize_t AmLiveDataSource::readAtNonBlocking(
         off64_t offset, void *data, size_t size) {
     Mutex::Autolock autoLock(mLock);
 
     if (offset != mOffset) {
-        ALOGE("Attempt at reading non-sequentially from LiveDataSource.");
+        ALOGE("Attempt at reading non-sequentially from AmLiveDataSource.");
         return -EPIPE;
     }
 
@@ -82,14 +82,14 @@ ssize_t LiveDataSource::readAtNonBlocking(
     return readAt_l(offset, data, size);
 }
 
-ssize_t LiveDataSource::readAt(off64_t offset, void *data, size_t size) {
+ssize_t AmLiveDataSource::readAt(off64_t offset, void *data, size_t size) {
     Mutex::Autolock autoLock(mLock);
     return readAt_l(offset, data, size);
 }
 
-ssize_t LiveDataSource::readAt_l(off64_t offset, void *data, size_t size) {
+ssize_t AmLiveDataSource::readAt_l(off64_t offset, void *data, size_t size) {
     if (offset != mOffset) {
-        ALOGE("Attempt at reading non-sequentially from LiveDataSource.");
+        ALOGE("Attempt at reading non-sequentially from AmLiveDataSource.");
         return -EPIPE;
     }
 
@@ -133,7 +133,7 @@ ssize_t LiveDataSource::readAt_l(off64_t offset, void *data, size_t size) {
     return sizeDone;
 }
 
-void LiveDataSource::queueBuffer(const sp<ABuffer> &buffer) {
+void AmLiveDataSource::queueBuffer(const sp<ABuffer> &buffer) {
     Mutex::Autolock autoLock(mLock);
 
     if (mFinalResult != OK) {
@@ -151,7 +151,7 @@ void LiveDataSource::queueBuffer(const sp<ABuffer> &buffer) {
     mCondition.broadcast();
 }
 
-void LiveDataSource::queueEOS(status_t finalResult) {
+void AmLiveDataSource::queueEOS(status_t finalResult) {
     CHECK_NE(finalResult, (status_t)OK);
 
     Mutex::Autolock autoLock(mLock);
@@ -160,7 +160,7 @@ void LiveDataSource::queueEOS(status_t finalResult) {
     mCondition.broadcast();
 }
 
-void LiveDataSource::reset() {
+void AmLiveDataSource::reset() {
     Mutex::Autolock autoLock(mLock);
 
     // XXX FIXME: If we've done a partial read and waiting for more buffers,
