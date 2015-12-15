@@ -27,6 +27,8 @@ static URLProtocol android_protocol;
 status_t AmlPlayerMetadataRetriever0::BasicInit()
 {
     static int have_inited = 0;
+    ALOGV("start %s\n",__FUNCTION__);
+
     if (!have_inited) {
 
         URLProtocol *prot = &android_protocol;

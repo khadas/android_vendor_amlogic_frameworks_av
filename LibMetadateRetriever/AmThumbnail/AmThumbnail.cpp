@@ -35,7 +35,6 @@ status_t AmThumbnailInt::BasicInit()
 {
     static int have_inited = 0;
     if (!have_inited) {
-
         URLProtocol *prot = &android_protocol;
         prot->name = "amthumb";
         prot->url_open = (int (*)(URLContext *, const char *, int))vp_open;
@@ -86,12 +85,12 @@ int AmThumbnailInt::vp_read(URLContext *h, unsigned char *buf, int size)
     AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
     int ret;
     //ALOGV("start%s,pos=%lld,size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
-    if(af->fd >= 0){
+    if (af->fd >= 0) {
         ret = read(af->fd, buf, size);
-    }else{
+    } else {
         ret = -1;
     }
-    if(ret < 0 && af->fd >0){
+    if (ret < 0 && af->fd >0) {
         close(af->fd);
         af->fd_valid = 0;
     }
@@ -282,7 +281,7 @@ void AmThumbnailInt::find_best_keyframe(AVFormatContext *pFormatCtx, int video_i
         ALOGV("[find_best_keyframe][%d]read frame packet.size=%d,pts=%lld\n", i, packet.size, packet.pts);
         havepts = (packet.pts > 0 || havepts);
         nopts = (i > 10) && !havepts;
-        if (packet.size > maxFrameSize && (packet.pts >= 0 || nopts)) { //packet.pts>=0 can used for seek.
+        if (packet.size > maxFrameSize && (packet.pts >= 0 || nopts)) { //packet.pts >= 0 can used for seek.
             maxFrameSize = packet.size;
             thumbTime = packet.pts;
             thumbOffset = avio_tell(pFormatCtx->pb) - packet.size;
@@ -321,10 +320,10 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
 {
     unsigned int i;
     int video_index, audio_index;
-    if((strncmp(filename, "http", strlen("http")) == 0 ||
-        strncmp(filename, "https", strlen("https")) == 0)){
+    if ((strncmp(filename, "http", strlen("http")) == 0 ||
+        strncmp(filename, "https", strlen("https")) == 0)) {
         is_slow_media = true;
-    }else{
+    } else {
         is_slow_media = false;
     }
 
@@ -337,6 +336,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
         ALOGV("Coundn't find stream information !\n");
         goto err1;
     }
+
 #ifdef DUMP_INDEX
 {
     int i, j;
@@ -352,7 +352,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
         }
     }
     ALOGV("*********************************************\n");
-}	
+}
 #endif
 
     for (i = 0; i < mStream.pFormatCtx->nb_streams; i++) {
@@ -372,7 +372,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
                 break;
             }
         }
-        
+
         if (audio_index == -1) {
             ALOGV("Didn't find a audio stream, too!\n");
             goto err1;
@@ -380,6 +380,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
             return 0;
         }
     } else {
+
         mStream.pCodecCtx = mStream.pFormatCtx->streams[video_index]->codec;
         if (mStream.pCodecCtx == NULL) {
             ALOGV("pCodecCtx is NULL !\n");
@@ -401,7 +402,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
         }
 
         /* detect frames */
-        if(!is_slow_media)
+        if (!is_slow_media)
             find_best_keyframe(mStream.pFormatCtx, video_index, 0, &mThumbnailTime, &mThumbnailOffset, &mMaxframesize);
 
         if (avcodec_open2(mStream.pCodecCtx, mStream.pCodec, NULL) < 0) {
@@ -467,7 +468,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
         ALOGV("[%s:%d]Illigle video streamindex %d", __FUNCTION__, __LINE__, stream->videoStream);
         return -1;
     }
-    
+
     AVPacket        packet;
     AVStream *pStream = pFormatCtx->streams[stream->videoStream];
     AVCodecContext *pCodecCtx = pFormatCtx->streams[stream->videoStream]->codec;
@@ -481,9 +482,9 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
             timestamp += pFormatCtx->start_time;
         }
     } else {
-        if(is_slow_media){
+        if (is_slow_media) {
             timestamp = 0;
-        }else if (starttime >= 0) {
+        } else if (starttime >= 0) {
             timestamp = (int64_t)starttime;
             if (timestamp >= duration) {
                 timestamp = duration - 1;
@@ -504,7 +505,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
         timestamp = timestamp * AV_TIME_BASE + pFormatCtx->start_time;
     }
 
-    ALOGV("[%s:%d]time %lld, timestamp %lld, starttime %f, duration %d %lld\n", 
+    ALOGV("[%s:%d]time %lld, timestamp %lld, starttime %f, duration %d %lld\n",
         __FUNCTION__, __LINE__, time, timestamp, starttime, duration, pFormatCtx->duration);
 
     if (!strcmp(pFormatCtx->iformat->name, "mpegts") || !strcmp(pFormatCtx->iformat->name, "mpeg"))

@@ -54,7 +54,7 @@ AmlPlayerMetadataRetriever::~AmlPlayerMetadataRetriever()
 
     delete mClient;
     mClient = NULL;
-    
+
     if (mAmlogicFile.fd_valid) {
         close(mAmlogicFile.fd);
     }
@@ -95,6 +95,15 @@ status_t AmlPlayerMetadataRetriever::setDataSource(int fd, int64_t offset, int64
     return setdatasource(NULL, fd, offset, length);
 }
 
+status_t AmlPlayerMetadataRetriever::setDataSource(const sp<DataSource>& source)
+{
+    ALOGV("setDataSource source ");
+    //mParsedMetaData = false;
+    //mMetaData.clear();
+
+    return NULL;//setdatasource(NULL, fd, offset, length);
+}
+
 status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int64_t offset, int64_t length)
 {
     char* file;
@@ -127,7 +136,7 @@ status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int6
     }
 
     mFileName = file;
-    
+
     err = mClient->amthumbnail_decoder_open(mFileName);
     if (err != 0) {
         ALOGV("Thumbnail decode init failed!\n");
@@ -137,7 +146,7 @@ status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int6
     }
 
     mOpened = true;
-    
+
     return OK;
 }
 
@@ -325,7 +334,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
        // { "GPSCoordinates", METADATA_KEY_LOCATION },//old ffmpeg
         { "location", METADATA_KEY_LOCATION }, //new ffmpeg on externel
         { "rotate", METADATA_KEY_VIDEO_ROTATION },
-        
+
         { "tracknumber", METADATA_KEY_CD_TRACK_NUMBER },
         { "discnumber", METADATA_KEY_DISC_NUMBER },
         { "year", METADATA_KEY_YEAR },
@@ -380,7 +389,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
     }
     int width=0,height=0;
     mClient->amthumbnail_get_video_size(&width, &height);
-    if(width >0 && height>0){
+    if (width >0 && height>0) {
         char tmp[32];
         sprintf(tmp, "%d", width);
         mMetaData.add(METADATA_KEY_VIDEO_WIDTH,String8(tmp));

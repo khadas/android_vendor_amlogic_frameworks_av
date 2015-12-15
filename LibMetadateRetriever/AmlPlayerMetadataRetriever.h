@@ -24,10 +24,6 @@
 #include <utils/KeyedVector.h>
 #include <utils/String8.h>
 
-extern "C" {
-#include "libavutil/avstring.h"
-#include "libavformat/avformat.h"
-}
 
 //#include <player_thumbnail.h>
 #include "AmThumbnail/AmThumbnail.h"
@@ -36,6 +32,7 @@ namespace android
 {
 
 class String8;
+class DataSource;
 
 class AmlPlayerMetadataRetriever : public MediaMetadataRetrieverInterface
 {
@@ -48,6 +45,7 @@ public:
             const KeyedVector<String8, String8> *headers = NULL);
     virtual status_t setDataSource(const char *url, const KeyedVector<String8, String8> *headers);
     virtual status_t setDataSource(int fd, int64_t offset, int64_t length);
+    virtual status_t setDataSource(const sp<DataSource>& source);
     virtual VideoFrame *getFrameAtTime(int64_t timeUs, int option);
     virtual MediaAlbumArt *extractAlbumArt();
     virtual const char* extractMetadata(int keyCode);

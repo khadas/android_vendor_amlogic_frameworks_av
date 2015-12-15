@@ -30,10 +30,8 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
         AmlogicPlayerExtractorDemux.cpp         \
         AmlogicPlayerExtractorDataSource.cpp    \
         AmlogicPlayerDataSouceProtocol.cpp      \
-        AmlPlayerMetadataRetriever.cpp \
         AmlPlayerMetadataRetriever0.cpp \
         AmlogicMediaFactory.cpp \
-        AmlogicMetadataRetrieverFactory.cpp \
         SStreamingExtractor.cpp \
 
 
@@ -54,7 +52,6 @@ LOCAL_SHARED_LIBRARIES :=       \
     libutils                    \
     libvorbisidec               \
     libdrmframework \
-    libamthumbnail  \
     libmediaplayerservice              \
     libstagefright              \
     libstagefright_foundation \

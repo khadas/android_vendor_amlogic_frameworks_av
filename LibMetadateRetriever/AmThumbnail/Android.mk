@@ -23,4 +23,4 @@ LOCAL_PRELINK_MODULE := false
 
 LOCAL_MODULE:= libamthumbnail
 
-include $(BUILD_SHARED_LIBRARY)
+include $(BUILD_STATIC_LIBRARY)

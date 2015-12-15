@@ -13,6 +13,7 @@
 ** See the License for the specific language governing permissions and
 ** limitations under the License.
 */
+#define LOG_NDEBUG 0
 #define LOG_TAG "AmlogicMetadataRetrieverFactory"
 #include <utils/Log.h>
 #include <cutils/properties.h>
@@ -23,7 +24,7 @@
 
 #include "AmlPlayerMetadataRetriever.h"
 
-#include "../libmediaplayerservice/MetadataRetrieverFactory.h"
+#include "media/libmediaplayerservice/MetadataRetrieverFactory.h"
 namespace android
 {
 
@@ -33,19 +34,17 @@ class AmlogicMetadataRetrieverFactory : public MediaMetadataRetrieverFactory::RF
 public:
     virtual sp<MediaMetadataRetrieverBase> createRetriever() {
         ALOGV("Create Amlogic MetadataRetriever");
-        return NULL;//new AmlPlayerMetadataRetriever();
+        return new AmlPlayerMetadataRetriever();
     }
 };
 
 int AmlogicMetadataRetrieverFactoryInit(void)
 {
-/*
     status_t err;
     err = MediaMetadataRetrieverFactory::registerFactory(new AmlogicMetadataRetrieverFactory(), AMLOGIC_PLAYER);
     ALOGV("register  AmlogicMetadataRetrieverFactory err =%d\n", err);
     err = MediaMetadataRetrieverFactory::registerFactory(new AmlogicMetadataRetrieverFactory(), AMSUPER_PLAYER);
     ALOGV("register  AmSuperMetadataRetrieverFactory err =%d\n", err);
-    */
     return 0;
 }
 
