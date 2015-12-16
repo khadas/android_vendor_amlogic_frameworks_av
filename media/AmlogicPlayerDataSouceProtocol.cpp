@@ -216,7 +216,7 @@ retry:
                 return -1;
             }
         }
-        sp<DataSource> source = new NuCachedSource2(httpSource);
+        sp<DataSource> source = NuCachedSource2::Create(httpSource);
         AmlogicPlayerDataSouceProtocol*mAmpSource = new AmlogicPlayerDataSouceProtocol(source, filename, flags | DSP_FLAG_CREATE_FROM_STATIC_OPEN);
         h->priv_data = (void*)mAmpSource;
         mAmpSource->DataOpen(h);
