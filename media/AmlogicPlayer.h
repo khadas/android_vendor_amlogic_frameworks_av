@@ -34,7 +34,6 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MetaData.h>
-#include <ISystemControlService.h>
 
 extern "C" {
 #include "libavutil/avstring.h"
@@ -269,7 +268,6 @@ private:
     int64_t mLastPosition;
     int mPlayTimeBac;
     int64_t realpositionBac;
-    sp<ISystemControlService> mSystemControlService;
 };
 
 }; // namespace android
