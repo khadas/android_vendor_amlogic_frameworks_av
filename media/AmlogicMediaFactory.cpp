@@ -135,7 +135,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const char* url,
                                float curScore) {
-        static const float kOurScore = 0.85; // temp
+        static const float kOurScore = 1.0;
 
         char value[PROPERTY_VALUE_MAX];
         if (property_get("media.hls.disable-nuplayer", value, NULL)
