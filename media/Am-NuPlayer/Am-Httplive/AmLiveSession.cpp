@@ -97,6 +97,8 @@ AmLiveSession::AmLiveSession(
       mFirstTimeUsValid(false),
       mFirstTimeUs(-1),
       mLastSeekTimeUs(0),
+      mAudioFirstTimeUs(-1),
+      mVideoFirstTimeUs(-1),
       mEOSTimeoutAudio(0),
       mEOSTimeoutVideo(0) {
     char value[PROPERTY_VALUE_MAX];
@@ -168,51 +170,36 @@ bool AmLiveSession::haveSufficientDataOnAVTracks() {
     sp<AmAnotherPacketSource> audioTrack = mPacketSources.valueFor(STREAMTYPE_AUDIO);
     sp<AmAnotherPacketSource> videoTrack = mPacketSources.valueFor(STREAMTYPE_VIDEO);
 
-    if (audioTrack == NULL && videoTrack == NULL) {
+    if ((audioTrack == NULL || !audioTrack->getValid())
+        && (videoTrack == NULL || !videoTrack->getValid())) {
         ALOGI("no audio and video track!\n");
         return false;
     }
 
     int64_t mediaDurationUs = 0;
     getDuration(&mediaDurationUs);
-    if ((audioTrack != NULL && audioTrack->isFinished(mediaDurationUs))
-            || (videoTrack != NULL && videoTrack->isFinished(mediaDurationUs))) {
+    if ((audioTrack != NULL && audioTrack->getValid() && audioTrack->isFinished(mediaDurationUs))
+            || (videoTrack != NULL && videoTrack->getValid() && videoTrack->isFinished(mediaDurationUs))) {
         ALOGI("audio or video finished!\n");
         return true;
     }
 
     status_t err;
-    int64_t durationUs, estimate;
-    bool buffer_flag = true;
-    if (audioTrack != NULL) {
-        estimate = audioTrack->getEstimatedBytesPerSec();
-        // just estimate, prevent wrong duration caused by pts jitter.
-        if ((durationUs = audioTrack->getBufferedDurationUs(&err)) < kMinDurationUs && err == OK) {
-            buffer_flag = false;
-        }
-        if (!buffer_flag && estimate) {
-            if (audioTrack->getBufferedDataSize() >= mBuffTimeSec * estimate) {
-                buffer_flag = true;
-            }
-        }
-        if (!buffer_flag) {
-            return false;
-        }
+    int64_t durationUs;
+    if (audioTrack != NULL && audioTrack->getValid()
+        && (durationUs = audioTrack->getBufferedDurationUs(&err)) < kMinDurationUs
+        && err == OK) {
+        ALOGV("audio track doesn't have enough data yet. (%.2f secs buffered)",
+        durationUs / 1E6);
+        return false;
     }
-    if (videoTrack != NULL) {
-        estimate = videoTrack->getEstimatedBytesPerSec();
-        // just estimate, prevent wrong duration caused by pts jitter.
-        if ((durationUs = videoTrack->getBufferedDurationUs(&err)) < kMinDurationUs && err == OK) {
-            buffer_flag = false;
-        }
-        if (!buffer_flag && estimate) {
-            if (videoTrack->getBufferedDataSize() >= mBuffTimeSec * estimate) {
-                buffer_flag = true;
-            }
-        }
-        if (!buffer_flag) {
-            return false;
-        }
+
+    if (videoTrack != NULL && videoTrack->getValid()
+        && (durationUs = videoTrack->getBufferedDurationUs(&err)) < kMinDurationUs
+        && err == OK) {
+        ALOGV("video track doesn't have enough data yet. (%.2f secs buffered)",
+        durationUs / 1E6);
+        return false;
     }
 
     ALOGI("audio and video track have enough data!\n");
@@ -230,7 +217,7 @@ void AmLiveSession::setEOSTimeout(bool audio, int64_t timeout) {
 status_t AmLiveSession::hasBufferAvailable(bool audio, bool * needBuffering) {
     StreamType stream = audio ? STREAMTYPE_AUDIO : STREAMTYPE_VIDEO;
     sp<AmAnotherPacketSource> t_source = mPacketSources.valueFor(stream);
-    if (t_source == NULL) {
+    if (t_source == NULL || !t_source->getValid()) {
         return -EWOULDBLOCK;
     }
     status_t finalResult;
@@ -243,7 +230,7 @@ status_t AmLiveSession::hasBufferAvailable(bool audio, bool * needBuffering) {
             status_t otherFinalResult;
 
             // If other source already signaled EOS, this source should also signal EOS
-            if (otherSource != NULL &&
+            if (otherSource != NULL && otherSource->getValid() &&
                     !otherSource->hasBufferAvailable(&otherFinalResult) &&
                     otherFinalResult == ERROR_END_OF_STREAM) {
                 t_source->signalEOS(ERROR_END_OF_STREAM);
@@ -264,7 +251,7 @@ status_t AmLiveSession::hasBufferAvailable(bool audio, bool * needBuffering) {
                 return -EWOULDBLOCK;
             }
 
-            if (!(otherSource != NULL && otherSource->isFinished(mediaDurationUs))) {
+            if (!(otherSource != NULL && otherSource->getValid() && otherSource->isFinished(mediaDurationUs))) {
                 // We should not enter buffering mode
                 // if any of the sources already have detected EOS.
                 *needBuffering = true;
@@ -338,7 +325,7 @@ status_t AmLiveSession::dequeueAccessUnit(
     if (mBuffering[idx]) {
         if (mSwitchInProgress
                 || packetSource->isFinished(0)
-                /*|| packetSource->getEstimatedDurationUs() > targetDurationUs*/) {
+                || packetSource->getEstimatedDurationUs() > targetDurationUs) {
             mBuffering[idx] = false;
         }
     }
@@ -373,6 +360,7 @@ status_t AmLiveSession::dequeueAccessUnit(
                 return -EAGAIN;
             } else {
                 mFirstTimeUsValid = true;
+                mVideoFirstTimeUs = mFirstTimeUs;
                 ALOGI("[Video] Found first min timeUs : %lld us", mFirstTimeUs);
             }
         }
@@ -527,6 +515,12 @@ status_t AmLiveSession::dequeueAccessUnit(
                 }
             }
 
+            if (stream == STREAMTYPE_AUDIO) {
+                if (mAudioFirstTimeUs < 0) {
+                    mAudioFirstTimeUs = firstTimeUs;
+                }
+            }
+
             strm.mLastDequeuedTimeUs = timeUs;
             if (timeUs >= firstTimeUs) {
                 timeUs -= firstTimeUs;
@@ -539,6 +533,13 @@ status_t AmLiveSession::dequeueAccessUnit(
             } else if (stream == STREAMTYPE_VIDEO && mVideoDiscontinuityOffsetTimesUs.indexOfKey(discontinuitySeq) >= 0) {
                 offset_timeUs = mVideoDiscontinuityOffsetTimesUs.valueFor(discontinuitySeq);
                 timeUs += offset_timeUs;
+            }
+
+            if (stream == STREAMTYPE_VIDEO) {
+                if (mAudioFirstTimeUs >= 0 && mVideoFirstTimeUs >= 0
+                    && llabs(mAudioFirstTimeUs - mVideoFirstTimeUs) > 100000) {
+                    timeUs += mVideoFirstTimeUs - mAudioFirstTimeUs;
+                }
             }
 
             if (mDebug) {
@@ -630,6 +631,8 @@ status_t AmLiveSession::seekTo(int64_t timeUs) {
     status_t err = msg->postAndAwaitResponse(&response);
 
     mFirstTimeUs = -1;
+    mAudioFirstTimeUs = -1;
+    mVideoFirstTimeUs = -1;
     mFirstTimeUsValid = false;
 
     return err;
@@ -969,14 +972,16 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
     status_t dummy_err;
     CFContext * cfc_handle = NULL;
     mPlaylist = fetchPlaylist(url.c_str(), NULL /* curPlaylistHash */, &dummy, dummy_err, &cfc_handle);
+    int httpCode = 0;
     if (cfc_handle) {
+        httpCode = -cfc_handle->http_code;
         curl_fetch_close(cfc_handle);
     }
 
     if (mPlaylist == NULL) {
         ALOGE("unable to fetch master playlist %s.", uriDebugString(url).c_str());
 
-        postPrepared(ERROR_IO);
+        postPrepared(httpCode);
         return;
     }
 
@@ -1120,7 +1125,7 @@ ssize_t AmLiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t si
             return UNKNOWN_ERROR;
         }
         if (read_seek_size && read_seek_left_size) {
-            int32_t tmp_size = read_seek_left_size > sizeof(dummy) ? sizeof(dummy) : read_seek_left_size;
+            int32_t tmp_size = read_seek_left_size > (int32_t)sizeof(dummy) ? sizeof(dummy) : read_seek_left_size;
             ret = curl_fetch_read(cfc, dummy, tmp_size);
             if (ret > 0) {
                 read_seek_left_size -= ret;
@@ -1244,13 +1249,13 @@ ssize_t AmLiveSession::fetchFile(
     if (*cfc == NULL) {
         String8 headers;
         if (range_offset > 0 || range_length >= 0) {
-            //headers.append(StringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : StringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
+            headers.append(AStringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : AStringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
         }
         ssize_t i = mExtraHeaders.indexOfKey(String8("User-Agent"));
         if (i >= 0) {
-            //headers.append(StringPrintf("User-Agent: %s\r\n", mExtraHeaders.valueAt(i).string()).c_str());
+            headers.append(AStringPrintf("User-Agent: %s\r\n", mExtraHeaders.valueAt(i).string()).c_str());
         } else {
-            //headers.append(StringPrintf("User-Agent: %s\r\n", kHTTPUserAgentDefault.string()).c_str());
+            headers.append(AStringPrintf("User-Agent: %s\r\n", kHTTPUserAgentDefault.string()).c_str());
         }
         CFContext * temp_cfc = curl_fetch_init(url, headers.string(), 0);
         if (!temp_cfc) {
@@ -1261,7 +1266,8 @@ ssize_t AmLiveSession::fetchFile(
         curl_fetch_set_parent_pid(temp_cfc, mParentThreadId);
         if (curl_fetch_open(temp_cfc)) {
             ALOGE("curl fetch open failed! http code : %d", temp_cfc->http_code);
-            curl_fetch_close(temp_cfc);
+            //curl_fetch_close(temp_cfc);
+            *cfc = temp_cfc;
             temp_cfc = NULL;
             return ERROR_CANNOT_CONNECT;
         }
@@ -1269,7 +1275,7 @@ ssize_t AmLiveSession::fetchFile(
     }
 
     size = (*cfc)->filesize;
-    if (isPlaylist && size > 1 * 1024 * 1024) { // assume not m3u8.
+    if (isPlaylist && size > 10 * 1024 * 1024) { // assume not m3u8.
         sp<AMessage> notify = mNotify->dup();
         notify->setInt32("what", kWhatSourceReady);
         notify->setInt32("err", 1);
@@ -2119,7 +2125,7 @@ void AmLiveSession::onCheckSwitchDown() {
         sp<AMessage> meta = packetSource->getLatestDequeuedMeta();
 
         if (meta != NULL && meta->findInt32("targetDuration", &targetDuration) ) {
-            int64_t bufferedDurationUs = 0;//packetSource->getEstimatedDurationUs();
+            int64_t bufferedDurationUs = packetSource->getEstimatedDurationUs();
             int64_t targetDurationUs = targetDuration * 1000000ll;
 
             if (bufferedDurationUs < targetDurationUs / 3) {
@@ -2360,6 +2366,13 @@ void AmLiveSession::postPrepared(status_t err) {
 
     //mSwitchDownMonitor = new AMessage(kWhatCheckSwitchDown, this);
     //mSwitchDownMonitor->post();
+}
+
+void AmLiveSession::setFrameRate(float frameRate) {
+    sp<AMessage> notify = mNotify->dup();
+    notify->setInt32("what", kWhatSetFrameRate);
+    notify->setFloat("frame-rate", frameRate);
+    notify->post();
 }
 
 }  // namespace android

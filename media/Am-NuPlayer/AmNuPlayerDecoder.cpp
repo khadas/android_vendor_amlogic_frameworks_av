@@ -62,6 +62,7 @@ AmNuPlayer::Decoder::Decoder(
       mFormatChangePending(false),
       mPaused(true),
       mResumePending(false),
+      mRememberThisTimeStamp(false),
       mComponentName("decoder"),
       mDumpMode(-1),
       mAudioHandle(NULL),
@@ -590,7 +591,6 @@ bool AmNuPlayer::Decoder::isStaleReply(const sp<AMessage> &msg) {
 status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     sp<ABuffer> accessUnit;
     bool dropAccessUnit;
-    bool rememberThisTimeStamp = false;
     do {
         status_t err = mSource->dequeueAccessUnit(mIsAudio, &accessUnit);
 
@@ -652,7 +652,7 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
                     rememberCodecSpecificData(newFormat);
                     err = OK;
                 } else if (dataCorrupt) {
-                    rememberThisTimeStamp = true;
+                    mRememberThisTimeStamp = true;
                     err = OK;
                 } else {
                     // This stream is unaffected by the discontinuity
@@ -690,11 +690,13 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
 
     // ALOGV("returned a valid buffer of %s data", mIsAudio ? "mIsAudio" : "video");
 
-    if (rememberThisTimeStamp) {
+    if (mRememberThisTimeStamp) {
         int64_t mediaTimeUs;
-        CHECK(accessUnit->meta()->findInt64("timeUs", &mediaTimeUs));
-        ALOGI("Data corrupt ! set render %s timestamp : %lld us", mIsAudio ? "audio" : "video", mediaTimeUs);
-        mRenderer->setTimeStampToRemember(mIsAudio, mediaTimeUs);  // ugly, maybe wrong.
+        if (accessUnit->meta()->findInt64("timeUs", &mediaTimeUs)) {
+            ALOGI("Data corrupt ! set render %s timestamp : %lld us", mIsAudio ? "audio" : "video", mediaTimeUs);
+            mRenderer->setTimeStampToRemember(mIsAudio, mediaTimeUs);  // ugly, maybe wrong.
+            mRememberThisTimeStamp = false;
+        }
     }
 
     if (mCCDecoder != NULL) {

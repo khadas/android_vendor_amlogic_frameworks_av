@@ -988,7 +988,7 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
     }
 
     entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
-    entry->mNotifyConsumed->setInt32("render", !tooLate);
+    entry->mNotifyConsumed->setInt32("render", 1); // render anyhow
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
     entry = NULL;
@@ -1031,7 +1031,7 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
     }
     if (isAudio && mAudioTimeStamp >= 0 && mAudioTimeStamp == timeUs) {
         // reset, no need to correct pts.
-        ALOGI("[%:%d] Audio timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        ALOGI("[%s:%d] Audio timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
         mAudioTimeStamp = -1;
         mLastAudioQueueTimeUs = -1;
         mAudioFrameIntervalUs = 0;
@@ -1039,7 +1039,7 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
     }
     if (!isAudio && mVideoTimeStamp >= 0 && mVideoTimeStamp == timeUs) {
         // reset, no need to correct pts.
-        ALOGI("[%:%d] Video timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        ALOGI("[%s:%d] Video timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
         mVideoTimeStamp = -1;
         mLastVideoQueueTimeUs = -1;
         mVideoFrameIntervalUs = 0;
@@ -1061,6 +1061,13 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
         if (llabs(timeUs - mLastAudioQueueTimeUs) > mAudioFrameDurationUs * 2) {
             bool jitter_flag = true;
             if (mSampleRate && mChannel && (llabs(llabs(timeUs - mLastAudioQueueTimeUs) - ((mLastAudioFrameSize * 1000000ll) / (mSampleRate * mChannel * 2))) < 5)) {
+                ALOGI("[%s:%d] ignore this audio jitter, samplerate(%d), channel(%d), last buffer size(%d)", __FUNCTION__, __LINE__, mSampleRate, mChannel, mLastAudioFrameSize);
+                jitter_flag = false;
+            }
+            double diff_ratio = (timeUs - mLastAudioQueueTimeUs) / (double)mAudioFrameDurationUs;
+            if (diff_ratio > 0 && diff_ratio < 20 && (diff_ratio - (timeUs - mLastAudioQueueTimeUs) / mAudioFrameDurationUs > 0.99
+                || diff_ratio - (timeUs - mLastAudioQueueTimeUs) / mAudioFrameDurationUs < 0.01)) {
+                ALOGI("[%s:%d] ignore this audio jitter, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, timeUs, mLastAudioQueueTimeUs);
                 jitter_flag = false;
             }
             if (jitter_flag) {
@@ -1071,12 +1078,37 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
         }
     }
     if (!isAudio && mLastVideoQueueTimeUs >= 0 && mVideoFrameDurationUs > 0) {
-        if (llabs(timeUs - mLastVideoQueueTimeUs) > mVideoFrameDurationUs * 2
-            && !((llabs(timeUs - mLastVideoQueueTimeUs) >= mVideoFrameDurationUs * 2 - 100 && llabs(timeUs - mLastVideoQueueTimeUs) <= mVideoFrameDurationUs * 2 + 100)
-            || (llabs(timeUs - mLastVideoQueueTimeUs) >= mVideoFrameDurationUs * 3 - 100 && llabs(timeUs - mLastVideoQueueTimeUs) <= mVideoFrameDurationUs * 3 + 100))) {
-            ALOGI("[%s:%d] video jitter ! timeUs : %lld us, last timeUs : %lld us, duration : %lld us", __FUNCTION__, __LINE__, timeUs, mLastVideoQueueTimeUs, mVideoFrameDurationUs);
-            rectify_timeUs = mLastVideoQueueTimeUs + mVideoFrameDurationUs;
-            mVideoFrameIntervalUs += rectify_timeUs - timeUs;
+        if (llabs(timeUs - mLastVideoQueueTimeUs) > mVideoFrameDurationUs * 2) {
+            bool jitter_flag = true;
+            double diff_ratio = (timeUs - mLastVideoQueueTimeUs) / (double)mVideoFrameDurationUs;
+            if (diff_ratio > 0 && diff_ratio < 20 && (diff_ratio - (timeUs - mLastVideoQueueTimeUs) / mVideoFrameDurationUs > 0.9
+                || diff_ratio - (timeUs - mLastVideoQueueTimeUs) / mVideoFrameDurationUs < 0.1)) { // maybe mosaic, wrong discontinuity
+                ALOGI("[%s:%d] ignore this video jitter, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, timeUs, mLastVideoQueueTimeUs);
+                jitter_flag = false;
+            }
+            if (jitter_flag && diff_ratio > 0 && diff_ratio < 20) {
+                // compare with audio queue
+                int64_t min_diff = -1, tmp_diff = -1, tmp_timeUs = -1;
+                List<QueueEntry>::iterator it = mAudioQueue.begin();
+                while (it != mAudioQueue.end()) {
+                    const QueueEntry &entry = *it;
+                    (entry.mBuffer)->meta()->findInt64("timeUs", &tmp_timeUs);
+                    tmp_diff = llabs(timeUs - tmp_timeUs);
+                    if (min_diff < 0 || tmp_diff < min_diff) {
+                        min_diff = tmp_diff;
+                    }
+                    ++it;
+                }
+                if (min_diff >= 0 && min_diff < (llabs(timeUs - mLastVideoQueueTimeUs) + 100000)) {
+                    ALOGI("[%s:%d] ignore this video jitter, min_diff(%lld)us, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, min_diff, timeUs, mLastVideoQueueTimeUs);
+                    jitter_flag = false;
+                }
+            }
+            if (jitter_flag) {
+                ALOGI("[%s:%d] video jitter ! timeUs : %lld us, last timeUs : %lld us, duration : %lld us", __FUNCTION__, __LINE__, timeUs, mLastVideoQueueTimeUs, mVideoFrameDurationUs);
+                rectify_timeUs = mLastVideoQueueTimeUs + mVideoFrameDurationUs;
+                mVideoFrameIntervalUs += rectify_timeUs - timeUs;
+            }
         }
     }
     if (isAudio) {

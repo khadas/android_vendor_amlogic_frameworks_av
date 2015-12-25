@@ -74,6 +74,9 @@ struct AmAnotherPacketSource : public MediaSource {
     sp<AMessage> getLatestEnqueuedMeta();
     sp<AMessage> getLatestDequeuedMeta();
 
+    void setValid(bool valid);
+    bool getValid();
+
 protected:
     virtual ~AmAnotherPacketSource();
 
@@ -83,6 +86,7 @@ private:
 
     bool mIsAudio;
     bool mIsVideo;
+    bool mIsValid;
     sp<MetaData> mFormat;
     int64_t mLastQueuedTimeUs;
     List<sp<ABuffer> > mBuffers;

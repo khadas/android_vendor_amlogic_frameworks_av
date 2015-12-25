@@ -96,12 +96,14 @@ struct AmLiveSession : public AHandler {
 
     void setParentThreadId(android_thread_id_t thread_id);
 
+    void setFrameRate(float frameRate);
     enum {
         kWhatStreamsChanged,
         kWhatError,
         kWhatPrepared,
         kWhatPreparationFailed,
         kWhatSourceReady,
+        kWhatSetFrameRate,
     };
 
     // create a format-change discontinuity
@@ -256,6 +258,8 @@ private:
     bool mFirstTimeUsValid;
     int64_t mFirstTimeUs;
     int64_t mLastSeekTimeUs;
+    int64_t mAudioFirstTimeUs;
+    int64_t mVideoFirstTimeUs;
 
     int64_t mEOSTimeoutAudio;
     int64_t mEOSTimeoutVideo;

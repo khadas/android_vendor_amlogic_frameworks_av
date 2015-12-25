@@ -4,6 +4,7 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:=               \
         AmLiveDataSource.cpp      \
+        AmHLSDataSource.cpp       \
         AmLiveSession.cpp         \
         AmM3UParser.cpp           \
         AmPlaylistFetcher.cpp     \

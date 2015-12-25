@@ -185,10 +185,22 @@ AmNuPlayer::AmNuPlayer()
       mResumePending(false),
       mVideoScalingMode(NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW),
       mNewSurface(NULL),
+      mEnableFrameRate(false),
+      mFrameRate(-1.0),
+      mWaitSeconds(10),
       mStarted(false),
       mPaused(false),
       mPausedByClient(false) {
     clearFlushComplete();
+
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.hls.frame-rate", value, NULL)) {
+        mEnableFrameRate = atoi(value);
+    }
+    char value1[PROPERTY_VALUE_MAX];
+    if (property_get("media.hls.wait-seconds", value, NULL)) {
+        mWaitSeconds = atoi(value);
+    }
 }
 
 AmNuPlayer::~AmNuPlayer() {
@@ -666,6 +678,18 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
             if (generation != mScanSourcesGeneration) {
                 // Drop obsolete msg.
                 break;
+            }
+
+            if (mEnableFrameRate && mFrameRate < 0.0) {
+                int32_t num = 0;
+                msg->findInt32("scan-num", &num);
+                if (num < mWaitSeconds * 100) {     // wait up to 10 seconds
+                    ALOGI("scan sources wait %d", num);
+                    ++num;
+                    msg->setInt32("scan-num", num);
+                    msg->post(10 * 1000);
+                    break;
+                }
             }
 
             mScanSourcesPending = false;
@@ -1313,6 +1337,7 @@ status_t AmNuPlayer::instantiateDecoder(bool audio, sp<DecoderBase> *decoder) {
         sp<AMessage> notify = new AMessage(kWhatVideoNotify, this);
         ++mVideoDecoderGeneration;
         notify->setInt32("generation", mVideoDecoderGeneration);
+        format->setFloat("frame-rate", mFrameRate);
 
         *decoder = new Decoder(
                 notify, mSource, mRenderer, mNativeWindow, mCCDecoder);
@@ -1954,6 +1979,12 @@ void AmNuPlayer::onSourceNotify(const sp<AMessage> &msg) {
             int32_t err;
             CHECK(msg->findInt32("err", &err));
             notifyListener(0xffff, err, 0);
+            break;
+        }
+
+        case Source::kWhatFrameRate:
+        {
+            CHECK(msg->findFloat("frame-rate", &mFrameRate));
             break;
         }
 

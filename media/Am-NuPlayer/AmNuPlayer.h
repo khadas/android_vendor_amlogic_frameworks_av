@@ -185,6 +185,10 @@ private:
 
     int32_t mVideoScalingMode;
 
+    bool mEnableFrameRate;
+    float mFrameRate;
+    int32_t mWaitSeconds;
+
     bool mStarted;
 
     // Actual pause state, either as requested by client or due to buffering.

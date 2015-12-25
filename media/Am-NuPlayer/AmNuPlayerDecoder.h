@@ -84,6 +84,7 @@ private:
 
     bool mPaused;
     bool mResumePending;
+    bool mRememberThisTimeStamp;
     AString mComponentName;
 
     int32_t mDumpMode;

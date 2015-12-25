@@ -31,6 +31,8 @@ struct DataSource;
 struct HTTPBase;
 struct AmLiveDataSource;
 struct AmM3UParser;
+struct MediaExtractor;
+struct MediaBuffer;
 struct String8;
 
 struct AmPlaylistFetcher : public AHandler {
@@ -171,6 +173,17 @@ private:
 
     sp<AmATSParser> mTSParser;
 
+    sp<MediaExtractor> mExtractor;
+    sp<MediaSource> mAudioTrack;
+    sp<MediaSource> mVideoTrack;
+    sp<AmAnotherPacketSource> mAudioSource;
+    sp<AmAnotherPacketSource> mVideoSource;
+
+    bool mEnableFrameRate;
+    float mFrameRate;
+    Vector<int64_t> mVecTimeUs;
+    static const size_t kFrameNum;
+
     bool mFirstPTSValid;
     uint64_t mFirstPTS;
     int64_t mFirstTimeUs;
@@ -215,9 +228,14 @@ private:
             const sp<AmAnotherPacketSource> &source,
             bool discard = false);
     status_t extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer);
-
+    status_t extractAndQueueAccessUnitsFromNonTs();
+    status_t queueAccessUnits();
     status_t extractAndQueueAccessUnits(
             const sp<ABuffer> &buffer, const sp<AMessage> &itemMeta);
+
+    void sniff(const sp<ABuffer> &buffer);
+    void readFromNonTsFile();
+    sp<ABuffer> mediaBufferToABuffer(MediaBuffer* mediaBuffer);
 
     void notifyError(status_t err);
 

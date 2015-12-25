@@ -272,8 +272,8 @@ status_t AmElementaryStreamQueue::appendData(
                 uint8_t *ptr = (uint8_t *)data;
 
                 ssize_t startOffset = -1;
-                for (size_t i = 0; i + 3 < size; ++i) {
-                    if (!memcmp("\x00\x00\x00\x01", &ptr[i], 4)) {
+                for (size_t i = 0; i + 2 < size; ++i) {
+                    if (!memcmp("\x00\x00\x01", &ptr[i], 3)) {
                         startOffset = i;
                         break;
                     }
@@ -844,21 +844,29 @@ int64_t AmElementaryStreamQueue::fetchTimestampAAC(size_t size) {
     return timeUs;
 }
 
+/*
+struct NALPosition {
+    size_t nalOffset;
+    size_t nalSize;
+};
+*/
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
-
-	if (mFormat == NULL) {
-        size_t stopOffset;
-        sp<ABuffer> spsBuffer;
-        size_t size = mBuffer->size();
-        const uint8_t *data = mBuffer->data();
-        const uint8_t *nalStart;
-        size_t nalSize;
-        while ((HEVC_getNextNALUnit(&data, &size, &nalStart, &nalSize, true) == OK)) {
-            if (((nalStart[0] >> 1) & 0x3f) == 33) { //SPS
-                int ret;
+    const uint8_t *data = mBuffer->data();
+    size_t size = mBuffer->size();
+    Vector<NALPosition> nals;
+    size_t totalSize = 0;
+    status_t err;
+    const uint8_t *nalStart;
+    size_t nalSize;
+    bool frame_start_found = false;
+    while ((err = HEVC_getNextNALUnit(&data, &size, &nalStart, &nalSize, false)) == OK) {
+        if (nalSize == 0) continue;
+        unsigned nalType = (nalStart[0] >> 1) & 0x3f;
+        if (mFormat == NULL) {
+            if (nalType == 33) { // sps
                 struct hevc_info info;
-                ret = HEVC_decode_SPS(nalStart + 2, nalSize - 2, &info);
-                if (ret == 0) {
+                int sps_ret = HEVC_decode_SPS(nalStart + 2, nalSize - 2, &info);
+                if (!sps_ret) {
                     sp<MetaData> meta = new MetaData;
                     meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_HEVC);
                     meta->setInt32(kKeyWidth, info.mwidth);
@@ -868,44 +876,58 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
                 }
             }
         }
-    }
-
-    // source has been released when seek. metadata could be null here, assign it.
-    if (mFormat == NULL) {
-        sp<MetaData> meta = new MetaData;
-        meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_HEVC);
-        // set width&height temporarily, avoid play failed.
-        meta->setInt32(kKeyWidth, 0);
-        meta->setInt32(kKeyHeight, 0);
-        mFormat = meta;
-    }
-
-    int keyframe = 0;
-    if (mBuffer->size() > 0) {
-        if (!mHevcFindKey) {
-            keyframe = HEVC_parse_keyframe(mBuffer->data(), mBuffer->size());
-            if (keyframe == 1) {
-                mHevcFindKey = true;
-            } else {
-                fetchTimestamp(mBuffer->size());
-                mBuffer->setRange(0, mBuffer->size() - mBuffer->size());
-                return NULL;
+        bool flush = false;
+        if ((nalType >= 32 && nalType <= 35) || nalType == 39 ||
+            (nalType >= 41 && nalType <= 44) || (nalType >= 48 && nalType <= 55)) {
+            if (frame_start_found) {
+                flush = true;
             }
+        } else if (nalType <= 9 || (nalType >= 16 && nalType <= 21)) {
+            if (frame_start_found) {
+                int first_slice_segment_in_pic_flag = 0;
+                for (size_t i = 1; i < nalSize; i++) {
+                    first_slice_segment_in_pic_flag = nalStart[i] >> 7;
+                    if (first_slice_segment_in_pic_flag) {
+                        break;
+                    }
+                }
+                if (first_slice_segment_in_pic_flag) {
+                    flush = true;
+                }
+            }
+            frame_start_found = true;
         }
-
-        sp<ABuffer> accessUnit = new ABuffer(mBuffer->size());
-        memcpy(accessUnit->data(), mBuffer->data(), mBuffer->size());
-
-        int64_t timeUs = fetchTimestamp(mBuffer->size());
-        CHECK_GE(timeUs, 0ll);
-        accessUnit->meta()->setInt64("timeUs", timeUs);
-        if (keyframe == 1) {
-            accessUnit->meta()->setInt32("iskeyframe", 1);
+        if (flush) {
+            size_t auSize = 4 * nals.size() + totalSize;
+            sp<ABuffer> accessUnit = new ABuffer(auSize);
+            size_t dstOffset = 0;
+            for (size_t i = 0; i < nals.size(); ++i) {
+                const NALPosition &pos = nals.itemAt(i);
+                memcpy(accessUnit->data() + dstOffset, "\x00\x00\x00\x01", 4);
+                memcpy(accessUnit->data() + dstOffset + 4,
+                       mBuffer->data() + pos.nalOffset,
+                       pos.nalSize);
+                dstOffset += pos.nalSize + 4;
+            }
+            const NALPosition &pos = nals.itemAt(nals.size() - 1);
+            size_t nextScan = pos.nalOffset + pos.nalSize;
+            memmove(mBuffer->data(),
+                    mBuffer->data() + nextScan,
+                    mBuffer->size() - nextScan);
+            mBuffer->setRange(0, mBuffer->size() - nextScan);
+            int64_t timeUs = fetchTimestamp(nextScan);
+            int keyframe = (nalType >= 16 && nalType <= 23);
+            accessUnit->meta()->setInt64("timeUs", timeUs);
+            accessUnit->meta()->setInt32("iskeyframe", keyframe);
+            return accessUnit;
         }
-        mBuffer->setRange(0, mBuffer->size() - mBuffer->size());
-        return accessUnit;
+        NALPosition pos;
+        pos.nalOffset = nalStart - mBuffer->data();
+        pos.nalSize = nalSize;
+        nals.push(pos);
+        totalSize += nalSize;
     }
-    mBuffer->setRange(0, mBuffer->size() - mBuffer->size());
+    CHECK_EQ(err, (status_t)-EAGAIN);
     return NULL;
 }
 
