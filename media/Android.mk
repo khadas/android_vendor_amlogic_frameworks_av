@@ -6,6 +6,12 @@ LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
 
+ifeq ($(GPU_TYPE),t83x)
+LOCAL_CFLAGS += -DMALI_AFBC_GRALLOC=1
+else
+LOCAL_CFLAGS += -DMALI_AFBC_GRALLOC=0
+endif
+
 MESON_GRALLOC_DIR?=hardware/amlogic/gralloc
 
 
