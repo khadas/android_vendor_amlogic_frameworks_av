@@ -694,7 +694,7 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
             return AMLOGIC_PLAYER;  //for SS
         } else if (!strcmp(type, "asf-pr"))
             return AMLOGIC_PLAYER;
-        if (match_codecs(type, "webm,vp8,vp6,hevc,rmsoft,wmv2")) {
+        if (match_codecs(type, "webm,vp8,vp6,hevc,rmsoft,wmv2,wmv1")) {
             if (match_codecs(type, "hevcHW")) {
                 goto PASS_THROUGH;
             }

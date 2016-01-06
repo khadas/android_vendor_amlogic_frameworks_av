@@ -62,25 +62,25 @@ AmVideoCodec::~ AmVideoCodec() {
 int32_t AmVideoCodec::video_decode_init(const char * codecMime, VIDEO_INFO_T *video_info) {
     AVCodecID id = static_cast<AVCodecID>(convertMimeTypetoCodecId(codecMime));
     mCodec = avcodec_find_decoder(id);
-    if(!mCodec) {
+    if (!mCodec) {
         ALOGE("%s decoder not found!!\n", codecMime);
         return UNKNOWN_ERROR;
     }
     mctx = avcodec_alloc_context3(mCodec);
-    if(!mctx) {
+    if (!mctx) {
         ALOGE("malloc codec context failed!!\n");
         return UNKNOWN_ERROR;
     }
-    if(mCodec->capabilities & CODEC_CAP_TRUNCATED) {
+    if (mCodec->capabilities & CODEC_CAP_TRUNCATED) {
         mctx->flags |= CODEC_FLAG_TRUNCATED;
     }
-    if(mCodec->capabilities & CODEC_CAP_DR1) {
+    if (mCodec->capabilities & CODEC_CAP_DR1) {
         mctx->flags |= CODEC_FLAG_EMU_EDGE;
     }
 
     int32_t thread_num = GetCPUCoreCount();
     ALOGI("decoder thread num : %d\n", thread_num);
-    if(mCodec->capabilities & CODEC_CAP_FRAME_THREADS) {
+    if (mCodec->capabilities & CODEC_CAP_FRAME_THREADS) {
         av_opt_set(mctx, "thread_type", "frame", 0);
     } else if (mCodec->capabilities & CODEC_CAP_SLICE_THREADS) {
         av_opt_set(mctx, "thread_type", "slice", 0);
@@ -91,24 +91,23 @@ int32_t AmVideoCodec::video_decode_init(const char * codecMime, VIDEO_INFO_T *vi
         mctx->thread_count = thread_num;
     }
 #endif
-
-    if(id == AV_CODEC_ID_WMV2) {
-        if(video_info->extra_data != NULL) {
+    if (id == AV_CODEC_ID_WMV2 || id == AV_CODEC_ID_WMV1 || id == AV_CODEC_ID_RV10 || id == AV_CODEC_ID_RV20) {
+        if (video_info->extra_data != NULL) {
             mctx->extradata = video_info->extra_data;
         }
-        if(video_info->extra_data_size != 0) {
+        if (video_info->extra_data_size != 0) {
             mctx->extradata_size = video_info->extra_data_size;
         }
-        if(video_info->width != 0) {
+        if (video_info->width != 0) {
             mctx->width = video_info->width;
         }
-        if(video_info->height!= 0) {
+        if (video_info->height!= 0) {
             mctx->height= video_info->height;
         }
         ALOGV("video info extra_data_size:%d width:%d height:%d", video_info->extra_data_size, video_info->width, video_info->height);
     }
 
-    if(avcodec_open2(mctx, mCodec, NULL) < 0) {
+    if (avcodec_open2(mctx, mCodec, NULL) < 0) {
         ALOGE("decoder not open!!\n");
         return UNKNOWN_ERROR;
     }

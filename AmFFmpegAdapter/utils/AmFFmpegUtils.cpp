@@ -72,8 +72,11 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_VIDEO_VPX, AV_CODEC_ID_VP8 },
     { MEDIA_MIMETYPE_VIDEO_VP9, AV_CODEC_ID_VP9 },
     { MEDIA_MIMETYPE_VIDEO_WMV, AV_CODEC_ID_WMV3 /* WMV9 */ },
-	{ MEDIA_MIMETYPE_VIDEO_RM, AV_CODEC_ID_RV40 },
-	{ MEDIA_MIMETYPE_VIDEO_WMV2, AV_CODEC_ID_WMV2 },
+    { MEDIA_MIMETYPE_VIDEO_RM10, AV_CODEC_ID_RV10 },
+    { MEDIA_MIMETYPE_VIDEO_RM20, AV_CODEC_ID_RV20 },
+    { MEDIA_MIMETYPE_VIDEO_RM40, AV_CODEC_ID_RV40 },
+    { MEDIA_MIMETYPE_VIDEO_WMV2, AV_CODEC_ID_WMV2 },
+    { MEDIA_MIMETYPE_VIDEO_WMV1, AV_CODEC_ID_WMV1 },
 
     { MEDIA_MIMETYPE_AUDIO_AAC, AV_CODEC_ID_AAC },
 #ifdef DOLBY_UDC
@@ -294,7 +297,10 @@ static void initInputFormatToMimeTypeMap(
     map.add(av_find_input_format("dts"), MEDIA_MIMETYPE_AUDIO_DTS);
     map.add(av_find_input_format("hevc"), MEDIA_MIMETYPE_VIDEO_HEVC);
     map.add(av_find_input_format("ape"), MEDIA_MIMETYPE_AUDIO_APE);
-    map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM);
+    map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM10);
+    map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM20);
+    map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM40);
+    map.add(av_find_input_format("wmv1"), MEDIA_MIMETYPE_VIDEO_WMV1);
 }
 
 const char *convertInputFormatToMimeType(AVInputFormat *inputFormat) {

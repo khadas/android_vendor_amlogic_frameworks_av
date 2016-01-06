@@ -223,12 +223,15 @@ status_t AmFFmpegSource::init(
             framerate /= rationalFramerate->den;
             mMeta->setInt32(kKeyFrameRateQ16, static_cast<int32_t>(framerate));
         }
-		if(stream->codec->extradata_size > 0) {
-	        mMeta->setData(kKeyExtraData, 0, (char*)stream->codec->extradata, stream->codec->extradata_size);
-		    mMeta->setInt32(kKeyExtraDataSize, stream->codec->extradata_size);
-		}
-		if(stream->codec->block_align > 0)
-		    mMeta->setInt32(kKeyBlockAlign, stream->codec->block_align);
+        if (stream->codec->extradata_size > 0) {
+            mMeta->setData(kKeyExtraData, 0, (char*)stream->codec->extradata, stream->codec->extradata_size);
+            mMeta->setInt32(kKeyExtraDataSize, stream->codec->extradata_size);
+        } else {
+            mMeta->setData(kKeyExtraData, 0, 0, 0);
+            mMeta->setInt32(kKeyExtraDataSize, 0);
+        }
+        if (stream->codec->block_align > 0)
+            mMeta->setInt32(kKeyBlockAlign, stream->codec->block_align);
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
             // Add ISO-14496-12 atom header (BigEndian size + FOURCC tx3g),
@@ -760,6 +763,10 @@ bool SniffAmFFmpeg(
             *mimeType = mimeDetected;
             // only available when stagefright not support
             *confidence = 0.05f;
+            if (!strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM10) || !strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM20) || !strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM40)) {
+                *confidence = 0.21f;
+                ALOGV("[%s %d] confidence 0.21", __FUNCTION__, __LINE__);
+            }
             return true;
         }
     }
