@@ -981,7 +981,11 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
     if (mPlaylist == NULL) {
         ALOGE("unable to fetch master playlist %s.", uriDebugString(url).c_str());
 
-        postPrepared(httpCode);
+        if (!httpCode) {
+            postPrepared(ERROR_IO); // prevent notify prepared.
+        } else {
+            postPrepared(httpCode);
+        }
         return;
     }
 
