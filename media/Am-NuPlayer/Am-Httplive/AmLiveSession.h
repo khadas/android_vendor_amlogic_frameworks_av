@@ -215,6 +215,8 @@ private:
     ssize_t mCurBandwidthIndex;
 
     sp<AmM3UParser> mPlaylist;
+    KeyedVector<AString, sp<AmM3UParser> > mFetcherPlaylist;
+    Mutex mFetcherPlaylistMutex;
 
     KeyedVector<AString, FetcherInfo> mFetcherInfos;
     uint32_t mStreamMask;
@@ -298,7 +300,7 @@ private:
             String8 *actualUrl = NULL, bool isPlaylist = false);
 
     sp<AmM3UParser> fetchPlaylist(
-            const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err, CFContext ** cfc = NULL);
+            const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err, CFContext ** cfc = NULL, bool isMasterPlaylist = false);
 
     size_t getBandwidthIndex();
     int64_t latestMediaSegmentStartTimeUs();

@@ -971,7 +971,7 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
     bool dummy;
     status_t dummy_err;
     CFContext * cfc_handle = NULL;
-    mPlaylist = fetchPlaylist(url.c_str(), NULL /* curPlaylistHash */, &dummy, dummy_err, &cfc_handle);
+    mPlaylist = fetchPlaylist(url.c_str(), NULL /* curPlaylistHash */, &dummy, dummy_err, &cfc_handle, true);
     int httpCode = 0;
     if (cfc_handle) {
         httpCode = -cfc_handle->http_code;
@@ -1103,8 +1103,14 @@ sp<AmPlaylistFetcher> AmLiveSession::addFetcher(const char *uri) {
     notify->setString("uri", uri);
     notify->setInt32("switchGeneration", mSwitchGeneration);
 
+    sp<AmM3UParser> playlist = NULL;
+    ssize_t i = mFetcherPlaylist.indexOfKey(AString(uri));
+    if (i >= 0) {
+        playlist = mFetcherPlaylist.valueAt(i);
+    }
+
     FetcherInfo info;
-    info.mFetcher = new AmPlaylistFetcher(notify, this, uri, mSubtitleGeneration);
+    info.mFetcher = new AmPlaylistFetcher(notify, this, playlist, uri, mSubtitleGeneration);
     info.mDurationUs = -1ll;
     info.mStatus = STATUS_ACTIVE;
     info.mIsPrepared = false;
@@ -1252,13 +1258,14 @@ ssize_t AmLiveSession::fetchFile(
 
     if (*cfc == NULL) {
         String8 headers;
+        for (size_t j = 0; j < mExtraHeaders.size(); j++) {
+            headers.append(AStringPrintf("%s: %s\r\n", mExtraHeaders.keyAt(j).string(), mExtraHeaders.valueAt(j).string()).c_str());
+        }
         if (range_offset > 0 || range_length >= 0) {
             headers.append(AStringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : AStringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
         }
         ssize_t i = mExtraHeaders.indexOfKey(String8("User-Agent"));
-        if (i >= 0) {
-            headers.append(AStringPrintf("User-Agent: %s\r\n", mExtraHeaders.valueAt(i).string()).c_str());
-        } else {
+        if (i < 0) {
             headers.append(AStringPrintf("User-Agent: %s\r\n", kHTTPUserAgentDefault.string()).c_str());
         }
         CFContext * temp_cfc = curl_fetch_init(url, headers.string(), 0);
@@ -1403,7 +1410,7 @@ ssize_t AmLiveSession::fetchFile(
 }
 
 sp<AmM3UParser> AmLiveSession::fetchPlaylist(
-        const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err_ret, CFContext ** cfc) {
+        const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err_ret, CFContext ** cfc, bool isMasterPlaylist) {
     ALOGI("fetchPlaylist '%s'", url);
 
     *unchanged = false;
@@ -1455,6 +1462,14 @@ PASS_THROUGH:
         ALOGE("failed to parse .m3u8 playlist");
 
         return NULL;
+    }
+
+    if (!isMasterPlaylist || !playlist->isVariantPlaylist()) {
+        Mutex::Autolock lock(mFetcherPlaylistMutex);
+        ssize_t i = mFetcherPlaylist.indexOfKey(AString(actualUrl.string()));
+        if (i < 0) {
+            mFetcherPlaylist.add(AString(actualUrl.string()), playlist); // backup for fetcher
+        }
     }
 
     return playlist;

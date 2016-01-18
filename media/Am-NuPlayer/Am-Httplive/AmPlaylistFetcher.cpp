@@ -68,6 +68,7 @@ const AString AmPlaylistFetcher::DumpPath = "/data/tmp/";
 AmPlaylistFetcher::AmPlaylistFetcher(
         const sp<AMessage> &notify,
         const sp<AmLiveSession> &session,
+        const sp<AmM3UParser> &playlist,
         const char *uri,
         int32_t subtitleGeneration)
     : mDumpMode(-1),
@@ -85,9 +86,11 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mDiscontinuitySeq(-1ll),
       mStartTimeUsRelative(false),
       mLastPlaylistFetchTimeUs(-1ll),
+      mPlaylist(playlist),
       mSeqNumber(-1),
       mDownloadedNum(0),
       mNumRetries(0),
+      mFirstRefresh(true),
       mStartup(true),
       mAdaptive(false),
       mFetchingNotify(false),
@@ -170,7 +173,7 @@ int64_t AmPlaylistFetcher::getSegmentStartTimeUs(int32_t seqNumber) const {
 int64_t AmPlaylistFetcher::delayUsToRefreshPlaylist() const {
     int64_t nowUs = ALooper::GetNowUs();
 
-    if (mPlaylist == NULL || mLastPlaylistFetchTimeUs < 0ll) {
+    if (mPlaylist == NULL) {
         CHECK_EQ((int)mRefreshState, (int)INITIAL_MINIMUM_RELOAD_DELAY);
         return 0ll;
     }
@@ -807,6 +810,11 @@ status_t AmPlaylistFetcher::refreshPlaylist() {
         mSession->checkBandwidth(&needRefresh);
     }
     if (needRefresh || delayUsToRefreshPlaylist() <= 0) {
+        if (mPlaylist != NULL && mFirstRefresh) {
+            mFirstRefresh = false;
+            goto END_OF_REFRESH;
+        }
+        mFirstRefresh = false;
         bool unchanged;
         status_t err = OK;
         CFContext * cfc_handle = NULL;
@@ -850,14 +858,16 @@ status_t AmPlaylistFetcher::refreshPlaylist() {
         } else {
             mRefreshState = INITIAL_MINIMUM_RELOAD_DELAY;
             mPlaylist = playlist;
-
-            if (mPlaylist->isComplete() || mPlaylist->isEvent()) {
-                updateDuration();
-            }
         }
 
         mLastPlaylistFetchTimeUs = ALooper::GetNowUs();
     }
+
+END_OF_REFRESH:
+    if (mPlaylist != NULL && (mPlaylist->isComplete() || mPlaylist->isEvent())) {
+        updateDuration();
+    }
+
     return OK;
 }
 
@@ -1004,7 +1014,7 @@ void AmPlaylistFetcher::onDownloadNext() {
             ALOGE("Cannot find sequence number %d in playlist "
                  "(contains %d - %d)",
                  mSeqNumber, firstSeqNumberInPlaylist,
-                  firstSeqNumberInPlaylist + (int32_t)mPlaylist->size() - 1);
+                 lastSeqNumberInPlaylist);
 
             notifyError(ERROR_END_OF_STREAM);
             return;

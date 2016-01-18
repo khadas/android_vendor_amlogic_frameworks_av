@@ -55,6 +55,7 @@ struct AmPlaylistFetcher : public AHandler {
     AmPlaylistFetcher(
             const sp<AMessage> &notify,
             const sp<AmLiveSession> &session,
+            const sp<AmM3UParser> &playlist,
             const char *uri,
             int32_t subtitleGeneration);
 
@@ -151,6 +152,7 @@ private:
     int32_t mSeqNumber;
     int32_t mDownloadedNum;
     int32_t mNumRetries;
+    bool mFirstRefresh;
     bool mStartup;
     bool mAdaptive;
     bool mFetchingNotify;
