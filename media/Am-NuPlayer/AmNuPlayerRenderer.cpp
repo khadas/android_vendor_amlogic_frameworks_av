@@ -72,12 +72,12 @@ AmNuPlayer::Renderer::Renderer(
       mLastAudioFrameSize(0),
       mChannel(0),
       mSampleRate(0),
-      mDebug(false),
       mRenderStarted(false),
       mDrainAudioQueuePending(false),
       mDrainVideoQueuePending(false),
       mAudioQueueGeneration(0),
       mVideoQueueGeneration(0),
+      mDebugHandle(NULL),
       mAudioFirstAnchorTimeMediaUs(-1),
       mAnchorTimeMediaUs(-1),
       mAnchorTimeRealUs(-1),
@@ -86,6 +86,8 @@ AmNuPlayer::Renderer::Renderer(
       mVideoLateByUs(0ll),
       mHasAudio(false),
       mHasVideo(false),
+      mAudioJump(false),
+      mVideoJump(false),
       mPauseStartedTimeRealUs(-1),
       mFlushingAudio(false),
       mFlushingVideo(false),
@@ -109,12 +111,15 @@ AmNuPlayer::Renderer::Renderer(
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.render_pts", value, NULL)
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
-        mDebug = true;
+        mDebugHandle = fopen("/data/tmp/render_pts.dat", "ab+");
     }
 
 }
 
 AmNuPlayer::Renderer::~Renderer() {
+    if (mDebugHandle) {
+        fclose(mDebugHandle);
+    }
     if (offloadingAudio()) {
         mAudioSink->stop();
         mAudioSink->flush();
@@ -340,8 +345,10 @@ void AmNuPlayer::Renderer::setTimeStampToRemember(bool isAudio, int64_t mediaUs)
     Mutex::Autolock autoLock(mLock);
     if (isAudio) {
         mAudioTimeStamp = mediaUs;
+        mAudioJump = true;
     } else {
         mVideoTimeStamp = mediaUs;
+        mVideoJump = true;
     }
 }
 
@@ -749,9 +756,6 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
         if (entry->mOffset == 0) {
             int64_t mediaTimeUs;
             CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-            if (mDebug) {
-                ALOGI("[audio] rendering at media time %lld us", mediaTimeUs);
-            }
             onNewAudioMediaTime(mediaTimeUs);
         }
 
@@ -901,6 +905,19 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
         // in 500 msec.
         delayUs = realTimeUs - nowUs;
         if (delayUs > 500000) {
+            bool clear_entry = false;
+            if (mHasAudio && mHasVideo) {
+                if (mAudioJump || mVideoJump) {
+                    clear_entry = true;
+                }
+            }
+            // keep rendering, prevent block here.
+            if (clear_entry) {
+                ALOGI("clear this entry, mediaTimeUs(%lld)", mediaTimeUs);
+                mVideoQueue.erase(mVideoQueue.begin());
+                mDrainVideoQueuePending = true;
+                return;
+            }
             int64_t postDelayUs = 500000;
             if (mHasAudio && (mLastAudioBufferDrained - entry.mBufferOrdinal) <= 0) {
                 postDelayUs = 10000;
@@ -971,13 +988,14 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         if (tooLate) {
             ALOGV("video late by %lld us (%.2f secs)",
                  mVideoLateByUs, mVideoLateByUs / 1E6);
-        } else {
+        }
+        /* else {
             if (mDebug) {
                 ALOGI("[video] rendering at media time %lld us",
                         (mFlags & FLAG_REAL_TIME ? realTimeUs :
                        (realTimeUs + mAnchorTimeMediaUs - mAnchorTimeRealUs)));
             }
-        }
+        }*/
     } else {
         setVideoLateByUs(0);
         if (!mVideoSampleReceived && !mHasAudio) {
@@ -1026,12 +1044,13 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
     Mutex::Autolock autoLock(mLock);
     int64_t timeUs, rectify_timeUs;
     buffer->meta()->findInt64("timeUs", &timeUs);
-    if (mDebug) {
-        ALOGI("[%s] queued buffer timeUs : %lld us \n", isAudio ? "audio" : "video", timeUs);
+    if (mDebugHandle) {
+        fprintf(mDebugHandle, "%s : queued buffer timeUs(%lld)us\n", isAudio ? "audio" : "video", timeUs);
     }
     if (isAudio && mAudioTimeStamp >= 0 && mAudioTimeStamp == timeUs) {
         // reset, no need to correct pts.
         ALOGI("[%s:%d] Audio timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        mAudioJump = false;
         mAudioTimeStamp = -1;
         mLastAudioQueueTimeUs = -1;
         mAudioFrameIntervalUs = 0;
@@ -1040,6 +1059,7 @@ void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t 
     if (!isAudio && mVideoTimeStamp >= 0 && mVideoTimeStamp == timeUs) {
         // reset, no need to correct pts.
         ALOGI("[%s:%d] Video timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
+        mVideoJump = false;
         mVideoTimeStamp = -1;
         mLastVideoQueueTimeUs = -1;
         mVideoFrameIntervalUs = 0;

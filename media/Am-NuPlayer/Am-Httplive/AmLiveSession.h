@@ -188,12 +188,12 @@ private:
     int32_t mAbnormalWaitSec;
 
     bool mFirstSniff;
-    bool mDebug;
     bool mCodecSpecificDataSend;
     bool mSeeked;
     bool mNeedExit;
     bool mInPreparationPhase;
     bool mBuffering[kMaxStreams];
+    FILE * mDebugHandle;
 
     static const String8 kHTTPUserAgentDefault;
 

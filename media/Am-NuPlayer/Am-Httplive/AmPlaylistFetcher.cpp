@@ -1030,12 +1030,13 @@ void AmPlaylistFetcher::onDownloadNext() {
                 &uri,
                 &itemMeta));
 
+#if 0
     int32_t val;
     if (itemMeta->findInt32("discontinuity", &val) && val != 0) {
         mDiscontinuitySeq++;
         discontinuity = true;
     }
-
+#endif
     int64_t item_durationUs = 0;
     itemMeta->findInt64("durationUs", &item_durationUs);
 

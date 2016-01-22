@@ -73,11 +73,11 @@ AmLiveSession::AmLiveSession(
       mFailureWaitSec(0),
       mAbnormalWaitSec(0),
       mFirstSniff(true),
-      mDebug(false),
       mCodecSpecificDataSend(false),
       mSeeked(false),
       mNeedExit(false),
       mInPreparationPhase(true),
+      mDebugHandle(NULL),
       mCodecSpecificData(NULL),
       mCodecSpecificDataSize(0),
       mCurBandwidthIndex(-1),
@@ -104,7 +104,7 @@ AmLiveSession::AmLiveSession(
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.read_pts", value, NULL)
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
-        mDebug = true;
+        mDebugHandle = fopen("/data/tmp/read_pts.dat", "ab+");
     }
     char value1[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.bufftime_s", value1, NULL)) {
@@ -137,6 +137,9 @@ AmLiveSession::~AmLiveSession() {
     if (mCodecSpecificData != NULL) {
         free(mCodecSpecificData);
         mCodecSpecificData = NULL;
+    }
+    if (mDebugHandle) {
+        fclose(mDebugHandle);
     }
     curl_global_cleanup();
 }
@@ -542,11 +545,10 @@ status_t AmLiveSession::dequeueAccessUnit(
                 }
             }
 
-            if (mDebug) {
-                ALOGI("[%s] read buffer at time (%lld)us, origin time (%lld)us, first time (%lld)us, seek time (%lld)us, offset time (%lld)us", streamStr, timeUs, origin_timeUs, firstTimeUs, mLastSeekTimeUs, offset_timeUs);
-            } else {
-                ALOGV("[%s] read buffer at time %" PRId64 " us", streamStr, timeUs);
+            if (mDebugHandle) {
+                fprintf(mDebugHandle, "%s : read buffer at time (%lld)us, origin time (%lld)us, first time (%lld)us, seek time (%lld)us, offset time (%lld)us\n", streamStr, timeUs, origin_timeUs, firstTimeUs, mLastSeekTimeUs, offset_timeUs);
             }
+            ALOGV("[%s] read buffer at time %" PRId64 " us", streamStr, timeUs);
 
             (*accessUnit)->meta()->setInt64("timeUs",  timeUs);
             mLastDequeuedTimeUs = timeUs;
@@ -554,9 +556,9 @@ status_t AmLiveSession::dequeueAccessUnit(
         } else if (stream == STREAMTYPE_SUBTITLES) {
             int32_t subtitleGeneration;
             if ((*accessUnit)->meta()->findInt32("subtitleGeneration", &subtitleGeneration)
-                    && subtitleGeneration != mSubtitleGeneration) {
-               return -EAGAIN;
-            };
+                && subtitleGeneration != mSubtitleGeneration) {
+                return -EAGAIN;
+            }
             (*accessUnit)->meta()->setInt32(
                     "trackIndex", mPlaylist->getSelectedIndex());
             (*accessUnit)->meta()->setInt64("baseUs", mRealTimeBaseUs);

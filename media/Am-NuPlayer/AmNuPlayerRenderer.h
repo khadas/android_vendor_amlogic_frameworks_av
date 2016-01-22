@@ -154,12 +154,12 @@ private:
     int32_t mChannel;
     int32_t mSampleRate;
 
-    bool mDebug;
     bool mRenderStarted;
     bool mDrainAudioQueuePending;
     bool mDrainVideoQueuePending;
     int32_t mAudioQueueGeneration;
     int32_t mVideoQueueGeneration;
+    FILE * mDebugHandle;
 
     Mutex mTimeLock;
     // |mTimeLock| protects the following 7 member vars that are related to time.
@@ -175,6 +175,8 @@ private:
     int64_t mVideoLateByUs;
     bool mHasAudio;
     bool mHasVideo;
+    bool mAudioJump;
+    bool mVideoJump;
     int64_t mPauseStartedTimeRealUs;
 
     Mutex mFlushLock;  // protects the following 2 member vars.
