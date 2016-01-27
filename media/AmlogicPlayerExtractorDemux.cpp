@@ -74,7 +74,7 @@ int drm_stronedrminfo(char *outpktdata, char *addr,
     int dsize;
     if (isdrminfo == 1) { //infoonly
         drminfo.drm_hasesdata = 0;
-        drminfo.drm_phy = (unsigned int)addr;
+        drminfo.drm_phy = (uint32_t)addr;
         drminfo.drm_flag = TYPE_DRMINFO;
         memcpy(outpktdata, &drminfo, sizeof(drminfo_t));
         //LOGV(" ######## phyaddr = drminfo.drm_phy [0x%x] type[%d]\n",drminfo.drm_phy,type);
