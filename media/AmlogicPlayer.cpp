@@ -43,8 +43,11 @@
 //#include <ui/Overlay.h>
 #define  TRACE()    LOGV("[%s::%d]\n",__FUNCTION__,__LINE__)
 //#define  TRACE()
+#include <amdrmutils.h>
+#include <dlfcn.h>
 
 #define SCREEN_MODE_SET_PATH "/sys/class/video/screen_mode"
+
 //screen mode 0 normal; 1 full screen;  2 4:3; 3 16:9;
 
 #include <cutils/properties.h>
@@ -357,6 +360,28 @@ int IsTheSameVfmPathDefault(char * path)
     return 1;
 }
 
+typedef void *(*DTVPRelease)();
+
+void CheckTVPEnable()
+{
+    int num;
+    struct tvp_region r;
+    void* SecLibHandle;
+    DTVPRelease TVPRelease;
+
+    num = tvp_mm_get_mem_region(&r, sizeof(struct tvp_region));
+    if (num > 0) {
+        LOGE("CheckTVPEnable unprotect TVP memory\n", num);
+        SecLibHandle = dlopen("libsecmem.so", RTLD_NOW);
+        if (SecLibHandle) {
+            TVPRelease = (DTVPRelease)dlsym(SecLibHandle, "Secure_ReleaseResource");
+            if (TVPRelease)
+                TVPRelease();
+        }
+        tvp_mm_disable(0);
+    }
+}
+
 status_t AmlogicPlayer::BasicInit()
 {
     static int have_inited = 0;
@@ -402,6 +427,7 @@ status_t AmlogicPlayer::BasicInit()
                 amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
             }
         }
+        CheckTVPEnable();
     }
     return 0;
 }
@@ -841,6 +867,23 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
                 LOGV("hdcp authenticate failed, it will close video!\n");
             }
         }
+        if (isWidevineStreaming) {
+            //reset map
+            char newsetting[128];
+            char value[PROPERTY_VALUE_MAX];
+            int ret = 1;
+            if (property_get("media.decoder.vfm.drmmap", value, NULL) > 0) {
+                ret = IsTheSameVfmPathDefault(value);
+                if (ret < 0)
+                {
+                    LOGE("reset DRM maping [%s]\n", value);
+                    strcpy(newsetting, "add default ");
+                    strcat(newsetting, value);
+                    amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
+                    amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+                }
+            }
+        }
         mTypeReady = true;
         sendEvent(0x11000);
         if (strstr(mTypeStr, "mpeg") != NULL) { /*mpeg,ts,ps\,may can't detect types here.*/
@@ -1031,6 +1074,23 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             set_sys_int(DISABLE_VIDEO, 2);
             isHDCPFailed = false;
             LOGV("[L%d]:Enable Video", __LINE__);
+        }
+        if (isWidevineStreaming) {
+            //reset map
+            char newsetting[128];
+            char value[PROPERTY_VALUE_MAX];
+            int ret = 1;
+            if (property_get("media.decoder.vfm.defmap", value, NULL) > 0) {
+                ret = IsTheSameVfmPathDefault(value);
+                if (ret < 0)
+                {
+                    LOGE("reset DRM maping [%s]\n", value);
+                    strcpy(newsetting, "add default ");
+                    strcat(newsetting, value);
+                    amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
+                    amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+                }
+            }
         }
     } else if (info->status == PLAYER_ERROR) {
         if (mHttpWV == false) {
