@@ -540,6 +540,7 @@ AmATSParser::Stream::Stream(
                     AmElementaryStreamQueue::DDP_AC3_AUDIO);
             break;
 
+        case STREAMTYPE_DDP_EAC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:
             // TODO FIXME verify!
             mQueue = new AmElementaryStreamQueue(
@@ -659,6 +660,7 @@ bool AmATSParser::Stream::isAudio() const {
         case STREAMTYPE_MPEG2_AUDIO_ADTS:
         case STREAMTYPE_PCM_AUDIO:
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
+        case STREAMTYPE_DDP_EAC3_AUDIO:
         case STREAMTYPE_DDP_AC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
