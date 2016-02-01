@@ -53,6 +53,17 @@ const AmNuPlayer::Renderer::PcmInfo AmNuPlayer::Renderer::AUDIO_PCMINFO_INITIALI
 const int64_t AmNuPlayer::Renderer::kMinPositionUpdateDelayUs = 100000ll;
 const int64_t AmNuPlayer::Renderer::kFrameJitterThresholdUs = 15000ll;
 
+#define PTS_LOG_LEVEL(level,formats...)\
+    do {\
+        if (mDebugLevel >= level) {\
+            ALOGI("PTS: " formats);}\
+    } while(0)
+
+
+#define PTS_LOG(fmt...) PTS_LOG_LEVEL(0,##fmt)
+#define PTS_LOGV(fmt...) PTS_LOG_LEVEL(2,##fmt)
+#define PTS_LOGD(fmt...) PTS_LOG_LEVEL(4,##fmt)
+
 AmNuPlayer::Renderer::Renderer(
         const sp<MediaPlayerBase::AudioSink> &sink,
         const sp<AMessage> &notify,
@@ -61,15 +72,6 @@ AmNuPlayer::Renderer::Renderer(
       mNotify(notify),
       mFlags(flags),
       mNumFramesWritten(0),
-      mLastAudioQueueTimeUs(-1),
-      mLastVideoQueueTimeUs(-1),
-      mAudioFrameDurationUs(-1),
-      mVideoFrameDurationUs(-1),
-      mAudioFrameIntervalUs(0),
-      mVideoFrameIntervalUs(0),
-      mAudioTimeStamp(-1),
-      mVideoTimeStamp(-1),
-      mLastAudioFrameSize(0),
       mChannel(0),
       mSampleRate(0),
       mRenderStarted(false),
@@ -86,8 +88,6 @@ AmNuPlayer::Renderer::Renderer(
       mVideoLateByUs(0ll),
       mHasAudio(false),
       mHasVideo(false),
-      mAudioJump(false),
-      mVideoJump(false),
       mPauseStartedTimeRealUs(-1),
       mFlushingAudio(false),
       mFlushingVideo(false),
@@ -107,12 +107,31 @@ AmNuPlayer::Renderer::Renderer(
       mTotalBuffersQueued(0),
       mLastAudioBufferDrained(0),
       mWakeLock(new AWakeLock()) {
-
     char value[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.render_pts", value, NULL)
-        && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
-        mDebugHandle = fopen("/data/tmp/render_pts.dat", "ab+");
+    mLastVideoUs = -1;
+    mLastestVideoFrameIntervalUs = 0;
+    mAvgVideoFrameIntervalUs =-1;
+
+    mLastAudioUs = -1;
+    mLastAudioFrameBytes = 0;
+
+    mAudioTimeJump = false;
+    mVideoTimeJump = false;
+    mVideoJumpedTimeUs = 0;
+    mAudioJumpedTimeUs = 0;
+    mAjumpedNum = 0;
+    mVjumpedNum = 0;
+    mTotalAudioJumpedTimeUs = 0;
+    mDebugLevel = 0;
+    mLastInfoTime = 0;
+    int ret;
+    if (property_get("media.hls.ptsdebug", value, NULL) > 0) {
+        if ((sscanf(value, "%d", &ret)) > 0) {
+            ALOGW("media.hls.ptsdebug is set to %d\n", ret);
+            mDebugLevel = ret;
+        }
     }
+
 
 }
 
@@ -177,13 +196,17 @@ void AmNuPlayer::Renderer::signalTimeDiscontinuity() {
     setAudioFirstAnchorTime(-1);
     setAnchorTime(-1, -1);
     setVideoLateByUs(0);
-    mLastAudioQueueTimeUs = -1;
-    mLastVideoQueueTimeUs = -1;
-    mAudioFrameIntervalUs = 0;
-    mVideoFrameIntervalUs = 0;
-    mAudioTimeStamp = -1;
-    mVideoTimeStamp = -1;
-    mLastAudioFrameSize = 0;
+
+/*AVsync by Zz*/
+    mAvgVideoFrameIntervalUs = -1;
+    mLastVideoUs = -1;
+    mLastAudioUs = -1;
+    mVideoJumpedTimeUs = 0;
+    mVideoJumpedTimeUs = 0;
+    mAudioTimeJump = false;
+    mVideoTimeJump = false;
+    mTotalAudioJumpedTimeUs = 0;
+/*AVsync by Zz end*/
     mSyncQueues = false;
 }
 
@@ -222,15 +245,21 @@ void AmNuPlayer::Renderer::setAudioParameter(sp<AMessage> para) {
 
 // Called on any threads, except renderer's thread.
 status_t AmNuPlayer::Renderer::getCurrentPosition(int64_t *mediaUs) {
+    int64_t C_AudioUs;
+    status_t status;
     {
         Mutex::Autolock autoLock(mLock);
         int64_t currentPositionUs;
         if (getCurrentPositionIfPaused_l(&currentPositionUs)) {
-            *mediaUs = currentPositionUs;
+            *mediaUs = currentPositionUs - mTotalAudioJumpedTimeUs;
             return OK;
         }
     }
-    return getCurrentPositionFromAnchor(mediaUs, ALooper::GetNowUs());
+    if (getCurrentPositionFromAnchor(&C_AudioUs, ALooper::GetNowUs()) == OK) {
+        *mediaUs = C_AudioUs - mTotalAudioJumpedTimeUs;
+        return OK;
+    }
+    return NO_INIT;
 }
 
 // Called on only renderer's thread.
@@ -339,17 +368,6 @@ int64_t AmNuPlayer::Renderer::getVideoLateByUs() {
 void AmNuPlayer::Renderer::setPauseStartedTimeRealUs(int64_t realUs) {
     Mutex::Autolock autoLock(mTimeLock);
     mPauseStartedTimeRealUs = realUs;
-}
-
-void AmNuPlayer::Renderer::setTimeStampToRemember(bool isAudio, int64_t mediaUs) {
-    Mutex::Autolock autoLock(mLock);
-    if (isAudio) {
-        mAudioTimeStamp = mediaUs;
-        mAudioJump = true;
-    } else {
-        mVideoTimeStamp = mediaUs;
-        mVideoJump = true;
-    }
 }
 
 status_t AmNuPlayer::Renderer::openAudioSink(
@@ -867,8 +885,8 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     msg->setInt32("generation", mVideoQueueGeneration);
     if (entry.mBuffer == NULL) {
         // EOS doesn't carry a timestamp.
-        msg->post();
         mDrainVideoQueuePending = true;
+        msg->post();
         return;
     }
 
@@ -904,45 +922,51 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
         // received after this buffer, repost in 10 msec. Otherwise repost
         // in 500 msec.
         delayUs = realTimeUs - nowUs;
-        if (delayUs > 500000) {
-            bool clear_entry = false;
-            if (mHasAudio && mHasVideo) {
-                if (mAudioJump || mVideoJump) {
-                    clear_entry = true;
-                }
-            }
-            // keep rendering, prevent block here.
-            if (clear_entry) {
-                ALOGI("clear this entry, mediaTimeUs(%lld)", mediaTimeUs);
-                mVideoQueue.erase(mVideoQueue.begin());
-                mDrainVideoQueuePending = true;
-                return;
-            }
+        if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
             int64_t postDelayUs = 500000;
             if (mHasAudio && (mLastAudioBufferDrained - entry.mBufferOrdinal) <= 0) {
                 postDelayUs = 10000;
             }
             msg->setWhat(kWhatPostDrainVideoQueue);
+            mDrainVideoQueuePending = true;
+            mSmootOutNum = 0;
             msg->post(postDelayUs);
             //mVideoScheduler->restart();
-            ALOGI("possible video time jump of %dms, retrying in %dms",
-                    (int)(delayUs / 1000), (int)(postDelayUs / 1000));
-            mDrainVideoQueuePending = true;
+            PTS_LOG("possible video time jump of %dms, retrying in %dms",
+               (int)(delayUs / 1000), (int)(postDelayUs / 1000));
             return;
+        }
+        if (mVideoTimeJump || mAudioTimeJump ) {
+            if (mSmootOutNum == 0)
+                mLastNoJumpVideoFrameUs = mLastVideoDrainRealTimeUs;
+            mSmootOutNum++;
+            /*smooth out video frame...*/
+            if (mLastNoJumpVideoFrameUs > 0 &&
+                mAvgVideoFrameIntervalUs > 0 &&
+                llabs(nowUs - mLastVideoDrainRealTimeUs) < 300*1000) {/*not too long for pause or others..*/
+                    realTimeUs = mLastNoJumpVideoFrameUs + mSmootOutNum * mAvgVideoFrameIntervalUs;
+                PTS_LOGD("mLastVideoDrainRealTimeUs1 =%lld,mAvgVideoFrameIntervalUs=%lld,nowUs=%lld\n",
+                    mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
+            } else {
+                realTimeUs = nowUs;
+                PTS_LOGD("mLastVideoDrainRealTimeUs2 =%lld,mAvgVideoFrameIntervalUs=%lld,nowUs=%lld\n",
+                    mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
+            }
+            PTS_LOGD("smooth out video frame on jump3 V:%d A:%d delayUs:%d uS",
+                mVideoTimeJump, mAudioTimeJump, (int)(realTimeUs - nowUs));
+        } else {
+            mSmootOutNum = 0;
         }
     }
 
-    //realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;
-    //int64_t twoVsyncsUs = 2 * (mVideoScheduler->getVsyncPeriod() / 1000);
+    /*realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;*/
+    delayUs = realTimeUs - nowUs;
+    ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
 
-    //delayUs = realTimeUs - nowUs;
-
-    //ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
     // post 2 display refreshes before rendering is due
-    //msg->post(delayUs > twoVsyncsUs ? delayUs - twoVsyncsUs : 0);
-    msg->post(delayUs);
-
     mDrainVideoQueuePending = true;
+    msg->post(delayUs > 0 ? delayUs : 0 );
+
 }
 
 void AmNuPlayer::Renderer::onDrainVideoQueue() {
@@ -971,7 +995,7 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
     } else {
         int64_t mediaTimeUs;
         CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-
+        mLastVideoDrainTimeUs = mediaTimeUs;
         nowUs = ALooper::GetNowUs();
         realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
     }
@@ -982,6 +1006,8 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         if (nowUs == -1) {
             nowUs = ALooper::GetNowUs();
         }
+
+        mLastVideoDrainRealTimeUs = nowUs;
         setVideoLateByUs(nowUs - realTimeUs);
         tooLate = (mVideoLateByUs > 40000);
 
@@ -1002,10 +1028,20 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
             // This will ensure that the first frame after a flush won't be used as anchor
             // when renderer is in paused state, because resume can happen any time after seek.
             setAnchorTime(-1, -1);
+            mAnchorTimeMediaUs = -1;
+            mAnchorNumFramesWritten = -1;
+            mAvgVideoFrameIntervalUs = -1;
+            mLastVideoUs = -1;
+            mLastAudioUs = -1;
+            mVideoJumpedTimeUs = 0;
+            mVideoJumpedTimeUs = 0;
+            mAudioTimeJump = false;
+            mVideoTimeJump = false;
+            mTotalAudioJumpedTimeUs = 0;
         }
     }
 
-    entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
+    entry->mNotifyConsumed->setInt64("timestampNs", nowUs * 1000ll);
     entry->mNotifyConsumed->setInt32("render", 1); // render anyhow
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
@@ -1040,106 +1076,127 @@ void AmNuPlayer::Renderer::notifyAudioOffloadTearDown() {
     (new AMessage(kWhatAudioOffloadTearDown, this))->post();
 }
 
-void AmNuPlayer::Renderer::checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t isAudio) {
-    Mutex::Autolock autoLock(mLock);
-    int64_t timeUs, rectify_timeUs;
-    buffer->meta()->findInt64("timeUs", &timeUs);
-    if (mDebugHandle) {
-        fprintf(mDebugHandle, "%s : queued buffer timeUs(%lld)us\n", isAudio ? "audio" : "video", timeUs);
-    }
-    if (isAudio && mAudioTimeStamp >= 0 && mAudioTimeStamp == timeUs) {
-        // reset, no need to correct pts.
-        ALOGI("[%s:%d] Audio timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
-        mAudioJump = false;
-        mAudioTimeStamp = -1;
-        mLastAudioQueueTimeUs = -1;
-        mAudioFrameIntervalUs = 0;
-        return;
-    }
-    if (!isAudio && mVideoTimeStamp >= 0 && mVideoTimeStamp == timeUs) {
-        // reset, no need to correct pts.
-        ALOGI("[%s:%d] Video timestamp match ! timeUs : %lld us", __FUNCTION__, __LINE__, timeUs);
-        mVideoJump = false;
-        mVideoTimeStamp = -1;
-        mLastVideoQueueTimeUs = -1;
-        mVideoFrameIntervalUs = 0;
-        return;
-    }
-    if (isAudio && mLastAudioQueueTimeUs >= 0 && timeUs > mLastAudioQueueTimeUs && mAudioFrameDurationUs <= 0) {
-        mAudioFrameDurationUs = timeUs - mLastAudioQueueTimeUs;
-        if (mAudioFrameDurationUs < 15000) {
-            mAudioFrameDurationUs = 0;
+void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, bool audio)
+{
+    int64_t mediaTimeUs;
+    bool mContinuous = false;
+    int64_t cur_time = ALooper::GetNowUs();
+
+    CHECK(buffer->meta()->findInt64("timeUs", &mediaTimeUs));
+    PTS_LOGD("queue[%s]:%lld:VJ=%d:Aj=%d ", audio?"audio":"video",
+        mediaTimeUs, mVideoTimeJump, mAudioTimeJump);
+
+    if ((cur_time - mLastInfoTime > 10000000ll) ||
+        (mDebugLevel >= 2 && cur_time - mLastInfoTime > 2000000ll)) {
+        int64_t SytemTimeStampUs;
+        status_t ret = getCurrentPositionFromAnchor(
+            &SytemTimeStampUs, cur_time);
+        if (ret != OK)
+            SytemTimeStampUs = mAnchorTimeMediaUs;
+        int64_t diff=(SytemTimeStampUs - mLastVideoDrainTimeUs);
+        const char *sync_info = "N/A";
+		if (mAudioTimeJump || mVideoTimeJump) {
+            sync_info ="Time Jumping";
+        } else if (llabs(diff) < 200000ll) {/*<200ms ,think synced.*/
+            sync_info ="AV SYNCED";
+        } else if (diff > 0) {/*A> 200ms,*/
+            sync_info ="Audio on Header";
+        } else if (diff < 0) {/*V> 200ms,*/
+            sync_info ="Video on Header";
         }
+        PTS_LOG("AV sync info:%s\n",sync_info);
+        PTS_LOG("  SystemTimeStamp:%lld\n", SytemTimeStampUs);
+        PTS_LOG("  Last AudioTimeStamp:%lld\n", mAnchorTimeMediaUs);
+        PTS_LOG("  Last VideoTimeStamp:%lld\n", mLastVideoDrainTimeUs);
+        PTS_LOG("  AV diff:%lld ,Ajump:%d,Vjump:%d\n", diff, mAudioTimeJump, mVideoTimeJump);
+        PTS_LOG("  mAjumpedNum:%d, mAudioJumped till now=%d\n", mAjumpedNum, cur_time - mAudioJumpedTimeUs);
+        PTS_LOG("  mVjumpedNum:%d, mVideoJumped till now=%d\n", mVjumpedNum, cur_time - mVideoJumpedTimeUs);
+        PTS_LOG("  mTotalAudioJumpedTimeUs:%lld\n",mTotalAudioJumpedTimeUs);
+        PTS_LOG("  mLastVideoUs:%lld\n", mLastVideoUs);
+        PTS_LOG("  mLastAudioUs:%lld\n", mLastAudioUs);
+        mLastInfoTime = cur_time;
     }
-    if (!isAudio && mLastVideoQueueTimeUs >= 0 && timeUs > mLastVideoQueueTimeUs && mVideoFrameDurationUs <= 0) {
-        mVideoFrameDurationUs = timeUs - mLastVideoQueueTimeUs;
-        if (mVideoFrameDurationUs < 16000 || mVideoFrameDurationUs > 67000) {
-            mVideoFrameDurationUs = 0;
-        }
-    }
-    if (isAudio && mLastAudioQueueTimeUs >= 0 && mAudioFrameDurationUs > 0) {
-        if (llabs(timeUs - mLastAudioQueueTimeUs) > mAudioFrameDurationUs * 2) {
-            bool jitter_flag = true;
-            if (mSampleRate && mChannel && (llabs(llabs(timeUs - mLastAudioQueueTimeUs) - ((mLastAudioFrameSize * 1000000ll) / (mSampleRate * mChannel * 2))) < 5)) {
-                ALOGI("[%s:%d] ignore this audio jitter, samplerate(%d), channel(%d), last buffer size(%d)", __FUNCTION__, __LINE__, mSampleRate, mChannel, mLastAudioFrameSize);
-                jitter_flag = false;
-            }
-            double diff_ratio = (timeUs - mLastAudioQueueTimeUs) / (double)mAudioFrameDurationUs;
-            if (diff_ratio > 0 && diff_ratio < 20 && (diff_ratio - (timeUs - mLastAudioQueueTimeUs) / mAudioFrameDurationUs > 0.99
-                || diff_ratio - (timeUs - mLastAudioQueueTimeUs) / mAudioFrameDurationUs < 0.01)) {
-                ALOGI("[%s:%d] ignore this audio jitter, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, timeUs, mLastAudioQueueTimeUs);
-                jitter_flag = false;
-            }
-            if (jitter_flag) {
-                ALOGI("[%s:%d] audio jitter ! timeUs : %lld us, last timeUs : %lld us, duration : %lld us, last frame size : %d", __FUNCTION__, __LINE__, timeUs, mLastAudioQueueTimeUs, mAudioFrameDurationUs, mLastAudioFrameSize);
-                rectify_timeUs  = mLastAudioQueueTimeUs + mAudioFrameDurationUs;
-                mAudioFrameIntervalUs += rectify_timeUs - timeUs;
-            }
-        }
-    }
-    if (!isAudio && mLastVideoQueueTimeUs >= 0 && mVideoFrameDurationUs > 0) {
-        if (llabs(timeUs - mLastVideoQueueTimeUs) > mVideoFrameDurationUs * 2) {
-            bool jitter_flag = true;
-            double diff_ratio = (timeUs - mLastVideoQueueTimeUs) / (double)mVideoFrameDurationUs;
-            if (diff_ratio > 0 && diff_ratio < 20 && (diff_ratio - (timeUs - mLastVideoQueueTimeUs) / mVideoFrameDurationUs > 0.9
-                || diff_ratio - (timeUs - mLastVideoQueueTimeUs) / mVideoFrameDurationUs < 0.1)) { // maybe mosaic, wrong discontinuity
-                ALOGI("[%s:%d] ignore this video jitter, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, timeUs, mLastVideoQueueTimeUs);
-                jitter_flag = false;
-            }
-            if (jitter_flag && diff_ratio > 0 && diff_ratio < 20) {
-                // compare with audio queue
-                int64_t min_diff = -1, tmp_diff = -1, tmp_timeUs = -1;
-                List<QueueEntry>::iterator it = mAudioQueue.begin();
-                while (it != mAudioQueue.end()) {
-                    const QueueEntry &entry = *it;
-                    (entry.mBuffer)->meta()->findInt64("timeUs", &tmp_timeUs);
-                    tmp_diff = llabs(timeUs - tmp_timeUs);
-                    if (min_diff < 0 || tmp_diff < min_diff) {
-                        min_diff = tmp_diff;
-                    }
-                    ++it;
-                }
-                if (min_diff >= 0 && min_diff < (llabs(timeUs - mLastVideoQueueTimeUs) + 100000)) {
-                    ALOGI("[%s:%d] ignore this video jitter, min_diff(%lld)us, timeUs(%lld)us, last timeUs(%lld)us", __FUNCTION__, __LINE__, min_diff, timeUs, mLastVideoQueueTimeUs);
-                    jitter_flag = false;
-                }
-            }
-            if (jitter_flag) {
-                ALOGI("[%s:%d] video jitter ! timeUs : %lld us, last timeUs : %lld us, duration : %lld us", __FUNCTION__, __LINE__, timeUs, mLastVideoQueueTimeUs, mVideoFrameDurationUs);
-                rectify_timeUs = mLastVideoQueueTimeUs + mVideoFrameDurationUs;
-                mVideoFrameIntervalUs += rectify_timeUs - timeUs;
+
+    if (!audio) {/*get latest video duration.*/
+        if (mAvgVideoFrameIntervalUs <= 0 ||
+            mAvgVideoFrameIntervalUs != (mediaTimeUs - mLastVideoUs)) {
+            int newIntervalUs = mediaTimeUs - mLastVideoUs;
+            if (newIntervalUs <  1000000 &&//>1fps
+                newIntervalUs > 1000000/120)//<120fps
+            {
+                if (llabs(mLastestVideoFrameIntervalUs - newIntervalUs) < 100 ||
+                    mAvgVideoFrameIntervalUs < 0)
+                    mAvgVideoFrameIntervalUs = mLastestVideoFrameIntervalUs;
+                mLastestVideoFrameIntervalUs = newIntervalUs;
             }
         }
     }
-    if (isAudio) {
-        mLastAudioQueueTimeUs = timeUs;
-        mLastAudioFrameSize = buffer->size();
-        rectify_timeUs = timeUs + mAudioFrameIntervalUs;
+    if (audio && mLastAudioUs != -1 &&
+       (mCurrentPcmInfo.mSampleRate > 0 && mCurrentPcmInfo.mNumChannels > 0)) {
+        int64_t expectTimeUs;
+        int64_t diff_us = 0;
+        int64_t abs_diff_us = 0 ;
+        expectTimeUs = (mLastAudioFrameBytes * 1000000ll)/
+            (mCurrentPcmInfo.mSampleRate * mCurrentPcmInfo.mNumChannels * 2);/*16bytes.*/
+        expectTimeUs += mLastAudioUs;
+        diff_us = (mediaTimeUs - expectTimeUs);
+        abs_diff_us = llabs(diff_us);
+        if (abs_diff_us < 20ll) {
+            mContinuous = true;
+        }
+        if (diff_us > 3000000ll || diff_us < -500000ll) {
+            PTS_LOG("audio Discontinue %lld-->%lld us,jump =%lld us",
+            expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
+            mAudioTimeJump = true;
+            mAudioJumpedTimeUs = cur_time;
+            mAjumpedNum ++ ;
+            mTotalAudioJumpedTimeUs += diff_us;
+        } else if (mAudioTimeJump && mContinuous && (cur_time - mAudioJumpedTimeUs > 1000000ll)) {
+            PTS_LOG("audio Discontinue timeout!");
+            mAudioTimeJump = false;
+            mAudioJumpedTimeUs = 0;
+        }
+    }
+    if (!audio && mLastAudioUs != -1 &&
+         mAvgVideoFrameIntervalUs > 0) {
+        int64_t expectTimeUs = mLastVideoUs + mAvgVideoFrameIntervalUs;
+        int64_t diff_us = mediaTimeUs - expectTimeUs;
+        int64_t abs_diff_us = llabs(diff_us);
+        if (abs_diff_us < 20ll) {
+            mContinuous = true;
+        }
+        if (diff_us > 3000000ll || diff_us < -500000ll) {
+            PTS_LOG("video Discontinue %lld-->%lld us,jump =%lld us",
+            expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
+            mVideoTimeJump = true;
+            mVideoJumpedTimeUs = cur_time;
+            mVjumpedNum ++ ;
+        } else if (mVideoTimeJump && mContinuous && (cur_time - mVideoJumpedTimeUs > 2000000ll)) {
+            PTS_LOG("video Discontinue timeout!");
+            mVideoTimeJump = false;
+            mVideoJumpedTimeUs = 0;
+        }
+    }
+    if (mContinuous && (mVideoTimeJump || mAudioTimeJump)) {
+        int64_t SytemTimeStampUs;
+        status_t ret = getCurrentPositionFromAnchor(
+            &SytemTimeStampUs, cur_time);
+        if (!audio && ret == OK && /*check on video stream...*/
+         llabs(mLastVideoDrainTimeUs - SytemTimeStampUs) < 100000ll && /*av diff < 500ms */
+         ((mVideoTimeJump && (cur_time - mVideoJumpedTimeUs) > 500000ll) || /*video jumped > 500ms*/
+         (mAudioTimeJump && (cur_time - mAudioJumpedTimeUs) > 500000ll))){ /*audio jumped > 500ms*/
+            mAudioTimeJump = false;
+            mVideoTimeJump = false;
+            PTS_LOG("AV SYNCED,clear jumpinfo!!\n");
+        }
+    }
+
+    if (audio) {/*latset audio */
+        mLastAudioUs = mediaTimeUs;
+        mLastAudioFrameBytes = buffer->size();
     } else {
-        mLastVideoQueueTimeUs = timeUs;
-        rectify_timeUs = timeUs + mVideoFrameIntervalUs;
+        mLastVideoUs = mediaTimeUs;
     }
-    buffer->meta()->setInt64("timeUs", rectify_timeUs);
 }
 
 void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
@@ -1163,9 +1220,7 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
 
     sp<ABuffer> buffer;
     CHECK(msg->findBuffer("buffer", &buffer));
-
-    checkFrameDiscontinuity(buffer, audio);
-
+    onQueueBufferDiscontinueCheck(buffer,audio);
     sp<AMessage> notifyConsumed;
     CHECK(msg->findMessage("notifyConsumed", &notifyConsumed));
 
@@ -1485,6 +1540,7 @@ void AmNuPlayer::Renderer::onResume() {
 }
 
 void AmNuPlayer::Renderer::onSetVideoFrameRate(float fps) {
+    fps = fps;
 #if 0
     if (mVideoScheduler == NULL) {
         mVideoScheduler = new VideoFrameScheduler();

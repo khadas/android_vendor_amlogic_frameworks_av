@@ -694,7 +694,6 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
         int64_t mediaTimeUs;
         if (accessUnit->meta()->findInt64("timeUs", &mediaTimeUs)) {
             ALOGI("Data corrupt ! set render %s timestamp : %lld us", mIsAudio ? "audio" : "video", mediaTimeUs);
-            mRenderer->setTimeStampToRemember(mIsAudio, mediaTimeUs);  // ugly, maybe wrong.
             mRememberThisTimeStamp = false;
         }
     }

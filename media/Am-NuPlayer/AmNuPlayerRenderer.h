@@ -73,7 +73,6 @@ struct AmNuPlayer::Renderer : public AHandler {
     int64_t getVideoLateByUs();
     void setPauseStartedTimeRealUs(int64_t realUs);
 
-    void setTimeStampToRemember(bool isAudio, int64_t mediaUs);
 
     status_t openAudioSink(
             const sp<AMessage> &format,
@@ -142,6 +141,7 @@ private:
     uint32_t mNumFramesWritten;
     //sp<VideoFrameScheduler> mVideoScheduler;
 
+/*
     int64_t mLastAudioQueueTimeUs;
     int64_t mLastVideoQueueTimeUs;
     int64_t mAudioFrameDurationUs;
@@ -151,6 +151,8 @@ private:
     int64_t mAudioTimeStamp;
     int64_t mVideoTimeStamp;
     uint32_t mLastAudioFrameSize;
+*/
+
     int32_t mChannel;
     int32_t mSampleRate;
 
@@ -175,8 +177,6 @@ private:
     int64_t mVideoLateByUs;
     bool mHasAudio;
     bool mHasVideo;
-    bool mAudioJump;
-    bool mVideoJump;
     int64_t mPauseStartedTimeRealUs;
 
     Mutex mFlushLock;  // protects the following 2 member vars.
@@ -215,6 +215,30 @@ private:
     int32_t mTotalBuffersQueued;
     int32_t mLastAudioBufferDrained;
 
+
+/*av sync--add by zz*/
+    int64_t mLastVideoUs;
+    int64_t mLastestVideoFrameIntervalUs;
+    int64_t mAvgVideoFrameIntervalUs;
+    int64_t mLastAudioUs;
+    int mLastAudioFrameBytes;
+    bool mAudioTimeJump;
+    bool mVideoTimeJump;
+    int64_t  mVideoJumpedTimeUs;
+    int64_t  mAudioJumpedTimeUs;
+    int64_t  mLastVideoDrainRealTimeUs;
+    int64_t  mLastVideoDrainTimeUs;
+    int mAjumpedNum;
+    int mVjumpedNum;
+    int64_t mTotalAudioJumpedTimeUs;/*for current position*/
+    int mDebugLevel;
+    int64_t mLastInfoTime;
+    int64_t mLastNoJumpVideoFrameUs;
+    int mSmootOutNum;
+    int64_t mLastVideoEnqueueUs;
+    int64_t mLastAudioEnqueueUs;
+/*av sync--add by zz end*/
+
     sp<AWakeLock> mWakeLock;
 
     status_t getCurrentPositionOnLooper(int64_t *mediaUs);
@@ -240,8 +264,7 @@ private:
     void prepareForMediaRenderingStart();
     void notifyIfMediaRenderingStarted();
 
-    void checkFrameDiscontinuity(sp<ABuffer> &buffer, int32_t isAudio);
-
+    void onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, bool audio);
     void onQueueBuffer(const sp<AMessage> &msg);
     void onQueueEOS(const sp<AMessage> &msg);
     void onFlush(const sp<AMessage> &msg);
