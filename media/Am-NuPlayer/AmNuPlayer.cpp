@@ -51,6 +51,7 @@
 
 #include "ESDS.h"
 #include <media/stagefright/Utils.h>
+#include <Amavutils.h>
 
 namespace android {
 
@@ -190,20 +191,21 @@ AmNuPlayer::AmNuPlayer()
       mWaitSeconds(10),
       mStarted(false),
       mPaused(false),
-      mPausedByClient(false) {
+      mPausedByClient(false),
+      mAutoSwitch(-1) {
     clearFlushComplete();
 
     char value[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.frame-rate", value, NULL)) {
-        mEnableFrameRate = atoi(value);
-    }
-    char value1[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.wait-seconds", value, NULL)) {
         mWaitSeconds = atoi(value);
     }
 }
 
 AmNuPlayer::~AmNuPlayer() {
+    // restore the state of auto frame-rate if needed
+    if (mEnableFrameRate && mAutoSwitch > 0) {
+        amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", mAutoSwitch);
+    }
 }
 
 // static
@@ -297,8 +299,15 @@ void AmNuPlayer::setDataSourceAsync(
     sp<AMessage> notify = new AMessage(kWhatSourceNotify, this);
 
     sp<Source> source;
+    mEnableFrameRate = false;
     if (IsHTTPLiveURL(url)) {
         source = new HTTPLiveSource(notify, httpService, url, headers, interrupt_callback);
+
+        // only enable auto frame-rate for HLS
+        char value[PROPERTY_VALUE_MAX];
+        if (property_get("media.hls.frame-rate", value, NULL)) {
+            mEnableFrameRate = atoi(value);
+        }
     } else if (!strncasecmp(url, "rtsp://", 7)) {
         source = new RTSPSource(
                 notify, httpService, url, headers, mUIDValid, mUID);
@@ -781,6 +790,12 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                 return;
             }
 
+            // restore the state of auto frame-rate after seek
+            if (mEnableFrameRate && !audio && mAutoSwitch > 0) {
+                amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", mAutoSwitch);
+                mAutoSwitch = -1;
+            }
+
             int32_t what;
             CHECK(msg->findInt32("what", &what));
 
@@ -1028,6 +1043,16 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
             ALOGV("kWhatSeek seekTimeUs=%lld us, needNotify=%d",
                     seekTimeUs, needNotify);
 
+            // temporarily close auto frame-rate to avoid black srceen when seek
+            if (mEnableFrameRate && mFrameRate > 0.0) {
+                int64_t nowUs = ALooper::GetNowUs();
+                int64_t timeSinceStart = nowUs - mStartTimeUs;
+                if (timeSinceStart > 100000) {
+                    mAutoSwitch = amsysfs_get_sysfs_int("/sys/class/tv/policy_fr_auto_switch");
+                    amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", 0);
+                }
+            }
+
             mDeferredActions.push_back(
                     new FlushDecoderAction(FLUSH_CMD_FLUSH /* audio */,
                                            FLUSH_CMD_FLUSH /* video */));
@@ -1175,6 +1200,8 @@ void AmNuPlayer::onStart() {
         mAudioDecoder->setRenderer(mRenderer);
         mRenderer->setHasMedia(true);
     }
+
+    mStartTimeUs = ALooper::GetNowUs();
 
     postScanSources();
 }

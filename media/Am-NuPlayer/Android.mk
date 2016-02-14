@@ -24,7 +24,8 @@ LOCAL_C_INCLUDES := \
 	$(TOP)/frameworks/av/media/libmediaplayerservice              \
 	$(TOP)/frameworks/native/include/media/openmax                \
     $(TOP)/external/curl/include                                  \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include
+    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
+    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
@@ -37,7 +38,8 @@ LOCAL_SHARED_LIBRARIES := \
         libstagefright_foundation \
         libutils \
         libamffmpeg \
-        libcurl
+        libcurl \
+        libamavutils
 
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_rtsp \

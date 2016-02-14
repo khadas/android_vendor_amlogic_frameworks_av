@@ -74,6 +74,7 @@ private:
     sp<ALooper> mLiveLooper;
     sp<AmLiveSession> mLiveSession;
     int32_t mFetchSubtitleDataGeneration;
+    bool mHasSub;
 
     interruptcallback mInterruptCallback;
     android_thread_id_t mParentThreadId;

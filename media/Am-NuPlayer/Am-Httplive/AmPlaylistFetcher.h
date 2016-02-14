@@ -152,7 +152,10 @@ private:
     int32_t mSeqNumber;
     int32_t mDownloadedNum;
     int32_t mNumRetries;
+    bool mNeedSniff;
+    bool mIsTs;
     bool mFirstRefresh;
+    bool mFirstTypeProbe;
     bool mStartup;
     bool mAdaptive;
     bool mFetchingNotify;
@@ -182,7 +185,6 @@ private:
     sp<AmAnotherPacketSource> mVideoSource;
 
     bool mEnableFrameRate;
-    float mFrameRate;
     Vector<int64_t> mVecTimeUs;
     static const size_t kFrameNum;
 
@@ -229,6 +231,7 @@ private:
             const sp<ABuffer> &accessUnit,
             const sp<AmAnotherPacketSource> &source,
             bool discard = false);
+    size_t resyncTs(const uint8_t *data, size_t size);
     status_t extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer);
     status_t extractAndQueueAccessUnitsFromNonTs();
     status_t queueAccessUnits();

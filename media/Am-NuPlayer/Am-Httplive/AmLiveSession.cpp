@@ -100,7 +100,9 @@ AmLiveSession::AmLiveSession(
       mAudioFirstTimeUs(-1),
       mVideoFirstTimeUs(-1),
       mEOSTimeoutAudio(0),
-      mEOSTimeoutVideo(0) {
+      mEOSTimeoutVideo(0),
+      mFrameRate(-1.0),
+      mSubTrackIndex(0) {
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.read_pts", value, NULL)
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
@@ -328,7 +330,7 @@ status_t AmLiveSession::dequeueAccessUnit(
     if (mBuffering[idx]) {
         if (mSwitchInProgress
                 || packetSource->isFinished(0)
-                || packetSource->getEstimatedDurationUs() > targetDurationUs) {
+                || packetSource->getEstimatedDurationUs() >= targetDurationUs) {
             mBuffering[idx] = false;
         }
     }
@@ -560,7 +562,7 @@ status_t AmLiveSession::dequeueAccessUnit(
                 return -EAGAIN;
             }
             (*accessUnit)->meta()->setInt32(
-                    "trackIndex", mPlaylist->getSelectedIndex());
+                    "trackIndex", mSubTrackIndex);
             (*accessUnit)->meta()->setInt64("baseUs", mRealTimeBaseUs);
         }
     } else {
@@ -1683,7 +1685,13 @@ status_t AmLiveSession::selectTrack(size_t index, bool select) {
         return INVALID_OPERATION;
     }
 
-    ++mSubtitleGeneration;
+    int32_t trackType;
+    sp<AMessage> format = getTrackInfo(index);
+    if (format != NULL && format->findInt32("type", &trackType)
+            && trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
+        ++mSubtitleGeneration;
+    }
+
     status_t err = mPlaylist->selectTrack(index, select);
     if (err == OK) {
         sp<AMessage> msg = new AMessage(kWhatChangeConfiguration, this);
@@ -1913,6 +1921,10 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
                 CHECK(msg->findString(mStreams[i].uriKey().c_str(), &mStreams[i].mUri));
             }
         }
+
+        if (resumeMask & indexToType(i)) {
+            CHECK(msg->findString(mStreams[i].uriKey().c_str(), &mStreams[i].mUri));
+        }
     }
 
     mNewStreamMask = streamMask | resumeMask;
@@ -2055,6 +2067,11 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
 
                 streamMask &= ~indexToType(j);
             }
+        }
+
+        if (pickTrack && sources[kSubtitleIndex] != NULL) {
+            startTimeUs = mLastDequeuedTimeUs;
+            segmentStartTimeUs = mLastDequeuedTimeUs;
         }
 
         fetcher->startAsync(

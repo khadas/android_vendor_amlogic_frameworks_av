@@ -188,6 +188,7 @@ private:
     bool mEnableFrameRate;
     float mFrameRate;
     int32_t mWaitSeconds;
+    int64_t mStartTimeUs;
 
     bool mStarted;
 
@@ -200,6 +201,8 @@ private:
     bool mPausedByClient;
 
     android_thread_id_t mSelfThreadId;
+
+    int mAutoSwitch;
 
     inline const sp<DecoderBase> &getDecoder(bool audio) {
         return audio ? mAudioDecoder : mVideoDecoder;

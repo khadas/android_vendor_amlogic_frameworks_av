@@ -97,6 +97,10 @@ struct AmLiveSession : public AHandler {
     void setParentThreadId(android_thread_id_t thread_id);
 
     void setFrameRate(float frameRate);
+    float getFrameRate() const { return mFrameRate; };
+
+    void setSubTrackIndex(size_t subTrackIndex) { mSubTrackIndex = subTrackIndex; }
+
     enum {
         kWhatStreamsChanged,
         kWhatError,
@@ -267,6 +271,10 @@ private:
     int64_t mEOSTimeoutVideo;
 
     sp<AMessage> mSwitchDownMonitor;
+
+    float mFrameRate;
+
+    size_t mSubTrackIndex;
 
     sp<AmPlaylistFetcher> addFetcher(const char *uri);
 
