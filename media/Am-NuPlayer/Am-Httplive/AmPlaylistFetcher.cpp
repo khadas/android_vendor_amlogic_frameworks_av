@@ -43,7 +43,7 @@
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MediaExtractor.h>
-#include <media/stagefright/AmMediaExtractorPlugin.h>
+
 
 #include <ctype.h>
 #include <inttypes.h>
@@ -1875,7 +1875,7 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
 
 void AmPlaylistFetcher::sniff(const sp<ABuffer> &buffer) {
     sp<DataSource> dataSource = new HLSDataSource(buffer);
-    mExtractor = MediaExtractor::CreateEx(dataSource, false);
+    mExtractor = MediaExtractor::Create(dataSource);
     if (mExtractor == NULL) {
         ALOGI("lzhnpng: sniff error");
         return;

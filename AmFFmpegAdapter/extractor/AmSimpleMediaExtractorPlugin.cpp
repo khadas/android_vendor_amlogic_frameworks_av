@@ -31,21 +31,26 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    namespace android
+    {
 
-bool sniffAmExtFormat(
+    bool amsniffFFmpegFormat(
         const android::sp<android::DataSource> &source,
         android::String8 *mimeType, float *confidence,
-        android::sp<android::AMessage> *msg) {
-    return android::SniffAmFFmpeg(source, mimeType, confidence, msg);
-}
+        android::sp<android::AMessage> *msg)
+    {
+        return android::SniffAmFFmpeg(source, mimeType, confidence, msg);
+    }
 
-android::sp<android::MediaExtractor> createAmMediaExtractor(
-        const android::sp<android::DataSource> &source, const char *mime) {
-    android::MediaExtractor *ret = NULL;    
-    ret = new android::AmFFmpegExtractor(source);
-    return ret;
-}
+    MediaExtractor *amcreateFFmpegExtractor(
+        const android::sp<android::DataSource> &source, const sp<AMessage> &meta)
+    {
+        android::MediaExtractor *ret = NULL;
+        ret = new android::AmFFmpegExtractor(source);
+        return ret;
+    }
 
+    }
 #ifdef __cplusplus
 }  // extern "C"
 #endif

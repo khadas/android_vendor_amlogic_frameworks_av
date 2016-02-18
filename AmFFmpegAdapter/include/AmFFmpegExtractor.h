@@ -32,9 +32,9 @@ namespace android {
 class AmFFmpegByteIOAdapter;
 class AmPTSPopulator;
 struct AMessage;
-struct DataSource;
+class DataSource;
 struct AmFFmpegSource;
-struct String8;
+class String8;
 
 /*
  * A MediaExtractor implementation based on the FFmpeg library.

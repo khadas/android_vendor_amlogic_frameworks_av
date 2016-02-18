@@ -39,6 +39,11 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in FFmpeg.
 
+
+include  $(TOP)/frameworks/av/amlogic/config.mk
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
+
+
 LOCAL_MODULE_TAGS := optional
 LOCAL_ARM_MODE := arm
 LOCAL_PRELINK_MODULE := false

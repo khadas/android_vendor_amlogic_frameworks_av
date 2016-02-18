@@ -829,9 +829,6 @@ Retry:
         static_cast<MediaPlayerInterface*>(p.get())->setAudioSink(mAudioSink);
     }
 	TRACE();
-	if(p->playerType()==STAGEFRIGHT_PLAYER&&isHEVC) {
-		//p->setHEVCFlag(true);
-	}
 	if(url_valid)
 		sret=p->setDataSource(mHTTPService,muri,&mheaders);
 	else if(fd_valid)

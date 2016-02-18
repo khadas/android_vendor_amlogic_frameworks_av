@@ -49,6 +49,8 @@ LOCAL_STATIC_LIBRARIES := \
         libcurl_base \
         libcurl_common
 
+LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in FFmpeg.
+
 LOCAL_MODULE:= libamnuplayer
 
 LOCAL_MODULE_TAGS := eng

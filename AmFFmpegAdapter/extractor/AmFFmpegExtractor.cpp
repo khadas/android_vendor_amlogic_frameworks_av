@@ -765,7 +765,6 @@ bool SniffAmFFmpeg(
             *confidence = 0.05f;
             if (!strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM10) || !strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM20) || !strcmp(mimeDetected,MEDIA_MIMETYPE_VIDEO_RM40)) {
                 *confidence = 0.21f;
-                ALOGV("[%s %d] confidence 0.21", __FUNCTION__, __LINE__);
             }
             return true;
         }
