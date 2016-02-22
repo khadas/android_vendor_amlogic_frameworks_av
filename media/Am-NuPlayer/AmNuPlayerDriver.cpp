@@ -355,6 +355,11 @@ status_t AmNuPlayerDriver::seekTo(int msec) {
         return OK;
     }
 
+    // set to begin if <= 1 sec.
+    if (seekTimeUs <= 1000000) {
+        seekTimeUs = 0;
+    }
+
     switch (mState) {
         case STATE_PREPARED:
         case STATE_STOPPED_AND_PREPARED:

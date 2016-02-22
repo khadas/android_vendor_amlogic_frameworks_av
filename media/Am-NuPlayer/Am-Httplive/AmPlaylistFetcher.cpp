@@ -50,6 +50,7 @@
 #include <openssl/aes.h>
 #include <openssl/md5.h>
 
+#include <curl/curl.h>
 #include "curl_fetch.h"
 
 namespace android {
@@ -82,6 +83,7 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mURI(uri),
       mStreamTypeMask(0),
       mStartTimeUs(-1ll),
+      mSeekedTimeUs(-1ll),
       mSegmentStartTimeUs(-1ll),
       mDiscontinuitySeq(-1ll),
       mStartTimeUsRelative(false),
@@ -90,11 +92,14 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mSeqNumber(-1),
       mDownloadedNum(0),
       mNumRetries(0),
+      mRetryTimeOverS(-1),
+      mRetryAnchorTimeUs(-1ll),
       mNeedSniff(true),
       mIsTs(false),
       mFirstRefresh(true),
       mFirstTypeProbe(true),
       mStartup(true),
+      mSeeked(false),
       mAdaptive(false),
       mFetchingNotify(false),
       mPrepared(false),
@@ -120,13 +125,14 @@ AmPlaylistFetcher::AmPlaylistFetcher(
     if (property_get("media.hls.dumpmode", value, NULL)) {
         mDumpMode = atoi(value);
     }
-    char value1[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.open_retry_s", value1, "3600")) {
-        mOpenFailureRetryUs = atoll(value1) * 1000000;
+    if (property_get("media.hls.open_retry_s", value, "3600")) {
+        mOpenFailureRetryUs = atoll(value) * 1000000;
     }
-    char value2[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.frame-rate", value, NULL)) {
         mEnableFrameRate = atoi(value);
+    }
+    if (property_get("media.hls.retry_timeover_s", value, "3600")) {
+        mRetryTimeOverS = atoi(value);
     }
 }
 
@@ -170,6 +176,10 @@ int64_t AmPlaylistFetcher::getSegmentStartTimeUs(int32_t seqNumber) const {
     }
 
     return segmentStartUs;
+}
+
+int64_t AmPlaylistFetcher::getSeekedTimeUs() const {
+    return mSeekedTimeUs;
 }
 
 int64_t AmPlaylistFetcher::delayUsToRefreshPlaylist() const {
@@ -442,6 +452,13 @@ void AmPlaylistFetcher::stopAsync(bool clear) {
     msg->post();
 }
 
+void AmPlaylistFetcher::seekAsync(int64_t seekTimeUs) {
+    ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
+    sp<AMessage> msg = new AMessage(kWhatSeek, this);
+    msg->setInt64("seekTimeUs", seekTimeUs);
+    msg->post();
+}
+
 void AmPlaylistFetcher::changeURI(AString uri) {
     mURI = uri;
 }
@@ -502,6 +519,16 @@ void AmPlaylistFetcher::onMessageReceived(const sp<AMessage> &msg) {
             notify->setInt32("what", kWhatStopped);
             notify->setString("uri", mURI.c_str());
             notify->setPointer("looper", looper().get());
+            notify->post();
+            break;
+        }
+
+        case kWhatSeek:
+        {
+            onSeek(msg);
+            sp<AMessage> notify = mNotify->dup();
+            notify->setInt32("what", kWhatSeeked);
+            notify->setInt64("seekTimeUs", mStartTimeUs);
             notify->post();
             break;
         }
@@ -615,6 +642,48 @@ void AmPlaylistFetcher::onStop(const sp<AMessage> &msg) {
 
     mPacketSources.clear();
     mStreamTypeMask = 0;
+}
+
+void AmPlaylistFetcher::onSeek(const sp<AMessage> &msg) {
+    ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
+    cancelMonitorQueue();
+    for (size_t i = 0; i < mPacketSources.size(); i++) {
+        sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
+        packetSource->clear();
+    }
+    if (mTSParser != NULL) {
+        for (size_t i = 0; i < mPacketSources.size(); i++) {
+            const AmLiveSession::StreamType stream = mPacketSources.keyAt(i);
+            AmATSParser::SourceType type;
+            switch (stream) {
+            case AmLiveSession::STREAMTYPE_VIDEO:
+                type = AmATSParser::VIDEO;
+                break;
+            case AmLiveSession::STREAMTYPE_AUDIO:
+                type = AmATSParser::AUDIO;
+                break;
+            case AmLiveSession::STREAMTYPE_SUBTITLES:
+                type = AmATSParser::NONE;
+                break;
+            default:
+                TRESPASS();
+            }
+            if (type > AmATSParser::NONE) {
+                sp<AmAnotherPacketSource> source = static_cast<AmAnotherPacketSource *>(mTSParser->getSource(type).get());
+                if (source != NULL) {
+                    source->clear();
+                }
+            }
+        }
+        sp<AMessage> extra = new AMessage;
+        extra->setInt64(IStreamListener::kKeyMediaTimeUs, 0);
+        mTSParser->signalDiscontinuity(AmATSParser::DISCONTINUITY_TIME, extra);
+    }
+    msg->findInt64("seekTimeUs", &mStartTimeUs);
+    mSeekedTimeUs = mStartTimeUs;
+    mSeqNumber = -1;
+    mSeeked = true;
+    postMonitorQueue();
 }
 
 // Resume until we have reached the boundary timestamps listed in `msg`; when
@@ -952,10 +1021,15 @@ void AmPlaylistFetcher::onDownloadNext() {
     if (mSeqNumber < firstSeqNumberInPlaylist
             || mSeqNumber > lastSeqNumberInPlaylist
             || err != OK) {
-        if ((err != OK || !mPlaylist->isComplete()) && mNumRetries < kMaxNumRetries) {
+        if (mRetryAnchorTimeUs < 0) {
+            mRetryAnchorTimeUs = ALooper::GetNowUs();
+        }
+        if ((err != OK || !mPlaylist->isComplete())
+            && (ALooper::GetNowUs() - mRetryAnchorTimeUs) / 1000000 <= mRetryTimeOverS) {
             ++mNumRetries;
 	        if (err == ERROR_CANNOT_CONNECT) {
                 mNumRetries = 0;
+                mRetryAnchorTimeUs = ALooper::GetNowUs();
             }
 
             if (mSeqNumber > lastSeqNumberInPlaylist || err != OK) {
@@ -975,9 +1049,10 @@ void AmPlaylistFetcher::onDownloadNext() {
                     delayUs = kMaxMonitorDelayUs;
                 }
                 ALOGV("sequence number high: %d from (%d .. %d), "
-                      "monitor in %" PRId64 " (retry=%d)",
+                      "monitor in %" PRId64 ", nowUs (%" PRId64 "), anchorUs (%" PRId64 ")",
                         mSeqNumber, firstSeqNumberInPlaylist,
-                        lastSeqNumberInPlaylist, delayUs, mNumRetries);
+                        lastSeqNumberInPlaylist, delayUs,
+                        ALooper::GetNowUs(), mRetryAnchorTimeUs);
                 postMonitorQueue(delayUs, 100 * 1000);
                 return;
             }
@@ -1006,7 +1081,6 @@ void AmPlaylistFetcher::onDownloadNext() {
                 stopAsync(/* clear = */ false);
                 return;
             }
-            mSeqNumber = lastSeqNumberInPlaylist - 3;
             if (mSeqNumber < firstSeqNumberInPlaylist) {
                 mSeqNumber = firstSeqNumberInPlaylist;
             }
@@ -1025,6 +1099,7 @@ void AmPlaylistFetcher::onDownloadNext() {
     }
 
     mNumRetries = 0;
+    mRetryAnchorTimeUs = -1ll;
 
     AString uri;
     sp<AMessage> itemMeta;
@@ -1105,6 +1180,38 @@ void AmPlaylistFetcher::onDownloadNext() {
         dumpHandle = fopen(dumpFile, "ab+");
     }
 
+    // seek by byte, maybe need to modify.
+    // just ts.
+    if (mSeeked && mIsTs && mStartTimeUs > 0 && (mStreamTypeMask != AmLiveSession::STREAMTYPE_SUBTITLES)) {
+        int64_t length = 0;
+        CURLcode rc;
+        CURL * c_handle = curl_easy_init();
+        if (c_handle) {
+            curl_easy_setopt(c_handle, CURLOPT_URL, uri.c_str());
+            curl_easy_setopt(c_handle, CURLOPT_NOBODY, 1L);
+            curl_easy_setopt(c_handle, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(c_handle, CURLOPT_HEADER, 0L);
+            if (!strncmp(uri.c_str(), "https", 5)) {
+                curl_easy_setopt(c_handle, CURLOPT_CAINFO, "/etc/curl/cacerts/ca-certificates.crt");
+            }
+            rc = curl_easy_perform(c_handle);
+            if (CURLE_OK == rc) {
+                double file_size = 0;
+                curl_easy_getinfo(c_handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &file_size);
+                length = (int64_t)file_size;
+            }
+            curl_easy_cleanup(c_handle);
+            c_handle = NULL;
+        }
+        if (length > 0) {
+            range_offset = (int64_t)(length * (mStartTimeUs / (double)(item_durationUs)));
+            ALOGI("seek to seq num(%d), offset(%lld), length(%lld)", mSeqNumber, range_offset, length);
+        } else {
+            mSeekedTimeUs = getSegmentStartTimeUs(mSeqNumber);
+            ALOGI("not support range, cannot seek by byte!");
+        }
+    }
+
     do {
         bytesRead = mSession->fetchFile(
                 uri.c_str(), &buffer, range_offset, range_length, kDownloadBlockSize, &cfc_handle);
@@ -1121,7 +1228,15 @@ void AmPlaylistFetcher::onDownloadNext() {
 
         if (bytesRead > 0) {
             total_size += bytesRead;
+            if (mSeeked && mIsTs && mStartTimeUs > 0 && (mStreamTypeMask != AmLiveSession::STREAMTYPE_SUBTITLES)) {
+                if (cfc_handle->http_code != 206) {
+                    mSeekedTimeUs = getSegmentStartTimeUs(mSeqNumber);
+                    ALOGI("HTTP response (%d), cannot seek by byte!", cfc_handle->http_code);
+                }
+            }
         }
+
+        mSeeked = false;
 
         // need to retry
         if (bytesRead == ERROR_CANNOT_CONNECT) {

@@ -312,7 +312,7 @@ private:
 
     size_t getBandwidthIndex();
     int64_t latestMediaSegmentStartTimeUs();
-    int64_t getSegmentStartTimeUsAfterSeek(int64_t seekUs);
+    int64_t getSegmentStartTimeUsAfterSeek(StreamType type);
 
     static int SortByBandwidth(const BandwidthItem *, const BandwidthItem *);
     static StreamType indexToType(int idx);
