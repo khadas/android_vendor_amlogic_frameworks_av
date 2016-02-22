@@ -35,6 +35,7 @@ static bool MimeSupportOrNot(const char * codecMime) {
     if(!strcmp(MEDIA_MIMETYPE_VIDEO_VP6, codecMime)
     || !strcmp(MEDIA_MIMETYPE_VIDEO_VP6F, codecMime)
     || !strcmp(MEDIA_MIMETYPE_VIDEO_VP6A, codecMime)
+    || !strcmp(MEDIA_MIMETYPE_VIDEO_VP8, codecMime)
     || !strcmp(MEDIA_MIMETYPE_VIDEO_AVC, codecMime)
     || !strcmp(MEDIA_MIMETYPE_VIDEO_WMV2, codecMime)
     || !strcmp(MEDIA_MIMETYPE_VIDEO_RM10, codecMime)
