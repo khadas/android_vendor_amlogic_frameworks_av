@@ -156,6 +156,7 @@ private:
     static int          vp_get_file_handle(URLContext *h);
     status_t getTrackInfo(Parcel* reply) const;
     status_t getMediaInfo(Parcel* reply) const;
+    status_t selectPid(int video_pid) const;
     status_t selectTrack(int index, bool select)const;
     status_t dump_videoinfo(int fd, media_info_t mStreamInfo)const;
     status_t dump_streaminfo(int fd, media_info_t mStreamInfo)const;

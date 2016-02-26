@@ -2213,6 +2213,14 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
             if (mStreamInfo.sub_info[i]->sub_language != NULL) 
                 reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));        
         }
+
+        reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
+        for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
+            reply->writeInt32(mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid);
+            if (mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name != NULL)
+                reply->writeString16(String16(mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name));
+        }
+
         reply->setDataPosition(datapos);
        ALOGV("--file name:%s \n",reply->readCString());
     return OK;
@@ -2223,6 +2231,32 @@ size_t AmlogicPlayer::countTracks() const
 {
     return mStreamInfo.stream_info.nb_streams + mTextDriver->countExternalTracks();
 }
+
+status_t AmlogicPlayer::selectPid(int video_pid) const
+{
+    int videoPidValid = 0;
+    int audio_pid = 0xffff;
+    const ts_programe_info_t* programe_info;
+    const ts_programe_detail_t* programe_detail;
+
+    programe_info = &(mStreamInfo.ts_programe_info);
+    for (int i = 0; i < programe_info->programe_num; i++) {
+        programe_detail = &(programe_info->ts_programe_detail[i]);
+        if (programe_detail->video_pid == video_pid) {
+            videoPidValid = 1;
+            audio_pid = programe_detail->audio_pid[0];// get default audio pid
+        }
+    }
+
+    if (mhasVideo && videoPidValid) {
+        ALOGE("player_switch_program mPlayer_id:%d video_pid:%d audio_pid:%d", mPlayer_id);
+        player_switch_program(mPlayer_id, video_pid, audio_pid);
+    } else
+        return !OK;
+
+    return OK;
+}
+
 status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only audio track and timed text track.
 {
     //Mutex::Autolock autoLock(mLock);
@@ -2665,6 +2699,23 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
             LOGI("setParameter %d=[%s]\n", key, keyStr.string());
             ApreID = getintfromString8(keyStr, "dtsAsset: ");
             DtshdSetAPreID(ApreID,&dts_dec_control);
+        }
+        break;
+    case KEY_PARAMETER_AML_PLAYER_SWITCH_VIDEO_TRACK:
+        if (mPlayer_id >= 0 && mPlay_ctl.novideo == 0) {
+            int vid = -1;
+            const String16 uri16 = request.readString16();
+            String8 keyStr = String8(uri16);
+            vid = getintfromString8(keyStr, "vid:");
+            for (int m = 0; m < mStreamInfo.stream_info.total_video_num; m++) {
+                if (vid == mStreamInfo.video_info[m]->index) {
+                    if (mStreamInfo.video_info[m]->id >= 0) {
+                        LOGI("switch video track,id:%d,pid:%d\n", vid, mStreamInfo.video_info[m]->id);
+                        selectPid(mStreamInfo.video_info[m]->id);
+                        return OK;
+                    }
+                }
+            }
         }
         break;
     case KEY_PARAMETER_AML_PLAYER_SWITCH_AUDIO_TRACK:
