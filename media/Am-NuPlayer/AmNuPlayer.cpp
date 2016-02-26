@@ -419,23 +419,35 @@ void AmNuPlayer::writeTrackInfo(
     int32_t trackType;
     CHECK(format->findInt32("type", &trackType));
 
+    AString mime;
+    if (!format->findString("mime", &mime)) {
+        // Java MediaPlayer only uses mimetype for subtitle and timedtext tracks.
+        // If we can't find the mimetype here it means that we wouldn't be needing
+        // the mimetype on the Java end. We still write a placeholder mime to keep the
+        // (de)serialization logic simple.
+        if (trackType == MEDIA_TRACK_TYPE_AUDIO) {
+            mime = "audio/";
+        } else if (trackType == MEDIA_TRACK_TYPE_VIDEO) {
+            mime = "video/";
+        } else {
+            TRESPASS();
+        }
+    }
+
     AString lang;
     CHECK(format->findString("language", &lang));
 
     reply->writeInt32(2); // write something non-zero
     reply->writeInt32(trackType);
+    reply->writeString16(String16(mime.c_str()));
     reply->writeString16(String16(lang.c_str()));
 
     if (trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
-        AString mime;
-        CHECK(format->findString("mime", &mime));
-
         int32_t isAuto, isDefault, isForced;
         CHECK(format->findInt32("auto", &isAuto));
         CHECK(format->findInt32("default", &isDefault));
         CHECK(format->findInt32("forced", &isForced));
 
-        reply->writeString16(String16(mime.c_str()));
         reply->writeInt32(isAuto);
         reply->writeInt32(isDefault);
         reply->writeInt32(isForced);

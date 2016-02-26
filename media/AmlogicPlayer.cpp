@@ -943,6 +943,21 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
         }
     }
     break;
+    case PLAYER_EVENTS_SUBTITLE_DATA:
+    {
+        AVSubtitleData * sub = (AVSubtitleData *)ext1;
+        Parcel in;
+        in.writeInt32(sub->sub_trackIndex);
+        in.writeInt64(sub->sub_timeUs);
+        in.writeInt64(sub->sub_durationUs);
+        in.writeInt32(sub->sub_size);
+        in.writeInt32(sub->sub_size);
+        in.write(sub->sub_buffer, sub->sub_size);
+        sendEvent(MEDIA_SUBTITLE_DATA, 0, 0, &in);
+        free(sub->sub_buffer);
+        free(sub);
+    }
+    break;
     default:
         break;
     }
@@ -2094,6 +2109,79 @@ int32_t AmlogicPlayer::getSelectedTrack(const Parcel& request) const
     return trackId;
 }
 
+status_t AmlogicPlayer::getStreamingTrackInfo(Parcel * reply) const
+{
+    int ret;
+    int info_num = 0, i = 0;
+    AVStreamInfo ** info_array = NULL;
+    ret = player_get_streaming_track_info(mPlayer_id, &info_num, &info_array);
+    if (ret) {
+        LOGE("[%s:%d] get track info failed !", __FUNCTION__, __LINE__);
+        return UNKNOWN_ERROR;
+    }
+    reply->writeInt32(info_num);
+    for (; i < info_num; i++) {
+        char * mime = NULL;
+        if (!info_array[i]->stream_mime) {
+            if (info_array[i]->stream_type == MEDIA_TRACK_TYPE_AUDIO) {
+                mime = "audio/";
+            } else if (info_array[i]->stream_type == MEDIA_TRACK_TYPE_VIDEO) {
+                mime = "video/";
+            } else {
+                LOGE("invalid track(%d)!", info_array[i]->stream_type);
+            }
+        } else {
+            mime = info_array[i]->stream_mime;
+        }
+        reply->writeInt32(2); // write something non-zero
+        reply->writeInt32(info_array[i]->stream_type);
+        reply->writeString16(String16(mime));
+        if (info_array[i]->stream_lang) {
+            reply->writeString16(String16(info_array[i]->stream_lang));
+        } else {
+            const char * lang = "und";
+            reply->writeString16(String16(lang));
+        }
+        if (info_array[i]->stream_type == MEDIA_TRACK_TYPE_SUBTITLE) {
+            reply->writeInt32(info_array[i]->stream_auto);
+            reply->writeInt32(info_array[i]->stream_default);
+            reply->writeInt32(info_array[i]->stream_forced);
+        }
+        // release info item
+        if (info_array[i]->stream_lang) {
+            free(info_array[i]->stream_lang);
+        }
+        if (info_array[i]->stream_mime) {
+            free(info_array[i]->stream_mime);
+        }
+        free(info_array[i]);
+    }
+    free(info_array);
+    return OK;
+}
+
+status_t AmlogicPlayer::selectStreamingTrack(int index, bool select) const
+{
+    int ret;
+    ret = player_select_streaming_track(mPlayer_id, index, select);
+    if (ret) {
+        LOGE("[%s:%d] switch track(%d) failed !", __FUNCTION__, __LINE__, index);
+        return UNKNOWN_ERROR;
+    }
+    return OK;
+}
+
+int AmlogicPlayer::getStreamingSelectedTrack(const Parcel& request) const
+{
+    int ret;
+    int selected_index = -1;
+    int type = request.readInt32();
+    ret = player_get_streaming_selected_track(mPlayer_id, type, &selected_index);
+    if (ret) {
+        LOGE("[%s:%d] get selected track failed !", __FUNCTION__, __LINE__);
+    }
+    return selected_index;
+}
 
 void transferFileSize(int64_t size, char *filesize)
 {
@@ -2316,7 +2404,11 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
 
     case INVOKE_ID_GET_TRACK_INFO: {
         LOGV("Get track info\n");
-        return getTrackInfo(reply);
+        if (player_get_source_type(mPlayer_id) > 0) {
+            return getStreamingTrackInfo(reply);
+        } else {
+            return getTrackInfo(reply);
+        }
     }
     case INVOKE_ID_ADD_EXTERNAL_SOURCE: {
         Mutex::Autolock autoLock(mLock);
@@ -2349,12 +2441,20 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
     case INVOKE_ID_SELECT_TRACK: {
         int index = request.readInt32();
         LOGV("select track,index:%d\n", index);
-        return selectTrack(index, true);
+        if (player_get_source_type(mPlayer_id) > 0) {
+            return selectStreamingTrack(index, true);
+        } else {
+            return selectTrack(index, true);
+        }
     }
     case INVOKE_ID_UNSELECT_TRACK: {
         int index = request.readInt32();
         LOGV("unselect track,index:%d\n", index);
-        return selectTrack(index, false);
+        if (player_get_source_type(mPlayer_id) > 0) {
+            return selectStreamingTrack(index, false);
+        } else {
+            return selectTrack(index, false);
+        }
     }
 	case INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE:{ 
 		int64_t buffed_size =  player_get_lpbufbuffedsize(mPlayer_id);
@@ -2372,8 +2472,13 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
 		LOGV("Set left volume:%f, right volume = %f\n",left_volume,right_volume);
 		return setVolume(left_volume,right_volume);
 	}
-	case INVOKE_ID_GET_SELECTED_TRACK: {
-		int32_t trackId = getSelectedTrack(request);
+	case INVOKE_ID_GET_SELECTED_TRACK:{
+		int32_t trackId;
+		if (player_get_source_type(mPlayer_id) > 0) {
+		    trackId = getStreamingSelectedTrack(request);
+		} else {
+		    trackId = getSelectedTrack(request);
+		}
 		LOGI("get select track id:%d\n", trackId);
 		reply->writeInt32((int)trackId);
 		return OK;

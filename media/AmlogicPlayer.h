@@ -165,6 +165,11 @@ private:
     int set_cur_dispmode(int mode);
     int32_t getSelectedTrack(const Parcel& request) const;
 
+    // audio/sub track function for hls/dash demuxer.
+    status_t getStreamingTrackInfo(Parcel * reply) const;
+    status_t selectStreamingTrack(int index, bool select) const;
+    int getStreamingSelectedTrack(const Parcel& request) const;
+
     sp<Surface>             mSurface;
     sp<ANativeWindow>       mNativeWindow;
     sp<AmlogicPlayerRender> mPlayerRender;
