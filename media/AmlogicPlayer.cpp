@@ -2177,7 +2177,7 @@ int32_t AmlogicPlayer::getSelectedTrack(const Parcel& request) const
             }
             break;
         case MEDIA_TRACK_TYPE_TIMEDTEXT:
-            if (mhasSub) {
+            if (mhasSub && mTextDriver!= NULL) {
                 return mTextDriver->getSelectedTrack();
             }
             break;
@@ -2376,7 +2376,7 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
             reply->writeInt32(mStreamInfo.sub_info[i]->id);
             reply->writeInt32(mStreamInfo.sub_info[i]->sub_type);
             if (mStreamInfo.sub_info[i]->sub_language != NULL) 
-                reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));        
+                reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));
         }
 
         reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
@@ -2394,7 +2394,11 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
 
 size_t AmlogicPlayer::countTracks() const
 {
-    return mStreamInfo.stream_info.nb_streams + mTextDriver->countExternalTracks();
+    int n = mStreamInfo.stream_info.nb_streams;
+    if (mTextDriver != NULL) {
+        n += mTextDriver->countExternalTracks();
+    }
+    return n;
 }
 
 status_t AmlogicPlayer::selectPid(int video_pid) const
@@ -2456,7 +2460,7 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
                 if (mStreamInfo.sub_info[m]->id >= 0) {
                     LOGE("switch audio track,id:%d,pid:%d\n", trackIndex, mStreamInfo.sub_info[m]->id);
                     SubSource *mSub = (SubSource *)mSubSource.get();
-                    if (select) {
+                    if (select && mSub != NULL && mTextDriver != NULL) {
                         mSub->sub_cur_id = m;
                         if (true == mRunning) {
                             player_sid(mPlayer_id, mStreamInfo.sub_info[m]->id);
@@ -2465,7 +2469,7 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
                         if (true == mRunning) {
                             mTextDriver->start();
                         }
-                    } else {
+                    } else if (mTextDriver != NULL){
                         status_t err;
                         err = mTextDriver->unselectTrack(trackIndex);
                         //mSub->sub_cur_id=-1;//no need to set
@@ -2479,14 +2483,14 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
     }
     //outband case
     status_t err = OK;
-    if (select) {
+    if (select && mTextDriver != NULL) {
         err = mTextDriver->selectTrack(trackIndex);
         if (err == OK) {
             if (true == mRunning) {
                 mTextDriver->start();
             }
         }
-    } else {
+    } else if (mTextDriver != NULL) {
         err = mTextDriver->unselectTrack(trackIndex);
     }
 
