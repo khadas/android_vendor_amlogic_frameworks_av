@@ -344,6 +344,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
         { "isdrm", METADATA_KEY_IS_DRM },
         { "width", METADATA_KEY_VIDEO_WIDTH },
         { "height", METADATA_KEY_VIDEO_HEIGHT },
+        { "com.android.capture.fps", METADATA_KEY_CAPTURE_FRAMERATE },
     };
     static const size_t kNumMapEntries = sizeof(kMap) / sizeof(kMap[0]);
     CharacterEncodingDetector *detector = new CharacterEncodingDetector();
