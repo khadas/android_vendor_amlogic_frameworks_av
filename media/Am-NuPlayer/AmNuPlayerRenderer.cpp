@@ -74,6 +74,7 @@ AmNuPlayer::Renderer::Renderer(
       mNumFramesWritten(0),
       mChannel(0),
       mSampleRate(0),
+      mQueueInitial(true),
       mRenderStarted(false),
       mDrainAudioQueuePending(false),
       mDrainVideoQueuePending(false),
@@ -1247,36 +1248,37 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
         mRenderStarted = true;
     }
 
-#if 0
-    sp<ABuffer> firstAudioBuffer = (*mAudioQueue.begin()).mBuffer;
-    sp<ABuffer> firstVideoBuffer = (*mVideoQueue.begin()).mBuffer;
+    if (mQueueInitial) {
+        if (mAudioQueue.empty() || mVideoQueue.empty()) {
+            // EOS signalled on either queue.
+            syncQueuesDone_l();
+            return;
+        }
 
-    if (firstAudioBuffer == NULL || firstVideoBuffer == NULL) {
-        // EOS signalled on either queue.
-        syncQueuesDone_l();
-        return;
+        sp<ABuffer> firstAudioBuffer = (*mAudioQueue.begin()).mBuffer;
+        sp<ABuffer> firstVideoBuffer = (*mVideoQueue.begin()).mBuffer;
+
+        int64_t firstAudioTimeUs;
+        int64_t firstVideoTimeUs;
+        CHECK(firstAudioBuffer->meta()
+                ->findInt64("timeUs", &firstAudioTimeUs));
+        CHECK(firstVideoBuffer->meta()
+                ->findInt64("timeUs", &firstVideoTimeUs));
+
+        int64_t diff = firstVideoTimeUs - firstAudioTimeUs;
+
+        if (diff > 100000ll) {
+            // Audio data starts More than 0.1 secs before video.
+            // Drop some audio.
+            ALOGV("video precedes audio %.2f secs, need to drop some audio", diff / 1E6);
+
+            (*mAudioQueue.begin()).mNotifyConsumed->post();
+            mAudioQueue.erase(mAudioQueue.begin());
+            return;
+        } else {
+            mQueueInitial = false;
+        }
     }
-
-    int64_t firstAudioTimeUs;
-    int64_t firstVideoTimeUs;
-    CHECK(firstAudioBuffer->meta()
-            ->findInt64("timeUs", &firstAudioTimeUs));
-    CHECK(firstVideoBuffer->meta()
-            ->findInt64("timeUs", &firstVideoTimeUs));
-
-    int64_t diff = firstVideoTimeUs - firstAudioTimeUs;
-
-    ALOGV("queueDiff = %.2f secs", diff / 1E6);
-
-    if (diff > 100000ll) {
-        // Audio data starts More than 0.1 secs before video.
-        // Drop some audio.
-
-        (*mAudioQueue.begin()).mNotifyConsumed->post();
-        mAudioQueue.erase(mAudioQueue.begin());
-        return;
-    }
-#endif
 
     postDrainAudioQueue_l();
     postDrainVideoQueue_l();
@@ -1396,6 +1398,7 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
     }
 
     mVideoSampleReceived = false;
+    mQueueInitial = true;
 
     if (notifyComplete) {
         notifyFlushComplete(audio);

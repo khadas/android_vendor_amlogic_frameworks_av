@@ -156,6 +156,7 @@ private:
     int32_t mChannel;
     int32_t mSampleRate;
 
+    bool mQueueInitial;
     bool mRenderStarted;
     bool mDrainAudioQueuePending;
     bool mDrainVideoQueuePending;

@@ -72,6 +72,7 @@ struct AmATSParser : public RefBase {
     void signalEOS(status_t finalResult);
 
     enum SourceType {
+        NONE  = -1,
         VIDEO = 0,
         AUDIO = 1,
         NUM_SOURCE_TYPES = 2

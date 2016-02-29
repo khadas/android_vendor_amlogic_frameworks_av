@@ -43,6 +43,7 @@ struct AmPlaylistFetcher : public AHandler {
         kWhatStarted,
         kWhatPaused,
         kWhatStopped,
+        kWhatSeeked,
         kWhatError,
         kWhatDurationUpdate,
         kWhatTemporarilyDoneFetching,
@@ -75,6 +76,8 @@ struct AmPlaylistFetcher : public AHandler {
 
     void stopAsync(bool clear = true);
 
+    void seekAsync(int64_t seekTimeUs);
+
     void changeURI(AString uri);
     uint32_t getStreamTypeMask();
     void setStreamTypeMask(uint32_t streamMask);
@@ -90,19 +93,22 @@ struct AmPlaylistFetcher : public AHandler {
     // This is computed by summing the durations of all segments before it.
     int64_t getSegmentStartTimeUs(int32_t seqNumber) const;
 
+    int64_t getSeekedTimeUs() const;
+
 protected:
     virtual ~AmPlaylistFetcher();
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
     enum {
-        kMaxNumRetries         = 5,
+        kMaxNumRetries         = 10,
     };
 
     enum {
         kWhatStart          = 'strt',
         kWhatPause          = 'paus',
         kWhatStop           = 'stop',
+        kWhatSeek           = 'seek',
         kWhatMonitorQueue   = 'moni',
         kWhatResumeUntil    = 'rsme',
         kWhatDownloadNext   = 'dlnx',
@@ -132,6 +138,7 @@ private:
 
     uint32_t mStreamTypeMask;
     int64_t mStartTimeUs;
+    int64_t mSeekedTimeUs;
 
     // Start time relative to the beginning of the first segment in the initial
     // playlist. It's value is initialized to a non-negative value only when we are
@@ -152,11 +159,14 @@ private:
     int32_t mSeqNumber;
     int32_t mDownloadedNum;
     int32_t mNumRetries;
+    int32_t mRetryTimeOverS;
+    int64_t mRetryAnchorTimeUs;
     bool mNeedSniff;
     bool mIsTs;
     bool mFirstRefresh;
     bool mFirstTypeProbe;
     bool mStartup;
+    bool mSeeked;
     bool mAdaptive;
     bool mFetchingNotify;
     bool mPrepared;
@@ -221,6 +231,7 @@ private:
     status_t onStart(const sp<AMessage> &msg);
     void onPause();
     void onStop(const sp<AMessage> &msg);
+    void onSeek(const sp<AMessage> &msg);
     void onMonitorQueue();
     void onDownloadNext();
 

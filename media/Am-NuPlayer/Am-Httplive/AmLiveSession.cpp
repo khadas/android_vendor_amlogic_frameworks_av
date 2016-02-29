@@ -279,28 +279,6 @@ status_t AmLiveSession::dequeueAccessUnit(
     }
 
     status_t finalResult;
-    sp<AmAnotherPacketSource> discontinuityQueue  = mDiscontinuities.valueFor(stream);
-    if (discontinuityQueue->hasBufferAvailable(&finalResult)) {
-        discontinuityQueue->dequeueAccessUnit(accessUnit);
-        // seeking, track switching
-        sp<AMessage> extra;
-        int64_t timeUs;
-        if ((*accessUnit)->meta()->findMessage("extra", &extra)
-                && extra != NULL
-                && extra->findInt64("timeUs", &timeUs)) {
-            // seeking only
-            mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(timeUs);
-            if (stream == STREAMTYPE_AUDIO) {
-                mAudioDiscontinuityOffsetTimesUs.clear();
-                mAudioDiscontinuityAbsStartTimesUs.clear();
-            } else if (stream == STREAMTYPE_VIDEO) {
-                mVideoDiscontinuityOffsetTimesUs.clear();
-                mVideoDiscontinuityAbsStartTimesUs.clear();
-            }
-        }
-        return INFO_DISCONTINUITY;
-    }
-
     sp<AmAnotherPacketSource> packetSource = mPacketSources.valueFor(stream);
 
     ssize_t idx = typeToIndex(stream);
@@ -355,6 +333,29 @@ status_t AmLiveSession::dequeueAccessUnit(
     }
     if (otherSource != NULL && !otherSource->hasBufferAvailable(&finalResult)) {
         return finalResult == OK ? -EAGAIN : finalResult;
+    }
+
+    sp<AmAnotherPacketSource> discontinuityQueue  = mDiscontinuities.valueFor(stream);
+    if (discontinuityQueue->hasBufferAvailable(&finalResult)) {
+        discontinuityQueue->dequeueAccessUnit(accessUnit);
+        // seeking, track switching
+        sp<AMessage> extra;
+        int64_t timeUs;
+        if ((*accessUnit)->meta()->findMessage("extra", &extra)
+                && extra != NULL
+                && extra->findInt64("timeUs", &timeUs)) {
+            // seeking only
+            mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(stream);
+            ALOGI("Got stream(%d) seeked timeUs (%lld)", stream, mLastSeekTimeUs);
+            if (stream == STREAMTYPE_AUDIO) {
+                mAudioDiscontinuityOffsetTimesUs.clear();
+                mAudioDiscontinuityAbsStartTimesUs.clear();
+            } else if (stream == STREAMTYPE_VIDEO) {
+                mVideoDiscontinuityOffsetTimesUs.clear();
+                mVideoDiscontinuityAbsStartTimesUs.clear();
+            }
+        }
+        return INFO_DISCONTINUITY;
     }
 
     status_t err;
@@ -734,6 +735,30 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
                                 mSeekReplyID.clear();
                                 mSeekReply.clear();
                             }
+                        }
+                    }
+                    break;
+                }
+
+                case AmPlaylistFetcher::kWhatSeeked:
+                {
+                    if (--mContinuationCounter == 0) {
+                        int64_t timeUs = 0;
+                        msg->findInt64("seekTimeUs", &timeUs);
+                        for (size_t i = 0; i < kMaxStreams; ++i) {
+                            sp<AmAnotherPacketSource> discontinuityQueue;
+                            sp<AMessage> extra = new AMessage;
+                            extra->setInt64("timeUs", timeUs);
+                            discontinuityQueue = mDiscontinuities.valueFor(indexToType(i));
+                            discontinuityQueue->queueDiscontinuity(AmATSParser::DISCONTINUITY_TIME, extra, true);
+                        }
+                        if (mSeekReplyID != NULL) {
+                            CHECK(mSeekReply != NULL);
+                            mSeekReply->setInt32("err", OK);
+                            mSeekReply->postReply(mSeekReplyID);
+                            mSeekReplyID.clear();
+                            mSeekReply.clear();
+                            ALOGI("seek complete!");
                         }
                     }
                     break;
@@ -1607,16 +1632,20 @@ int64_t AmLiveSession::latestMediaSegmentStartTimeUs() {
     return minSegmentStartTimeUs;
 }
 
-int64_t AmLiveSession::getSegmentStartTimeUsAfterSeek(int64_t seekUs) {
+int64_t AmLiveSession::getSegmentStartTimeUsAfterSeek(StreamType type) {
     int64_t minStartTimeUs = -1, tempTimeUs = -1;
-    int32_t number;
     for (size_t i = 0; i < mFetcherInfos.size(); i++) {
-        number = mFetcherInfos.valueAt(i).mFetcher->getSeqNumberForTime(seekUs);
-        tempTimeUs = mFetcherInfos.valueAt(i).mFetcher->getSegmentStartTimeUs(number);
-        if (minStartTimeUs < 0) {
-            minStartTimeUs = tempTimeUs;
-        } else {
-            minStartTimeUs = minStartTimeUs <= tempTimeUs ? minStartTimeUs : tempTimeUs;
+        uint32_t streamMask = mFetcherInfos.valueAt(i).mFetcher->getStreamTypeMask();
+        if (streamMask & STREAMTYPE_SUBTITLES) {
+            continue;
+        }
+        if (type & streamMask) {
+            tempTimeUs = mFetcherInfos.valueAt(i).mFetcher->getSeekedTimeUs();
+            if (minStartTimeUs < 0) {
+                minStartTimeUs = tempTimeUs;
+            } else {
+                minStartTimeUs = minStartTimeUs <= tempTimeUs ? minStartTimeUs : tempTimeUs;
+            }
         }
     }
     return minStartTimeUs;
@@ -1633,7 +1662,10 @@ status_t AmLiveSession::onSeek(const sp<AMessage> &msg) {
     }
 
     if (!mReconfigurationInProgress) {
-        changeConfiguration(timeUs, mCurBandwidthIndex);
+        mContinuationCounter = mFetcherInfos.size();
+        for (size_t i = 0; i < mFetcherInfos.size(); ++i) {
+            mFetcherInfos.valueAt(i).mFetcher->seekAsync(timeUs);
+        }
         return OK;
     } else {
         return -EWOULDBLOCK;
