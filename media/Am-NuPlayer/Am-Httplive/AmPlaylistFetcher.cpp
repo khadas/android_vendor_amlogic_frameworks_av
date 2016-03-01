@@ -459,6 +459,11 @@ void AmPlaylistFetcher::seekAsync(int64_t seekTimeUs) {
     msg->post();
 }
 
+void AmPlaylistFetcher::startAfterSeekAsync() {
+    ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
+    postMonitorQueue();
+}
+
 void AmPlaylistFetcher::changeURI(AString uri) {
     mURI = uri;
 }
@@ -683,7 +688,6 @@ void AmPlaylistFetcher::onSeek(const sp<AMessage> &msg) {
     mSeekedTimeUs = mStartTimeUs;
     mSeqNumber = -1;
     mSeeked = true;
-    postMonitorQueue();
 }
 
 // Resume until we have reached the boundary timestamps listed in `msg`; when
@@ -1484,13 +1488,6 @@ void AmPlaylistFetcher::onDownloadNext() {
                 || tsBuffer->size() > 16) && mExtractor == NULL) {
             ALOGE("MPEG2 transport stream is not an even multiple of 188 "
                     "bytes in length.");
-            //notifyError(ERROR_MALFORMED);
-            //return;
-            if (mTSParser != NULL) {
-                mTSParser.clear();
-            }
-            ALOGE("ts packet not complete!");
-            queueDiscontinuity(AmATSParser::DISCONTINUITY_DATA_CORRUPTION, NULL);
         }
     }
 

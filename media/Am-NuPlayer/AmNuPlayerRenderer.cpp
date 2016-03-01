@@ -76,6 +76,7 @@ AmNuPlayer::Renderer::Renderer(
       mSampleRate(0),
       mQueueInitial(true),
       mRenderStarted(false),
+      mAudioEOS(false),
       mDrainAudioQueuePending(false),
       mDrainVideoQueuePending(false),
       mAudioQueueGeneration(0),
@@ -769,6 +770,7 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
                 mAudioSink->stop();
                 mNumFramesWritten = 0;
             }
+            mAudioEOS = true;
             return false;
         }
 
@@ -877,6 +879,10 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     }
 
     if (mVideoQueue.empty()) {
+        return;
+    }
+
+    if (mHasAudio && !mAudioEOS && mAudioQueue.empty()) {
         return;
     }
 
@@ -1249,10 +1255,15 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
     }
 
     if (mQueueInitial) {
-        if (mAudioQueue.empty() || mVideoQueue.empty()) {
-            // EOS signalled on either queue.
-            syncQueuesDone_l();
-            return;
+        if (mHasAudio && mHasVideo) {
+            if (mAudioQueue.empty() || mVideoQueue.empty()) {
+                // EOS signalled on either queue.
+                syncQueuesDone_l();
+                return;
+            }
+        } else {
+            mQueueInitial = false;
+            goto PASS;
         }
 
         sp<ABuffer> firstAudioBuffer = (*mAudioQueue.begin()).mBuffer;
@@ -1280,6 +1291,7 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
         }
     }
 
+PASS:
     postDrainAudioQueue_l();
     postDrainVideoQueue_l();
 }

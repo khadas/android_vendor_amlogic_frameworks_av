@@ -158,6 +158,7 @@ private:
 
     bool mQueueInitial;
     bool mRenderStarted;
+    bool mAudioEOS;
     bool mDrainAudioQueuePending;
     bool mDrainVideoQueuePending;
     int32_t mAudioQueueGeneration;

@@ -861,7 +861,7 @@ status_t AmATSParser::Stream::parsePES(ABitReader *br) {
                      "payload. (numBitsLeft = %zu, required = %u)",
                      br->numBitsLeft(), dataLength * 8);
 
-                return ERROR_MALFORMED;
+                return BAD_VALUE;
             }
 
             CHECK_GE(br->numBitsLeft(), dataLength * 8);

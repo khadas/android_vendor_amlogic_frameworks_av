@@ -141,8 +141,6 @@ status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         }
         mBuffering = false;
         sp<AMessage> notify = dupNotify();
-        notify->setInt32("what", kWhatBufferingEnd);
-        notify->post();
         notify->setInt32("what", kWhatResumeOnBufferingEnd);
         notify->post();
         ALOGI("HTTPLiveSource buffering end!\n");
@@ -154,8 +152,6 @@ status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         mBuffering = true;
         sp<AMessage> notify = dupNotify();
         notify->setInt32("what", kWhatPauseOnBufferingStart);
-        notify->post();
-        notify->setInt32("what", kWhatBufferingStart);
         notify->post();
         ALOGI("HTTPLiveSource buffering start!\n");
         return finalResult;

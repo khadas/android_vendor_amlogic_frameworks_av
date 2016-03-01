@@ -78,6 +78,8 @@ struct AmPlaylistFetcher : public AHandler {
 
     void seekAsync(int64_t seekTimeUs);
 
+    void startAfterSeekAsync();
+
     void changeURI(AString uri);
     uint32_t getStreamTypeMask();
     void setStreamTypeMask(uint32_t streamMask);

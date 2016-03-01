@@ -744,8 +744,9 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
                 {
                     if (--mContinuationCounter == 0) {
                         int64_t timeUs = 0;
+                        size_t i;
                         msg->findInt64("seekTimeUs", &timeUs);
-                        for (size_t i = 0; i < kMaxStreams; ++i) {
+                        for (i = 0; i < kMaxStreams; ++i) {
                             sp<AmAnotherPacketSource> discontinuityQueue;
                             sp<AMessage> extra = new AMessage;
                             extra->setInt64("timeUs", timeUs);
@@ -759,6 +760,10 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
                             mSeekReplyID.clear();
                             mSeekReply.clear();
                             ALOGI("seek complete!");
+                        }
+                        for (i = 0; i < mFetcherInfos.size(); i++) {
+                            const FetcherInfo info = mFetcherInfos.valueAt(i);
+                            info.mFetcher->startAfterSeekAsync();
                         }
                     }
                     break;
