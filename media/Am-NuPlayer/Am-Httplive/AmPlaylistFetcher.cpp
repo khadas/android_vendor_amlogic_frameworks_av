@@ -825,36 +825,7 @@ void AmPlaylistFetcher::onMonitorQueue() {
         }
     }
 
-#if 0
-    if (bufferedDataSize && mSegmentBytesPerSec) {
-        int64_t adjust_durationUs = (bufferedDataSize / (mSegmentBytesPerSec * 0.9)) * 1E6;
-        if (llabs(adjust_durationUs - bufferedDurationUs) > durationToBufferUs) {
-            ALOGI("buffered durationUs : %lld us not correct, rectify it!", bufferedDurationUs);
-            bufferedDurationUs = adjust_durationUs;
-        }
-    }
-#endif
-
     downloadMore = (bufferedDurationUs < durationToBufferUs);
-
-    if (audioBufferedDurationUs >= 0 && videoBufferedDurationUs >= 0
-        && llabs(audioBufferedDurationUs - videoBufferedDurationUs) > kMinBufferedDurationUs / 2) {
-        downloadMore = true;
-    }
-
-#if 0
-    // signal start if buffered up at least the target size
-    if (!mPrepared && bufferedDurationUs > targetDurationUs && downloadMore) {
-        mPrepared = true;
-
-        ALOGV("prepared, buffered=%" PRId64 " > %" PRId64 "",
-                bufferedDurationUs, targetDurationUs);
-        sp<AMessage> msg = mNotify->dup();
-        msg->setInt32("what", kWhatTemporarilyDoneFetching);
-        msg->setString("uri", mURI.c_str());
-        msg->post();
-    }
-#endif
 
     if (finalResult == OK && (downloadMore || !mPostPrepared)) {
         ALOGV("monitoring, buffered=%" PRId64 " < %" PRId64 "",
