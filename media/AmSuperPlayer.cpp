@@ -720,7 +720,9 @@ PASS_THROUGH:
         audio_all=PropIsEnable("media.amplayer.audio-all");
         if (audios>0 && audio_all )
             return AMLOGIC_PLAYER;
-
+       if (match_codecs(type,"dra")) {
+            return AMLOGIC_PLAYER;
+        }
         ret=property_get("media.amplayer.enable-acodecs",value,NULL);
         if (ret>0 && (match_codecs(type,value)|| (!match_codecs(type,"ogg") && url_valid && IS_LOCAL_HTTP(muri)))) {
             /*some local http(127.0.0.1) dont support switch http clinet,use old AmlogicPlayer*/
