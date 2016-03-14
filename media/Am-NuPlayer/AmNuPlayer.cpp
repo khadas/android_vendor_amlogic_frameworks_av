@@ -609,7 +609,7 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
             }
 
             int64_t durationUs;
-            if (mDriver != NULL && mSource->getDuration(&durationUs) == OK) {
+            if (mDriver != NULL && mSource != NULL && mSource->getDuration(&durationUs) == OK) {
                 sp<AmNuPlayerDriver> driver = mDriver.promote();
                 if (driver != NULL) {
                     driver->notifyDuration(durationUs);
@@ -1855,7 +1855,7 @@ void AmNuPlayer::onSourceNotify(const sp<AMessage> &msg) {
                 // notify duration first, so that it's definitely set when
                 // the app received the "prepare complete" callback.
                 int64_t durationUs;
-                if (mSource->getDuration(&durationUs) == OK) {
+                if (mSource != NULL && mSource->getDuration(&durationUs) == OK) {
                     driver->notifyDuration(durationUs);
                 }
                 driver->notifyPrepareCompleted(err);
