@@ -1311,7 +1311,6 @@ ssize_t AmLiveSession::fetchFile(
         curl_fetch_set_parent_pid(temp_cfc, mParentThreadId);
         if (curl_fetch_open(temp_cfc)) {
             ALOGE("curl fetch open failed! http code : %d", temp_cfc->http_code);
-            //curl_fetch_close(temp_cfc);
             *cfc = temp_cfc;
             temp_cfc = NULL;
             return ERROR_CANNOT_CONNECT;

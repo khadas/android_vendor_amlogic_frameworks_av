@@ -1159,25 +1159,25 @@ void AmPlaylistFetcher::onDownloadNext() {
     // just ts.
     if (mSeeked && mIsTs && mStartTimeUs > 0 && (mStreamTypeMask != AmLiveSession::STREAMTYPE_SUBTITLES)) {
         int64_t length = 0;
-        CURLcode rc;
-        CURL * c_handle = curl_easy_init();
-        if (c_handle) {
-            curl_easy_setopt(c_handle, CURLOPT_URL, uri.c_str());
-            curl_easy_setopt(c_handle, CURLOPT_NOBODY, 1L);
-            curl_easy_setopt(c_handle, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(c_handle, CURLOPT_HEADER, 0L);
-            if (!strncmp(uri.c_str(), "https", 5)) {
-                curl_easy_setopt(c_handle, CURLOPT_CAINFO, "/etc/curl/cacerts/ca-certificates.crt");
-            }
-            rc = curl_easy_perform(c_handle);
-            if (CURLE_OK == rc) {
-                double file_size = 0;
-                curl_easy_getinfo(c_handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &file_size);
-                length = (int64_t)file_size;
-            }
-            curl_easy_cleanup(c_handle);
-            c_handle = NULL;
+        CFContext * header_handle = curl_fetch_init(uri.c_str(),
+            "User-Agent: Mozilla/5.0 (Linux; Android 5.1.1) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/39.0.0.0 Safari/537.36\r\n",
+            C_FLAGS_NO_BODY);
+        if (!header_handle) {
+            ALOGE("open failed!");
+            goto FETCH;
         }
+        curl_fetch_register_interrupt_pid(header_handle, mSession->mInterruptCallback);
+        curl_fetch_set_parent_pid(header_handle, mSession->mParentThreadId);
+        if (curl_fetch_open(header_handle)) {
+            ALOGE("fetch open failed!");
+            curl_fetch_close(header_handle);
+            header_handle = NULL;
+            goto FETCH;
+        }
+        length = header_handle->filesize;
+        curl_fetch_close(header_handle);
+        header_handle = NULL;
+
         if (length > 0) {
             range_offset = (int64_t)(length * (mStartTimeUs / (double)(item_durationUs)));
             ALOGI("seek to seq num(%d), offset(%lld), length(%lld)", mSeqNumber, range_offset, length);
@@ -1186,6 +1186,8 @@ void AmPlaylistFetcher::onDownloadNext() {
             ALOGI("not support range, cannot seek by byte!");
         }
     }
+
+FETCH:
 
     do {
         bytesRead = mSession->fetchFile(
@@ -2180,12 +2182,27 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnits(
 
         meta->setInt32(kKeyIsADTS, true);
 
+        int32_t sampleRate;
+        int32_t numChannels;
+        CHECK(meta->findInt32(kKeySampleRate, &sampleRate));
+        CHECK(meta->findInt32(kKeyChannelCount, &numChannels));
+        ALOGI("[ID3] found AAC codec config (%d Hz, %d channels)", sampleRate, numChannels);
+
         packetSource->setFormat(meta);
     }
 
     int64_t numSamples = 0ll;
     int32_t sampleRate;
     CHECK(packetSource->getFormat()->findInt32(kKeySampleRate, &sampleRate));
+
+    if (!mPostPrepared) {
+        ALOGI("[ID3] source prepared!");
+        mPostPrepared = true;
+        sp<AMessage> msg = mNotify->dup();
+        msg->setInt32("what", kWhatTemporarilyDoneFetching);
+        msg->setString("uri", mURI.c_str());
+        msg->post();
+    }
 
     int64_t timeUs = (PTS * 100ll) / 9ll;
     if (!mFirstPTSValid) {

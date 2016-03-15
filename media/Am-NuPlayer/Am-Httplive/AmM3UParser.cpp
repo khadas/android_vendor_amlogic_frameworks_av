@@ -1308,6 +1308,8 @@ bool AmM3UParser::codecIsType(const AString &codec, const char *type) {
         case 'gif ':
         case 'h261':
         case 'h263':
+        case 'hev1':
+        case 'hvc1':
         case 'HD10':
         case 'jpeg':
         case 'M105':

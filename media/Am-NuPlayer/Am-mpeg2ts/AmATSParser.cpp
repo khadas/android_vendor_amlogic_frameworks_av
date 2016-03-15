@@ -1184,8 +1184,13 @@ status_t AmATSParser::parsePID(
     return OK;
 }
 
-void AmATSParser::parseAdaptationField(ABitReader *br, unsigned PID) {
+status_t AmATSParser::parseAdaptationField(ABitReader *br, unsigned PID) {
     unsigned adaptation_field_length = br->getBits(8);
+
+    if (br->numBitsLeft() < adaptation_field_length * 8) {
+        ALOGE("[%s:%d] no enough space!", __FUNCTION__, __LINE__);
+        return BAD_VALUE;
+    }
 
     if (adaptation_field_length > 0) {
         unsigned discontinuity_indicator = br->getBits(1);
@@ -1234,6 +1239,8 @@ void AmATSParser::parseAdaptationField(ABitReader *br, unsigned PID) {
 
         br->skipBits(adaptation_field_length * 8 - numBitsRead);
     }
+
+    return OK;
 }
 
 status_t AmATSParser::parseTS(ABitReader *br) {
@@ -1268,11 +1275,15 @@ status_t AmATSParser::parseTS(ABitReader *br) {
 
     // ALOGI("PID = 0x%04x, continuity_counter = %u", PID, continuity_counter);
 
+    status_t err = OK;
+
     if (adaptation_field_control == 2 || adaptation_field_control == 3) {
-        parseAdaptationField(br, PID);
+        err = parseAdaptationField(br, PID);
     }
 
-    status_t err = OK;
+    if (err == BAD_VALUE) {
+        return err;
+    }
 
     if (adaptation_field_control == 1 || adaptation_field_control == 3) {
         err = parsePID(

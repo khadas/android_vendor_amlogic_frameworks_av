@@ -496,6 +496,8 @@ status_t AmNuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
         return ret;
     }
 
+    ALOGI("invoke methodId(%d)", methodId);
+
     switch (methodId) {
         case INVOKE_ID_SET_VIDEO_SCALING_MODE:
         {

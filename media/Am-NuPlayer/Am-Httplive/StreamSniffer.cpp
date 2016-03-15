@@ -58,9 +58,21 @@ int32_t StreamSniffer::isBOMHeader(ABitReader * br) {
 status_t StreamSniffer::tryHLSParser(ABitReader * br) {
     char line[1024] = {0};
     char * ptr = line;
+    bool sniffHeader = true;
     int32_t tp;
     for (;;) {
-        tp = isBOMHeader(br);
+        if (sniffHeader) {
+            if (br->numBitsLeft() < 32) {
+                break;
+            }
+            tp = isBOMHeader(br);
+            sniffHeader = false;
+        } else {
+            if (br->numBitsLeft() < 8) {
+                break;
+            }
+            tp = br->getBits(8);
+        }
         if (tp < 0) {
             return UNKNOWN_ERROR;
         }
