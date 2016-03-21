@@ -214,7 +214,10 @@ AmlogicPlayer::AmlogicPlayer() :
     mDelaySendBufferingInfo_s = (int)PropGetFloat("media.amplayer.delaybuffering.s",0.0);
     DtshdApreTotal=0;
     DtsHdStreamType=0;
-    dts_dec_control=0;
+    DtsHdMulAssetHint=0;
+    DtsHdHpsHint=0;
+    AudioDualMonoNeed=0;
+    AudioDualMonoSetOK=0;
 
 }
 
@@ -965,33 +968,104 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
 }
 
 
-#define AUDIO_PRESENTATION_MASK_TOTAL   0x00003c00 //bit 10-bit13
-#define AUDIO_PRESENTATION_MASK_USERSET 0x0003c000 //bit 14-18
-#define STREM_TYPE_MASK                 0x000c0000 //bit19 -bit20
 
-static void DtshdSetAPreID(unsigned val,unsigned *dts_dec_control )
+#define DTSM6_EXCHANGE_INFO_NODE "/sys/class/amaudio/debug"
+static void dtsm6_get_exchange_info(int *streamtype,int *APreCnt,int *APreSel,int *ApreAssetSel,int32_t *ApresAssetsArray,int *MulAssetHint,int *HPs_hint)
 {
-   *dts_dec_control &= ~AUDIO_PRESENTATION_MASK_USERSET;
-   *dts_dec_control |= ((val&0x0000000f)<<14);
-   ALOGI("[%s %d]ApreSelect/%d dts_dec_control/0x%x\n",__FUNCTION__,__LINE__,val,*dts_dec_control);
-   set_sys_int("/sys/class/audiodsp/dts_dec_control",*dts_dec_control);
+    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes=0,i;
+    if (fd >= 0)
+    {
+        uint8_t ubuf8[256]={0};
+        bytes=read(fd,ubuf8,256);
+
+        if (streamtype != NULL ) {
+            uint8_t *pStreamType=(uint8_t *)strstr((const char*)ubuf8,"StreamType");
+            if (pStreamType != NULL) {
+               pStreamType+=10;
+               *streamtype=atoi((const char*)pStreamType);
+            }
+        }
+
+        if (APreCnt != NULL) {
+            uint8_t *pApreCnt=(uint8_t *)strstr((const char*)ubuf8,"ApreCnt");
+            if (pApreCnt != NULL) {
+               pApreCnt+=7;
+               *APreCnt=atoi((const char*)pApreCnt);
+            }
+        }
+
+        if (APreSel != NULL) {
+            uint8_t *pApreSel=(uint8_t *)strstr((const char*)ubuf8,"ApreSel");
+            if (pApreSel != NULL) {
+               pApreSel+=7;
+               *APreSel=atoi((const char*)pApreSel);
+            }
+        }
+
+        if (ApreAssetSel != NULL) {
+            uint8_t *pApreAssetSel=(uint8_t *)strstr((const char*)ubuf8,"ApreAssetSel");
+            if (pApreAssetSel != NULL) {
+                pApreAssetSel+=12;
+                *ApreAssetSel=atoi((const char*)pApreAssetSel);
+            }
+        }
+
+        if (ApresAssetsArray != NULL && APreCnt != NULL) {
+            uint8_t *pApresAssetsArray=(uint8_t *)strstr((const char*)ubuf8,"ApresAssetsArray");
+            if (pApresAssetsArray != NULL) {
+               pApresAssetsArray+=16;
+               for (i=0;i<*APreCnt;i++) {
+                 ApresAssetsArray[i]=pApresAssetsArray[i];
+                 LOGI("[%s %d]ApresAssetsArray[%d]/%d",__FUNCTION__,__LINE__,i,ApresAssetsArray[i]);
+               }
+            }
+        }
+        if (MulAssetHint != NULL) {
+            uint8_t *pMulAssetHint=(uint8_t *)strstr((const char*)ubuf8,"MulAssetHint");
+            if (pMulAssetHint != NULL) {
+               pMulAssetHint+=12;
+               *MulAssetHint=atoi((const char*)pMulAssetHint);
+            }
+        }
+        if (HPs_hint != NULL)
+        {
+            uint8_t *phps_hint=(uint8_t *)strstr((const char*)ubuf8,"HPSHint");
+            if (phps_hint != NULL) {
+               phps_hint += 7;
+               *HPs_hint=atoi((const char*)phps_hint);
+            }
+        }
+        close(fd);
+    }else{
+        LOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
+       if (streamtype != NULL)  *streamtype=0;
+       if (APreCnt != NULL)     *APreCnt=0;
+       if (APreSel != NULL)     *APreSel=0;
+       if (ApreAssetSel != NULL)*ApreAssetSel=0;
+       if (HPs_hint != NULL)    *HPs_hint=0;
+       if (ApresAssetsArray != NULL && APreCnt != NULL) memset(ApresAssetsArray,0,*APreCnt);
+    }
 }
 
-
-static int DtshdUpdateStreamInfo(int *pstream_type,int *pTotalApre,unsigned *pdts_dec_control)
+static void dtsm6_set_exchange_info(int *APreSel,int *ApreAssetSel)
 {
-    int totalApre=0;
-    int StreamTpye=0;
-    unsigned  dts_dec_control=get_sysfs_int("/sys/class/audiodsp/dts_dec_control");
-
-    *pdts_dec_control=dts_dec_control;
-    StreamTpye = dts_dec_control&STREM_TYPE_MASK;
-    StreamTpye=(StreamTpye>>18)&0x3;
-    totalApre= dts_dec_control&AUDIO_PRESENTATION_MASK_TOTAL;
-    totalApre= (totalApre>>10)& 0xffff;
-    *pstream_type=StreamTpye;
-    *pTotalApre=totalApre;
-     return 0;
+    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes,pos=0;
+    if (fd >= 0) {
+       char ubuf8[128]={0};
+       if (APreSel != NULL) {
+           bytes=sprintf(ubuf8,"dtsm6_apre_sel_set%d",*APreSel);
+           write(fd, ubuf8, bytes);
+       }
+       if (ApreAssetSel != NULL) {
+           bytes=sprintf(ubuf8,"dtsm6_apre_assets_sel_set%d",*ApreAssetSel);
+           write(fd, ubuf8, bytes);
+       }
+       close(fd);
+    }else{
+       LOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
+    }
 }
 int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
 {
@@ -1196,6 +1270,9 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
     if(info->status == PLAYER_START && mSetVolumeFlag == 1){
         audio_set_lrvolume(mPlayer_id, mLeftVolume, mRightVolume);
         mSetVolumeFlag = 0;
+    }
+    if (AudioDualMonoNeed && AudioDualMonoSetOK != 1) {
+        AudioDualMonoSetOK = !audio_lr_mix_set(mPlayer_id, 1);
     }
     return 0;
 }
@@ -2798,12 +2875,15 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
     //  break;
     case KEY_PARAMETER_AML_PLAYER_SET_DTS_ASSET:
         {
-            int ApreID =0;
+            int ApreID =0,ApreAssetSel;
             const String16 uri16 = request.readString16();
             String8 keyStr = String8(uri16);
             LOGI("setParameter %d=[%s]\n", key, keyStr.string());
-            ApreID = getintfromString8(keyStr, "dtsAsset: ");
-            DtshdSetAPreID(ApreID,&dts_dec_control);
+            ApreID = getintfromString8(keyStr, "dtsApre:");
+            ApreAssetSel=getintfromString8(keyStr, "dtsAsset:");
+            if (ApreID >= 0 && ApreAssetSel >= 0) {
+                dtsm6_set_exchange_info(&ApreID,&ApreAssetSel);
+            }
         }
         break;
     case KEY_PARAMETER_AML_PLAYER_SWITCH_VIDEO_TRACK:
@@ -2857,10 +2937,19 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
             LOGI("setParameter %d=[%s]\n", key, keyStr.string());
             if (!keyStr.compare(String8("lmono"))) {
                 audio_left_mono(mPlayer_id);
+                audio_lr_mix_set(mPlayer_id,0);
+                AudioDualMonoNeed=0;
             } else if (!keyStr.compare(String8("rmono"))) {
                 audio_right_mono(mPlayer_id);
+                audio_lr_mix_set(mPlayer_id,0);
+                AudioDualMonoNeed=0;
             } else if (!keyStr.compare(String8("stereo"))) {
                 audio_stereo(mPlayer_id);
+                audio_lr_mix_set(mPlayer_id,0);
+                AudioDualMonoNeed=0;
+            }else if(!keyStr.compare(String8("lrmix"))){
+                AudioDualMonoSetOK=!audio_lr_mix_set(mPlayer_id,1);
+                AudioDualMonoNeed =1;
             }
         }
         break;
@@ -2985,8 +3074,16 @@ status_t    AmlogicPlayer::getParameter(int key, Parcel *reply)
         return OK;
     }
     else if(key == KEY_PARAMETER_AML_PLAYER_GET_DTS_ASSET_TOTAL) {
-        if(!strncmp(mStrCurrentAudioCodec,"DTS",3))
+        if (mStrCurrentAudioCodec != NULL && !strncmp(mStrCurrentAudioCodec,"DTS",3)) {
+            int32_t ApresAssetsArray[32]={0};
+            dtsm6_get_exchange_info(NULL,&DtshdApreTotal,NULL,NULL,ApresAssetsArray,NULL,NULL);
             reply->writeInt32(DtshdApreTotal);
+            reply->writeInt32Array(32,ApresAssetsArray);
+        }else{
+            int32_t ApresAssetsArray[32]={0};
+            reply->writeInt32(0);
+            reply->writeInt32Array(32,ApresAssetsArray);
+        }
         return OK;
     }
     
@@ -3056,7 +3153,9 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     if(mStrCurrentAudioCodec!=NULL &&!strncmp(mStrCurrentAudioCodec,"DTS",3)){
         int stream_type=0;
         int TotalApre=0;
-        DtshdUpdateStreamInfo(&stream_type,&TotalApre,&dts_dec_control);
+        int MulAssetHint=0;
+        int HPS_hint=0;
+        dtsm6_get_exchange_info(&stream_type,&TotalApre,NULL,NULL,NULL,&MulAssetHint,&HPS_hint);
         if(TotalApre!=DtshdApreTotal && TotalApre>0 )
         {
             LOGI("[%s %d]TotalApre changed:%d-->%d\n",__FUNCTION__,__LINE__,DtshdApreTotal,TotalApre);
@@ -3071,6 +3170,16 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
              else if(DtsHdStreamType==0x2)
                 sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_HD_MASTER_AUDIO);
            
+        }
+        if (DtsHdMulAssetHint != MulAssetHint && MulAssetHint) {//TOTO:xiangliang.wang
+            LOGI("[%s %d]MulAssetHint event send\n",__FUNCTION__,__LINE__);
+            sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_MULASSETHINT);
+            DtsHdMulAssetHint=MulAssetHint;
+        }
+
+        if (HPS_hint && DtsHdHpsHint == 0) {
+            sendEvent(MEDIA_INFO,MEDIA_INFO_AMLOGIC_SHOW_DTS_HPS_NOTSUPPORT);
+            DtsHdHpsHint=1;
         }
     }
     LOGV("CurrentPosition=%dmS,mStreamTime=%d\n", *position, mStreamTime);

@@ -268,7 +268,10 @@ private:
     int mDelaySendBufferingInfo_s;
     int DtshdApreTotal;
     int DtsHdStreamType;
-    unsigned dts_dec_control;
+    int DtsHdMulAssetHint;
+    int DtsHdHpsHint;
+    int AudioDualMonoNeed;
+    int AudioDualMonoSetOK;
     bool mSeekdone;
     int mLastPlaytime;
     int64_t mLastPosition;
