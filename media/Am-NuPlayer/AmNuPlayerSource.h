@@ -54,6 +54,7 @@ struct AmNuPlayer::Source : public AHandler {
         kWhatCacheStats,
         kWhatSubtitleData,
         kWhatTimedTextData,
+        kWhatTimedMetaData,
         kWhatQueueDecoderShutdown,
         kWhatDrmNoLicense,
         kWhatInstantiateSecureDecoders,

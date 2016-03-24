@@ -51,6 +51,7 @@ struct AmPlaylistFetcher : public AHandler {
         kWhatPreparationFailed,
         kWhatStartedAt,
         kWhatCodecSpecificData,
+        kWhatMetadataDetected,
     };
 
     AmPlaylistFetcher(
@@ -66,6 +67,7 @@ struct AmPlaylistFetcher : public AHandler {
             const sp<AmAnotherPacketSource> &audioSource,
             const sp<AmAnotherPacketSource> &videoSource,
             const sp<AmAnotherPacketSource> &subtitleSource,
+            const sp<AmAnotherPacketSource> &metadataSource,
             int64_t startTimeUs = -1ll,         // starting timestamps
             int64_t segmentStartTimeUs = -1ll, // starting position within playlist
             // startTimeUs!=segmentStartTimeUs only when playlist is live
@@ -201,6 +203,7 @@ private:
     static const size_t kFrameNum;
 
     bool mFirstPTSValid;
+    bool mHasMetadata;
     uint64_t mFirstPTS;
     int64_t mFirstTimeUs;
     int64_t mAbsoluteTimeAnchorUs;

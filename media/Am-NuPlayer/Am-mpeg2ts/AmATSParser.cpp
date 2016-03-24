@@ -56,7 +56,7 @@ struct AmATSParser::Program : public RefBase {
     bool parsePID(
             unsigned pid, unsigned continuity_counter,
             unsigned payload_unit_start_indicator,
-            ABitReader *br, status_t *err);
+            ABitReader *br, status_t *err, unsigned LastPESLength);
 
     void signalDiscontinuity(
             DiscontinuityType type, const sp<AMessage> &extra);
@@ -113,7 +113,7 @@ struct AmATSParser::Stream : public RefBase {
     status_t parse(
             unsigned continuity_counter,
             unsigned payload_unit_start_indicator,
-            ABitReader *br);
+            ABitReader *br, unsigned LastPESLength);
 
     void signalDiscontinuity(
             DiscontinuityType type, const sp<AMessage> &extra);
@@ -124,6 +124,7 @@ struct AmATSParser::Stream : public RefBase {
 
     bool isAudio() const;
     bool isVideo() const;
+    bool isMeta() const;
 
 protected:
     virtual ~Stream();
@@ -134,6 +135,7 @@ private:
     unsigned mStreamType;
     unsigned mPCR_PID;
     int32_t mExpectedContinuityCounter;
+    unsigned mLastPESLength;
 
     sp<ABuffer> mBuffer;
     sp<AmAnotherPacketSource> mSource;
@@ -204,7 +206,7 @@ bool AmATSParser::Program::parsePSISection(
 bool AmATSParser::Program::parsePID(
         unsigned pid, unsigned continuity_counter,
         unsigned payload_unit_start_indicator,
-        ABitReader *br, status_t *err) {
+        ABitReader *br, status_t *err, unsigned LastPESLength) {
     *err = OK;
 
     ssize_t index = mStreams.indexOfKey(pid);
@@ -213,7 +215,7 @@ bool AmATSParser::Program::parsePID(
     }
 
     *err = mStreams.editValueAt(index)->parse(
-            continuity_counter, payload_unit_start_indicator, br);
+            continuity_counter, payload_unit_start_indicator, br, LastPESLength);
 
     return true;
 }
@@ -485,6 +487,8 @@ bool AmATSParser::Program::hasSource(SourceType type) const {
             return true;
         } else if (type == VIDEO && stream->isVideo()) {
             return true;
+        } else if (type == META && stream->isMeta()) {
+            return true;
         }
     }
 
@@ -529,6 +533,7 @@ AmATSParser::Stream::Stream(
       mStreamType(streamType),
       mPCR_PID(PCR_PID),
       mExpectedContinuityCounter(-1),
+      mLastPESLength(0),
       mPayloadStarted(false),
       mPrevPTS(0),
       mQueue(NULL) {
@@ -588,6 +593,10 @@ AmATSParser::Stream::Stream(
             mQueue = new AmElementaryStreamQueue(
                     AmElementaryStreamQueue::UNKNOWN_MODE);
             break;
+        case STREAMTYPE_METADATA:
+            mQueue = new AmElementaryStreamQueue(
+                    AmElementaryStreamQueue::METADATA);
+            break;
 
         default:
             break;
@@ -608,9 +617,13 @@ AmATSParser::Stream::~Stream() {
 
 status_t AmATSParser::Stream::parse(
         unsigned continuity_counter,
-        unsigned payload_unit_start_indicator, ABitReader *br) {
+        unsigned payload_unit_start_indicator, ABitReader *br, unsigned LastPESLength) {
     if (mQueue == NULL) {
         return OK;
+    }
+
+    if (LastPESLength) {
+        mLastPESLength = LastPESLength;
     }
 
     if (mExpectedContinuityCounter >= 0
@@ -677,6 +690,14 @@ status_t AmATSParser::Stream::parse(
     memcpy(mBuffer->data() + mBuffer->size(), br->data(), payloadSizeBits / 8);
     mBuffer->setRange(0, mBuffer->size() + payloadSizeBits / 8);
 
+    if (mLastPESLength && mBuffer->size() == (mLastPESLength + 6)) { // need to flush.
+        ALOGV("flush last pes packet, length(%d), buffer size(%d)", mLastPESLength, mBuffer->size());
+        status_t err = flush();
+        if (err != OK) {
+            return err;
+        }
+    }
+
     return OK;
 }
 
@@ -737,6 +758,13 @@ bool AmATSParser::Stream::isAudio() const {
         default:
             return false;
     }
+}
+
+bool AmATSParser::Stream::isMeta() const {
+    if (mStreamType == STREAMTYPE_METADATA) {
+        return true;
+    }
+    return false;
 }
 
 void AmATSParser::Stream::signalDiscontinuity(
@@ -1035,6 +1063,14 @@ sp<MediaSource> AmATSParser::Stream::getSource(SourceType type) {
             break;
         }
 
+        case META:
+        {
+            if (isMeta()) {
+                return mSource;
+            }
+            break;
+        }
+
         default:
             break;
     }
@@ -1181,7 +1217,7 @@ void AmATSParser::parseProgramAssociationTable(ABitReader *br) {
 status_t AmATSParser::parsePID(
         ABitReader *br, unsigned PID,
         unsigned continuity_counter,
-        unsigned payload_unit_start_indicator) {
+        unsigned payload_unit_start_indicator, unsigned LastPESLength) {
     ssize_t sectionIndex = mPSISections.indexOfKey(PID);
 
     if (sectionIndex >= 0) {
@@ -1246,7 +1282,7 @@ status_t AmATSParser::parsePID(
         status_t err;
         if (mPrograms.editItemAt(i)->parsePID(
                     PID, continuity_counter, payload_unit_start_indicator,
-                    br, &err)) {
+                    br, &err, LastPESLength)) {
             if (err != OK) {
                 return err;
             }
@@ -1364,9 +1400,14 @@ status_t AmATSParser::parseTS(ABitReader *br) {
         return err;
     }
 
+    unsigned LastPESLength = 0;
+    if (payload_unit_start_indicator) {
+        LastPESLength = peekPESLength(br);
+    }
+
     if (adaptation_field_control == 1 || adaptation_field_control == 3) {
         err = parsePID(
-                br, PID, continuity_counter, payload_unit_start_indicator);
+                br, PID, continuity_counter, payload_unit_start_indicator, LastPESLength);
     }
 
     ++mNumTSPacketsParsed;
@@ -1436,6 +1477,16 @@ void AmATSParser::updatePCR(
 
         ALOGV("transportRate = %.2f bytes/sec", transportRate);
     }
+}
+
+unsigned AmATSParser::peekPESLength(ABitReader * br) {
+    unsigned packet_startcode_prefix = br->getBits(24);
+    unsigned stream_id = br->getBits(8);
+    unsigned PES_packet_length = br->getBits(16);
+    br->putBits(PES_packet_length, 16);
+    br->putBits(stream_id, 8);
+    br->putBits(packet_startcode_prefix, 24);
+    return PES_packet_length;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

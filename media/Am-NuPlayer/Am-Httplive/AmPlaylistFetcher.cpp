@@ -17,6 +17,7 @@
 #define LOG_NDEBUG 0
 #define LOG_TAG "NU-AmPlaylistFetcher"
 #include <utils/Log.h>
+#include <utils/misc.h>
 
 #include "AmPlaylistFetcher.h"
 
@@ -115,6 +116,7 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mVideoSource(NULL),
       mEnableFrameRate(false),
       mFirstPTSValid(false),
+      mHasMetadata(false),
       mAbsoluteTimeAnchorUs(0ll),
       mVideoBuffer(new AmAnotherPacketSource(NULL)) {
     memset(mPlaylistHash, 0, sizeof(mPlaylistHash));
@@ -410,6 +412,7 @@ void AmPlaylistFetcher::startAsync(
         const sp<AmAnotherPacketSource> &audioSource,
         const sp<AmAnotherPacketSource> &videoSource,
         const sp<AmAnotherPacketSource> &subtitleSource,
+        const sp<AmAnotherPacketSource> &metadataSource,
         int64_t startTimeUs,
         int64_t segmentStartTimeUs,
         int32_t startDiscontinuitySeq,
@@ -431,6 +434,11 @@ void AmPlaylistFetcher::startAsync(
     if (subtitleSource != NULL) {
         msg->setPointer("subtitleSource", subtitleSource.get());
         streamTypeMask |= AmLiveSession::STREAMTYPE_SUBTITLES;
+    }
+
+    if (metadataSource != NULL) {
+        msg->setPointer("metadataSource", metadataSource.get());
+        // metadataSource does not affect streamTypeMask.
     }
 
     msg->setInt32("streamTypeMask", streamTypeMask);
@@ -610,6 +618,15 @@ status_t AmPlaylistFetcher::onStart(const sp<AMessage> &msg) {
                 static_cast<AmAnotherPacketSource *>(ptr));
     }
 
+    void *ptr;
+    // metadataSource is not part of streamTypeMask
+    if ((streamTypeMask & (AmLiveSession::STREAMTYPE_AUDIO | AmLiveSession::STREAMTYPE_VIDEO))
+            && msg->findPointer("metadataSource", &ptr)) {
+        mPacketSources.add(
+                AmLiveSession::STREAMTYPE_METADATA,
+                static_cast<AmAnotherPacketSource *>(ptr));
+    }
+
     mStreamTypeMask = streamTypeMask;
 
     mSegmentStartTimeUs = segmentStartTimeUs;
@@ -670,9 +687,13 @@ void AmPlaylistFetcher::onSeek(const sp<AMessage> &msg) {
             case AmLiveSession::STREAMTYPE_SUBTITLES:
                 type = AmATSParser::NONE;
                 break;
+            case AmLiveSession::STREAMTYPE_METADATA:
+                type = AmATSParser::META;
+                break;
             default:
                 TRESPASS();
             }
+            // TODO: maybe need to fix for timed ID3.
             if (type > AmATSParser::NONE) {
                 sp<AmAnotherPacketSource> source = static_cast<AmAnotherPacketSource *>(mTSParser->getSource(type).get());
                 if (source != NULL) {
@@ -1406,11 +1427,11 @@ FETCH:
         if (mIsTs) {
             // If we don't see a stream in the program table after fetching a full ts segment
             // mark it as nonexistent.
-            const size_t kNumTypes = AmATSParser::NUM_SOURCE_TYPES;
-            AmATSParser::SourceType srcTypes[kNumTypes] =
-                    { AmATSParser::VIDEO, AmATSParser::AUDIO };
-            AmLiveSession::StreamType streamTypes[kNumTypes] =
-                    { AmLiveSession::STREAMTYPE_VIDEO, AmLiveSession::STREAMTYPE_AUDIO };
+            AmATSParser::SourceType srcTypes[] =
+                { AmATSParser::VIDEO, AmATSParser::AUDIO };
+            AmLiveSession::StreamType streamTypes[] =
+                { AmLiveSession::STREAMTYPE_VIDEO, AmLiveSession::STREAMTYPE_AUDIO };
+            const size_t kNumTypes = NELEM(srcTypes);
 
             for (size_t i = 0; i < kNumTypes; i++) {
                 AmATSParser::SourceType srcType = srcTypes[i];
@@ -1718,6 +1739,11 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
                 source = mAudioSource;
                 break;
 
+            case AmLiveSession::STREAMTYPE_METADATA:
+                type = AmATSParser::META;
+                key = "timeUsMetadata";
+                break;
+
             case AmLiveSession::STREAMTYPE_SUBTITLES:
             {
                 ALOGE("MPEG2 Transport streams do not contain subtitles.");
@@ -1731,6 +1757,17 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
 
         if (mExtractor == NULL) {
             source = static_cast<AmAnotherPacketSource *>(mTSParser->getSource(type).get());
+            if (stream == AmLiveSession::STREAMTYPE_METADATA && mTSParser->hasSource(type) && !mHasMetadata) {
+                ALOGI("[timed_id3] metadata detected!");
+                mHasMetadata = true;
+                sp<AMessage> notify = mNotify->dup();
+                notify->setInt32("what", kWhatMetadataDetected);
+                notify->post();
+            }
+        }
+
+        if (stream == AmLiveSession::STREAMTYPE_METADATA) {
+            source_count++;
         }
 
         if (source == NULL) {
@@ -1741,7 +1778,7 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
             packetSource->setFormat(source->getFormat());
         }
 
-        if (source->getFormat() != NULL) {
+        if (source->getFormat() != NULL && stream != AmLiveSession::STREAMTYPE_METADATA) {
             source_count++;
         }
 

@@ -20,6 +20,7 @@
 
 #include "AmNuPlayer.h"
 #include "AmNuPlayerSource.h"
+#include "AmLiveSession.h"
 
 namespace android {
 
@@ -62,6 +63,7 @@ private:
     enum {
         kWhatSessionNotify,
         kWhatFetchSubtitleData,
+        kWhatFetchMetaData,
     };
 
     sp<IMediaHTTPService> mHTTPService;
@@ -74,12 +76,18 @@ private:
     sp<ALooper> mLiveLooper;
     sp<AmLiveSession> mLiveSession;
     int32_t mFetchSubtitleDataGeneration;
+    int32_t mFetchMetaDataGeneration;
+    bool mHasMetadata;
+    bool mMetadataSelected;
     bool mHasSub;
 
     interruptcallback mInterruptCallback;
     android_thread_id_t mParentThreadId;
 
     void onSessionNotify(const sp<AMessage> &msg);
+    void pollForRawData(
+            const sp<AMessage> &msg, int32_t currentGeneration,
+            AmLiveSession::StreamType fetchType, int32_t pushWhat);
 
     DISALLOW_EVIL_CONSTRUCTORS(HTTPLiveSource);
 };

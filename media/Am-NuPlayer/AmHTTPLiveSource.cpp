@@ -22,7 +22,6 @@
 
 #include "AmAnotherPacketSource.h"
 #include "AmLiveDataSource.h"
-#include "AmLiveSession.h"
 
 #include <media/IMediaHTTPService.h>
 #include <media/stagefright/foundation/ABuffer.h>
@@ -30,6 +29,7 @@
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MetaData.h>
+#include <media/stagefright/MediaDefs.h>
 
 namespace android {
 
@@ -47,6 +47,9 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
       mFinalResult(OK),
       mOffset(0),
       mFetchSubtitleDataGeneration(0),
+      mFetchMetaDataGeneration(0),
+      mHasMetadata(false),
+      mMetadataSelected(false),
       mHasSub(false),
       mInterruptCallback(pfunc) {
     if (headers) {
@@ -178,25 +181,68 @@ sp<AMessage> AmNuPlayer::HTTPLiveSource::getTrackInfo(size_t trackIndex) const {
 ssize_t AmNuPlayer::HTTPLiveSource::getSelectedTrack(media_track_type type) const {
     if (mLiveSession == NULL) {
         return -1;
+    } else if (type == MEDIA_TRACK_TYPE_METADATA) {
+        // MEDIA_TRACK_TYPE_METADATA is always last track
+        // mMetadataSelected can only be true when mHasMetadata is true
+        return mMetadataSelected ? (mLiveSession->getTrackCount() - 1) : -1;
     } else {
         return mLiveSession->getSelectedTrack(type);
     }
 }
 
 status_t AmNuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select, int64_t /*timeUs*/) {
-    status_t err = mLiveSession->selectTrack(trackIndex, select);
+    if (mLiveSession == NULL) {
+        return INVALID_OPERATION;
+    }
+
+    ALOGI("%s track(%d)", select ? "select" : "unselect", trackIndex);
+    status_t err = INVALID_OPERATION;
+    bool postFetchMsg = false;
+    if (!mHasMetadata || trackIndex != mLiveSession->getTrackCount() - 1) {
+        err = mLiveSession->selectTrack(trackIndex, select);
+        postFetchMsg = select;
+    } else {
+        // metadata track; i.e. (mHasMetadata && trackIndex == mLiveSession->getTrackCount() - 1)
+        if (mMetadataSelected && !select) {
+            err = OK;
+        } else if (!mMetadataSelected && select) {
+            postFetchMsg = true;
+            err = OK;
+        } else {
+            err = BAD_VALUE; // behave as LiveSession::selectTrack
+        }
+
+        mMetadataSelected = select;
+    }
 
     if (err == OK) {
-        int32_t trackType;
+        int32_t trackType, generation;
+        bool isSub = false, isMetaData = false;
         sp<AMessage> format = mLiveSession->getTrackInfo(trackIndex);
-        if (format != NULL && format->findInt32("type", &trackType)
-                && trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
-            mFetchSubtitleDataGeneration++;
-            if (select) {
+        if (format != NULL && format->findInt32("type", &trackType)) {
+            if (trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
+                isSub = true;
+                mFetchSubtitleDataGeneration++;
+                generation = mFetchSubtitleDataGeneration;
+            } else if (trackType == MEDIA_TRACK_TYPE_METADATA) {
+                isMetaData = true;
+                mFetchMetaDataGeneration++;
+                generation = mFetchMetaDataGeneration;
+            }
+        }
+        if (postFetchMsg) {
+            if (isSub) {
+                ALOGI("subtitle selected!");
                 mHasSub = true;
                 mLiveSession->setSubTrackIndex(trackIndex);
                 sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
-                msg->setInt32("generation", mFetchSubtitleDataGeneration);
+                msg->setInt32("generation", generation);
+                msg->post();
+            } else if (isMetaData) {
+                ALOGI("metadata selected!");
+                mHasSub = false;
+                sp<AMessage> msg = new AMessage(kWhatFetchMetaData, this);
+                msg->setInt32("generation", generation);
                 msg->post();
             } else {
                 mHasSub = false;
@@ -219,6 +265,48 @@ status_t AmNuPlayer::HTTPLiveSource::seekTo(int64_t seekTimeUs) {
     return mLiveSession->seekTo(seekTimeUs);
 }
 
+void AmNuPlayer::HTTPLiveSource::pollForRawData(
+        const sp<AMessage> &msg, int32_t currentGeneration,
+        AmLiveSession::StreamType fetchType, int32_t pushWhat) {
+    int32_t generation;
+    CHECK(msg->findInt32("generation", &generation));
+
+    if (generation != currentGeneration) {
+        return;
+    }
+
+    sp<ABuffer> buffer;
+    while (mLiveSession->dequeueAccessUnit(fetchType, &buffer) == OK) {
+
+        sp<AMessage> notify = dupNotify();
+        notify->setInt32("what", pushWhat);
+        notify->setBuffer("buffer", buffer);
+
+        int64_t timeUs, baseUs, delayUs;
+        CHECK(buffer->meta()->findInt64("baseUs", &baseUs));
+        CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
+        delayUs = baseUs + timeUs - ALooper::GetNowUs();
+
+        if (fetchType == AmLiveSession::STREAMTYPE_SUBTITLES) {
+            notify->post();
+            msg->post(delayUs > 0ll ? delayUs : 0ll);
+            return;
+        } else if (fetchType == AmLiveSession::STREAMTYPE_METADATA) {
+            if (delayUs < -1000000ll) { // 1 second
+                continue;
+            }
+            notify->post();
+            // push all currently available metadata buffers in each invocation of pollForRawData
+            // continue;
+        } else {
+            TRESPASS();
+        }
+    }
+
+    // try again in 1 second
+    msg->post(1000000ll);
+}
+
 void AmNuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
     switch (msg->what()) {
         case kWhatSessionNotify:
@@ -229,33 +317,24 @@ void AmNuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
 
         case kWhatFetchSubtitleData:
         {
-            int32_t generation;
-            CHECK(msg->findInt32("generation", &generation));
+            pollForRawData(
+                    msg, mFetchSubtitleDataGeneration,
+                    /* fetch */ AmLiveSession::STREAMTYPE_SUBTITLES,
+                    /* push */ kWhatSubtitleData);
 
-            if (generation != mFetchSubtitleDataGeneration) {
-                // stale
+            break;
+        }
+
+        case kWhatFetchMetaData:
+        {
+            if (!mMetadataSelected) {
                 break;
             }
 
-            sp<ABuffer> buffer;
-            if (mLiveSession->dequeueAccessUnit(
-                    AmLiveSession::STREAMTYPE_SUBTITLES, &buffer) == OK) {
-                sp<AMessage> notify = dupNotify();
-                notify->setInt32("what", kWhatSubtitleData);
-                notify->setBuffer("buffer", buffer);
-                notify->post();
-
-                int64_t timeUs, baseUs, durationUs, delayUs;
-                CHECK(buffer->meta()->findInt64("baseUs", &baseUs));
-                CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
-                CHECK(buffer->meta()->findInt64("durationUs", &durationUs));
-                delayUs = baseUs + timeUs - ALooper::GetNowUs();
-
-                msg->post(delayUs > 0ll ? delayUs : 0ll);
-            } else {
-                // try again in 1 second
-                msg->post(1000000ll);
-            }
+            pollForRawData(
+                    msg, mFetchMetaDataGeneration,
+                    /* fetch */ AmLiveSession::STREAMTYPE_METADATA,
+                    /* push */ kWhatTimedMetaData);
 
             break;
         }
@@ -373,6 +452,19 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             notify->setInt32("what", kWhatFrameRate);
             notify->setFloat("frame-rate", frameRate);
             notify->post();
+            break;
+        }
+
+        case AmLiveSession::kWhatMetadataDetected:
+        {
+            if (!mHasMetadata) {
+                mHasMetadata = true;
+
+                sp<AMessage> notify = dupNotify();
+                // notification without buffer triggers MEDIA_INFO_METADATA_UPDATE
+                notify->setInt32("what", kWhatTimedMetaData);
+                notify->post();
+            }
             break;
         }
 

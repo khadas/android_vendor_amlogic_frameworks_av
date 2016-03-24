@@ -102,7 +102,8 @@ AmLiveSession::AmLiveSession(
       mEOSTimeoutAudio(0),
       mEOSTimeoutVideo(0),
       mFrameRate(-1.0),
-      mSubTrackIndex(0) {
+      mSubTrackIndex(0),
+      mHasMetadata(false) {
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.read_pts", value, NULL)
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
@@ -127,9 +128,10 @@ AmLiveSession::AmLiveSession(
 
     for (size_t i = 0; i < kMaxStreams; ++i) {
         mDiscontinuities.add(indexToType(i), new AmAnotherPacketSource(NULL /* meta */));
+    }
+    for (size_t i = 0; i < kNumSources; ++i) {
         mPacketSources.add(indexToType(i), new AmAnotherPacketSource(NULL /* meta */));
         mPacketSources2.add(indexToType(i), new AmAnotherPacketSource(NULL /* meta */));
-        mBuffering[i] = false;
     }
 
     curl_global_init(CURL_GLOBAL_ALL);
@@ -280,82 +282,55 @@ status_t AmLiveSession::dequeueAccessUnit(
 
     status_t finalResult;
     sp<AmAnotherPacketSource> packetSource = mPacketSources.valueFor(stream);
-
-    ssize_t idx = typeToIndex(stream);
     if (!packetSource->hasBufferAvailable(&finalResult)) {
         if (finalResult == OK) {
-            mBuffering[idx] = true;
             return -EAGAIN;
         } else {
             return finalResult;
         }
     }
 
-    int32_t targetDuration = 0;
-    sp<AMessage> meta = packetSource->getLatestEnqueuedMeta();
-    if (meta != NULL) {
-        meta->findInt32("targetDuration", &targetDuration);
-    }
-
-    int64_t targetDurationUs = targetDuration * 1000000ll;
-    if (targetDurationUs == 0 ||
-            targetDurationUs > AmPlaylistFetcher::kMinBufferedDurationUs) {
-        // Fetchers limit buffering to
-        // min(3 * targetDuration, kMinBufferedDurationUs)
-        targetDurationUs = AmPlaylistFetcher::kMinBufferedDurationUs;
-    }
-
-    if (mBuffering[idx]) {
-        if (mSwitchInProgress
-                || packetSource->isFinished(0)
-                || packetSource->getEstimatedDurationUs() >= targetDurationUs) {
-            mBuffering[idx] = false;
+    if (stream < STREAMTYPE_SUBTITLES) {
+        // wait for counterpart
+        sp<AmAnotherPacketSource> otherSource;
+        uint32_t mask = mNewStreamMask & mStreamMask;
+        uint32_t fetchersMask  = 0;
+        for (size_t i = 0; i < mFetcherInfos.size(); ++i) {
+            uint32_t fetcherMask = mFetcherInfos.valueAt(i).mFetcher->getStreamTypeMask();
+            fetchersMask |= fetcherMask;
         }
-    }
+        mask &= fetchersMask;
+        if (stream == STREAMTYPE_AUDIO && (mask & STREAMTYPE_VIDEO)) {
+            otherSource = mPacketSources.valueFor(STREAMTYPE_VIDEO);
+        } else if (stream == STREAMTYPE_VIDEO && (mask & STREAMTYPE_AUDIO)) {
+            otherSource = mPacketSources.valueFor(STREAMTYPE_AUDIO);
+        }
+        if (otherSource != NULL && !otherSource->hasBufferAvailable(&finalResult)) {
+            return finalResult == OK ? -EAGAIN : finalResult;
+        }
 
-    if (mBuffering[idx]) {
-        return -EAGAIN;
-    }
-
-    // wait for counterpart
-    sp<AmAnotherPacketSource> otherSource;
-    uint32_t mask = mNewStreamMask & mStreamMask;
-    uint32_t fetchersMask  = 0;
-    for (size_t i = 0; i < mFetcherInfos.size(); ++i) {
-        uint32_t fetcherMask = mFetcherInfos.valueAt(i).mFetcher->getStreamTypeMask();
-        fetchersMask |= fetcherMask;
-    }
-    mask &= fetchersMask;
-    if (stream == STREAMTYPE_AUDIO && (mask & STREAMTYPE_VIDEO)) {
-        otherSource = mPacketSources.valueFor(STREAMTYPE_VIDEO);
-    } else if (stream == STREAMTYPE_VIDEO && (mask & STREAMTYPE_AUDIO)) {
-        otherSource = mPacketSources.valueFor(STREAMTYPE_AUDIO);
-    }
-    if (otherSource != NULL && !otherSource->hasBufferAvailable(&finalResult)) {
-        return finalResult == OK ? -EAGAIN : finalResult;
-    }
-
-    sp<AmAnotherPacketSource> discontinuityQueue  = mDiscontinuities.valueFor(stream);
-    if (discontinuityQueue->hasBufferAvailable(&finalResult)) {
-        discontinuityQueue->dequeueAccessUnit(accessUnit);
-        // seeking, track switching
-        sp<AMessage> extra;
-        int64_t timeUs;
-        if ((*accessUnit)->meta()->findMessage("extra", &extra)
-                && extra != NULL
-                && extra->findInt64("timeUs", &timeUs)) {
-            // seeking only
-            mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(stream);
-            ALOGI("Got stream(%d) seeked timeUs (%lld)", stream, mLastSeekTimeUs);
-            if (stream == STREAMTYPE_AUDIO) {
-                mAudioDiscontinuityOffsetTimesUs.clear();
-                mAudioDiscontinuityAbsStartTimesUs.clear();
-            } else if (stream == STREAMTYPE_VIDEO) {
-                mVideoDiscontinuityOffsetTimesUs.clear();
-                mVideoDiscontinuityAbsStartTimesUs.clear();
+        sp<AmAnotherPacketSource> discontinuityQueue  = mDiscontinuities.valueFor(stream);
+        if (discontinuityQueue->hasBufferAvailable(&finalResult)) {
+            discontinuityQueue->dequeueAccessUnit(accessUnit);
+            // seeking, track switching
+            sp<AMessage> extra;
+            int64_t timeUs;
+            if ((*accessUnit)->meta()->findMessage("extra", &extra)
+                    && extra != NULL
+                    && extra->findInt64("timeUs", &timeUs)) {
+                // seeking only
+                mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(stream);
+                ALOGI("Got stream(%d) seeked timeUs (%lld)", stream, mLastSeekTimeUs);
+                if (stream == STREAMTYPE_AUDIO) {
+                    mAudioDiscontinuityOffsetTimesUs.clear();
+                    mAudioDiscontinuityAbsStartTimesUs.clear();
+                } else if (stream == STREAMTYPE_VIDEO) {
+                    mVideoDiscontinuityOffsetTimesUs.clear();
+                    mVideoDiscontinuityAbsStartTimesUs.clear();
+                }
             }
+            return INFO_DISCONTINUITY;
         }
-        return INFO_DISCONTINUITY;
     }
 
     status_t err;
@@ -405,11 +380,14 @@ status_t AmLiveSession::dequeueAccessUnit(
             streamIdx = kSubtitleIndex;
             streamStr = "subs";
             break;
+        case STREAMTYPE_METADATA:
+            streamIdx = kMetaDataIndex;
+            streamStr = "metadata";
+            break;
         default:
             TRESPASS();
     }
 
-    StreamItem& strm = mStreams[streamIdx];
     if (err == INFO_DISCONTINUITY) {
         // adaptive streaming, discontinuities in the playlist
         int32_t type;
@@ -444,39 +422,44 @@ status_t AmLiveSession::dequeueAccessUnit(
                 }
             }
         } else {
-            size_t seq = strm.mCurDiscontinuitySeq;
-            int64_t offsetTimeUs;
-            if (stream == STREAMTYPE_AUDIO && mAudioDiscontinuityOffsetTimesUs.indexOfKey(seq) >= 0) {
-                offsetTimeUs = mAudioDiscontinuityOffsetTimesUs.valueFor(seq);
-            } else if (stream == STREAMTYPE_VIDEO && mVideoDiscontinuityOffsetTimesUs.indexOfKey(seq) >= 0) {
-                offsetTimeUs = mVideoDiscontinuityOffsetTimesUs.valueFor(seq);
-            } else {
-                offsetTimeUs = 0;
-            }
+            if (stream == STREAMTYPE_AUDIO || stream == STREAMTYPE_VIDEO) {
+                StreamItem& strm = mStreams[streamIdx];
+                size_t seq = strm.mCurDiscontinuitySeq;
+                int64_t offsetTimeUs;
+                if (stream == STREAMTYPE_AUDIO && mAudioDiscontinuityOffsetTimesUs.indexOfKey(seq) >= 0) {
+                    offsetTimeUs = mAudioDiscontinuityOffsetTimesUs.valueFor(seq);
+                } else if (stream == STREAMTYPE_VIDEO && mVideoDiscontinuityOffsetTimesUs.indexOfKey(seq) >= 0) {
+                    offsetTimeUs = mVideoDiscontinuityOffsetTimesUs.valueFor(seq);
+                } else {
+                    offsetTimeUs = 0;
+                }
 
-            seq += 1;
-            if (stream == STREAMTYPE_AUDIO && mAudioDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) >= 0) {
-                int64_t firstTimeUs;
-                firstTimeUs = mAudioDiscontinuityAbsStartTimesUs.valueFor(strm.mCurDiscontinuitySeq);
-                offsetTimeUs += strm.mLastDequeuedTimeUs - firstTimeUs;
-                offsetTimeUs += strm.mLastSampleDurationUs;
-            } else if (stream == STREAMTYPE_VIDEO && mVideoDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) >= 0) {
-                int64_t firstTimeUs;
-                firstTimeUs = mVideoDiscontinuityAbsStartTimesUs.valueFor(strm.mCurDiscontinuitySeq);
-                offsetTimeUs += strm.mLastDequeuedTimeUs - firstTimeUs;
-                offsetTimeUs += strm.mLastSampleDurationUs;
-            } else {
-                offsetTimeUs += strm.mLastSampleDurationUs;
-            }
-            if (stream == STREAMTYPE_AUDIO) {
-                mAudioDiscontinuityOffsetTimesUs.add(seq, offsetTimeUs);
-            } else if (stream == STREAMTYPE_VIDEO) {
-                mVideoDiscontinuityOffsetTimesUs.add(seq, offsetTimeUs);
+                seq += 1;
+                if (stream == STREAMTYPE_AUDIO && mAudioDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) >= 0) {
+                    int64_t firstTimeUs;
+                    firstTimeUs = mAudioDiscontinuityAbsStartTimesUs.valueFor(strm.mCurDiscontinuitySeq);
+                    offsetTimeUs += strm.mLastDequeuedTimeUs - firstTimeUs;
+                    offsetTimeUs += strm.mLastSampleDurationUs;
+                } else if (stream == STREAMTYPE_VIDEO && mVideoDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) >= 0) {
+                    int64_t firstTimeUs;
+                    firstTimeUs = mVideoDiscontinuityAbsStartTimesUs.valueFor(strm.mCurDiscontinuitySeq);
+                    offsetTimeUs += strm.mLastDequeuedTimeUs - firstTimeUs;
+                    offsetTimeUs += strm.mLastSampleDurationUs;
+                } else {
+                    offsetTimeUs += strm.mLastSampleDurationUs;
+                }
+                if (stream == STREAMTYPE_AUDIO) {
+                    mAudioDiscontinuityOffsetTimesUs.add(seq, offsetTimeUs);
+                } else if (stream == STREAMTYPE_VIDEO) {
+                    mVideoDiscontinuityOffsetTimesUs.add(seq, offsetTimeUs);
+                }
+                mDiscontinuityOffsetTimesUs.add(seq, offsetTimeUs);
             }
         }
     } else if (err == OK) {
 
         if (stream == STREAMTYPE_AUDIO || stream == STREAMTYPE_VIDEO) {
+            StreamItem& strm = mStreams[streamIdx];
             int64_t timeUs, origin_timeUs;
             int32_t discontinuitySeq = 0;
             CHECK((*accessUnit)->meta()->findInt64("timeUs",  &origin_timeUs));
@@ -486,6 +469,10 @@ status_t AmLiveSession::dequeueAccessUnit(
 
             int32_t discard = 0;
             int64_t firstTimeUs;
+            if (mDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) < 0
+                && !((*accessUnit)->meta()->findInt32("discard", &discard) && discard)) {
+                mDiscontinuityAbsStartTimesUs.add(strm.mCurDiscontinuitySeq, timeUs);
+            }
             if (stream == STREAMTYPE_AUDIO && mAudioDiscontinuityAbsStartTimesUs.indexOfKey(strm.mCurDiscontinuitySeq) >= 0) {
                 int64_t durUs; // approximate sample duration
                 if (timeUs > strm.mLastDequeuedTimeUs) {
@@ -565,6 +552,26 @@ status_t AmLiveSession::dequeueAccessUnit(
             (*accessUnit)->meta()->setInt32(
                     "trackIndex", mSubTrackIndex);
             (*accessUnit)->meta()->setInt64("baseUs", mRealTimeBaseUs);
+        } else if (stream == STREAMTYPE_METADATA) {
+            HLSTime mdTime((*accessUnit)->meta());
+            if (mDiscontinuityAbsStartTimesUs.indexOfKey(mdTime.mSeq) < 0) {
+                packetSource->requeueAccessUnit((*accessUnit));
+                return -EAGAIN;
+            } else {
+                int64_t firstTimeUs = mDiscontinuityAbsStartTimesUs.valueFor(mdTime.mSeq);
+                int64_t timeUs = mdTime.mTimeUs;
+                if (timeUs >= firstTimeUs) {
+                    timeUs -= firstTimeUs;
+                } else {
+                    timeUs = 0;
+                }
+                timeUs += mLastSeekTimeUs;
+                if (mDiscontinuityOffsetTimesUs.indexOfKey(mdTime.mSeq) >= 0) {
+                    timeUs += mDiscontinuityOffsetTimesUs.valueFor(mdTime.mSeq);
+                }
+                (*accessUnit)->meta()->setInt64("timeUs",  timeUs);
+                (*accessUnit)->meta()->setInt64("baseUs", mRealTimeBaseUs);
+            }
         }
     } else {
         ALOGI("[%s] encountered error %d", streamStr, err);
@@ -882,6 +889,18 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
                     break;
                 }
 
+                case AmPlaylistFetcher::kWhatMetadataDetected:
+                {
+                    if (!mHasMetadata) {
+                        mStreamMask |= STREAMTYPE_METADATA;
+                        mHasMetadata = true;
+                        sp<AMessage> notify = mNotify->dup();
+                        notify->setInt32("what", kWhatMetadataDetected);
+                        notify->post();
+                    }
+                    break;
+                }
+
                 default:
                     TRESPASS();
             }
@@ -964,7 +983,7 @@ int AmLiveSession::SortByBandwidth(const BandwidthItem *a, const BandwidthItem *
 
 // static
 AmLiveSession::StreamType AmLiveSession::indexToType(int idx) {
-    CHECK(idx >= 0 && idx < kMaxStreams);
+    CHECK(idx >= 0 && idx < kNumSources);
     return (StreamType)(1 << idx);
 }
 
@@ -977,6 +996,8 @@ ssize_t AmLiveSession::typeToIndex(int32_t type) {
             return 1;
         case STREAMTYPE_SUBTITLES:
             return 2;
+        case STREAMTYPE_METADATA:
+            return 3;
         default:
             return -1;
     };
@@ -1155,6 +1176,36 @@ sp<AmPlaylistFetcher> AmLiveSession::addFetcher(const char *uri) {
     mFetcherLooper.push(fetcherLooper);
 
     return info.mFetcher;
+}
+
+sp<AmAnotherPacketSource> AmLiveSession::getPacketSourceForStreamIndex(
+        size_t trackIndex, bool newUri) {
+    StreamType type = indexToType(trackIndex);
+    sp<AmAnotherPacketSource> source = NULL;
+    if (newUri) {
+        source = mPacketSources2.valueFor(type);
+        source->clear();
+    } else {
+        source = mPacketSources.valueFor(type);
+    }
+    return source;
+}
+
+sp<AmAnotherPacketSource> AmLiveSession::getMetadataSource(
+        sp<AmAnotherPacketSource> sources[kNumSources], uint32_t streamMask, bool newUri) {
+    // todo: One case where the following strategy can fail is when audio and video
+    // are in separate playlists, both are transport streams, and the metadata
+    // is actually contained in the audio stream.
+    ALOGI("[timed_id3] getMetadataSourceForUri streamMask %x newUri %s",
+            streamMask, newUri ? "true" : "false");
+
+    if ((sources[kVideoIndex] != NULL) // video fetcher; or ...
+            || (!(streamMask & STREAMTYPE_VIDEO) && sources[kAudioIndex] != NULL)) {
+            // ... audio fetcher for audio only variant
+        return getPacketSourceForStreamIndex(kMetaDataIndex, newUri);
+    }
+
+    return NULL;
 }
 
 ssize_t AmLiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t size) {
@@ -1665,6 +1716,9 @@ status_t AmLiveSession::onSeek(const sp<AMessage> &msg) {
         discontinuityQueue->clear();
     }
 
+    mDiscontinuityOffsetTimesUs.clear();
+    mDiscontinuityAbsStartTimesUs.clear();
+
     if (!mReconfigurationInProgress) {
         mContinuationCounter = mFetcherInfos.size();
         for (size_t i = 0; i < mFetcherInfos.size(); ++i) {
@@ -1704,7 +1758,7 @@ size_t AmLiveSession::getTrackCount() const {
     if (mPlaylist == NULL) {
         return 0;
     } else {
-        return mPlaylist->getTrackCount();
+        return mPlaylist->getTrackCount() + (mHasMetadata ? 1 : 0);
     }
 }
 
@@ -1712,6 +1766,14 @@ sp<AMessage> AmLiveSession::getTrackInfo(size_t trackIndex) const {
     if (mPlaylist == NULL) {
         return NULL;
     } else {
+        if (trackIndex == mPlaylist->getTrackCount() && mHasMetadata) {
+            ALOGI("[timed_id3] Got id3 info!");
+            sp<AMessage> format = new AMessage();
+            format->setInt32("type", MEDIA_TRACK_TYPE_METADATA);
+            format->setString("language", "und");
+            format->setString("mime", MEDIA_MIMETYPE_DATA_TIMED_ID3);
+            return format;
+        }
         return mPlaylist->getTrackInfo(trackIndex);
     }
 }
@@ -1975,7 +2037,7 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
     for (size_t i = 0; i < mFetcherInfos.size(); ++i) {
         const AString &uri = mFetcherInfos.keyAt(i);
 
-        sp<AmAnotherPacketSource> sources[kMaxStreams];
+        sp<AmAnotherPacketSource> sources[kNumSources];
         for (size_t j = 0; j < kMaxStreams; ++j) {
             if ((resumeMask & indexToType(j)) && uri == mStreams[j].mUri) {
                 sources[j] = mPacketSources.valueFor(indexToType(j));
@@ -1996,7 +2058,10 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
         if (sources[kAudioIndex] != NULL || sources[kVideoIndex] != NULL
                 || sources[kSubtitleIndex] != NULL) {
             info.mFetcher->startAsync(
-                    sources[kAudioIndex], sources[kVideoIndex], sources[kSubtitleIndex]);
+                    sources[kAudioIndex],
+                    sources[kVideoIndex],
+                    sources[kSubtitleIndex],
+                    getMetadataSource(sources, streamMask, timeUs));
             info.mStatus = STATUS_ACTIVE;
         } else {
             info.mToBeRemoved = true;
@@ -2026,7 +2091,7 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
         int64_t startTimeUs = -1;
         int64_t segmentStartTimeUs = -1ll;
         int32_t discontinuitySeq = -1;
-        sp<AmAnotherPacketSource> sources[kMaxStreams];
+        sp<AmAnotherPacketSource> sources[kNumSources];
 
         if (i == kSubtitleIndex) {
             segmentStartTimeUs = latestMediaSegmentStartTimeUs();
@@ -2114,6 +2179,7 @@ void AmLiveSession::onChangeConfiguration3(const sp<AMessage> &msg) {
                 sources[kAudioIndex],
                 sources[kVideoIndex],
                 sources[kSubtitleIndex],
+                getMetadataSource(sources, mNewStreamMask, switching),
                 startTimeUs < 0 ? mLastSeekTimeUs : startTimeUs,
                 segmentStartTimeUs,
                 discontinuitySeq,

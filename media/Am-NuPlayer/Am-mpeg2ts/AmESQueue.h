@@ -36,6 +36,7 @@ struct AmElementaryStreamQueue {
         MPEG_VIDEO,
         MPEG4_VIDEO,
         PCM_AUDIO,
+        METADATA,
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         DDP_AC3_AUDIO,
         DDP_EC3_AUDIO,
@@ -100,6 +101,7 @@ private:
     sp<ABuffer> dequeueAccessUnitDDP();
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
     sp<ABuffer> dequeueAccessUnitDTS();
+    sp<ABuffer> dequeueAccessUnitMetadata();
 
     // consume a logical (compressed) access unit of size "size",
     // returns its timestamp in us (or -1 if no time information).

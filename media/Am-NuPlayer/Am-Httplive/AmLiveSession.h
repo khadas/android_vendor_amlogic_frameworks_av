@@ -55,12 +55,15 @@ struct AmLiveSession : public AHandler {
         kVideoIndex    = 1,
         kSubtitleIndex = 2,
         kMaxStreams    = 3,
+        kMetaDataIndex = 3,
+        kNumSources    = 4,
     };
 
     enum StreamType {
         STREAMTYPE_AUDIO        = 1 << kAudioIndex,
         STREAMTYPE_VIDEO        = 1 << kVideoIndex,
         STREAMTYPE_SUBTITLES    = 1 << kSubtitleIndex,
+        STREAMTYPE_METADATA     = 1 << kMetaDataIndex,
     };
 
     enum FetcherStatus {
@@ -108,6 +111,7 @@ struct AmLiveSession : public AHandler {
         kWhatPreparationFailed,
         kWhatSourceReady,
         kWhatSetFrameRate,
+        kWhatMetadataDetected,
     };
 
     // create a format-change discontinuity
@@ -196,7 +200,6 @@ private:
     bool mSeeked;
     bool mNeedExit;
     bool mInPreparationPhase;
-    bool mBuffering[kMaxStreams];
     FILE * mDebugHandle;
 
     static const String8 kHTTPUserAgentDefault;
@@ -209,6 +212,10 @@ private:
     KeyedVector<size_t, int64_t> mVideoDiscontinuityAbsStartTimesUs;
     KeyedVector<size_t, int64_t> mAudioDiscontinuityOffsetTimesUs;
     KeyedVector<size_t, int64_t> mVideoDiscontinuityOffsetTimesUs;
+
+    // defined for metadata.
+    KeyedVector<size_t, int64_t> mDiscontinuityAbsStartTimesUs;
+    KeyedVector<size_t, int64_t> mDiscontinuityOffsetTimesUs;
 
     AString mLastPlayListURL;
     AString mMasterURL;
@@ -275,7 +282,10 @@ private:
     float mFrameRate;
 
     size_t mSubTrackIndex;
+    bool mHasMetadata;
 
+    sp<AmAnotherPacketSource> getPacketSourceForStreamIndex(size_t trackIndex, bool newUri);
+    sp<AmAnotherPacketSource> getMetadataSource(sp<AmAnotherPacketSource> sources[kNumSources], uint32_t streamMask, bool newUri);
     sp<AmPlaylistFetcher> addFetcher(const char *uri);
 
     void onConnect(const sp<AMessage> &msg);

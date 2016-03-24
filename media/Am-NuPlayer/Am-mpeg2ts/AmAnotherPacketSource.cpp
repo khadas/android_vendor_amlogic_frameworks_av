@@ -70,7 +70,7 @@ void AmAnotherPacketSource::setFormat(const sp<MetaData> &meta) {
     } else  if (!strncasecmp("video/", mime, 6)) {
         mIsVideo = true;
     } else {
-        CHECK(!strncasecmp("text/", mime, 5));
+        CHECK(!strncasecmp("text/", mime, 5) || !strncasecmp("application/", mime, 12));
     }
 }
 
@@ -142,6 +142,12 @@ status_t AmAnotherPacketSource::dequeueAccessUnit(sp<ABuffer> *buffer) {
     }
 
     return mEOSResult;
+}
+
+void AmAnotherPacketSource::requeueAccessUnit(const sp<ABuffer> &buffer) {
+    // TODO: update corresponding book keeping info.
+    Mutex::Autolock autoLock(mLock);
+    mBuffers.push_front(buffer);
 }
 
 status_t AmAnotherPacketSource::read(
@@ -219,14 +225,6 @@ void AmAnotherPacketSource::queueAccessUnit(const sp<ABuffer> &buffer) {
     int32_t discontinuity;
     if (buffer->meta()->findInt32("discontinuity", &discontinuity)) {
         ++mQueuedDiscontinuityCount;
-    } else {
-        if (!mEstimatedBytePerSec) {
-            status_t dummy;
-            getBufferedDurationUs_l(&dummy, &mEstimatedBytePerSec);
-            if (mEstimatedBytePerSec) {
-                ALOGI("[%s] estimate bytes by second : %lld !", mIsAudio ? "audio" : "video", mEstimatedBytePerSec);
-            }
-        }
     }
 
     if (mLatestEnqueuedMeta == NULL) {

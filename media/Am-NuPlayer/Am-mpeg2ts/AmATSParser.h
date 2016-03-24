@@ -75,7 +75,8 @@ struct AmATSParser : public RefBase {
         NONE  = -1,
         VIDEO = 0,
         AUDIO = 1,
-        NUM_SOURCE_TYPES = 2
+        META  = 2,
+        NUM_SOURCE_TYPES = 3
     };
     sp<MediaSource> getSource(SourceType type);
     bool hasSource(SourceType type) const;
@@ -91,6 +92,7 @@ struct AmATSParser : public RefBase {
         STREAMTYPE_MPEG2_AUDIO          = 0x04,
         STREAMTYPE_MPEG2_AUDIO_ADTS     = 0x0f,
         STREAMTYPE_MPEG4_VIDEO          = 0x10,
+        STREAMTYPE_METADATA             = 0x15,
         STREAMTYPE_H264                 = 0x1b,
         STREAMTYPE_H265                 = 0x24,
         STREAMTYPE_PCM_AUDIO            = 0x83,
@@ -129,12 +131,14 @@ private:
     status_t parsePID(
         ABitReader *br, unsigned PID,
         unsigned continuity_counter,
-        unsigned payload_unit_start_indicator);
+        unsigned payload_unit_start_indicator,
+        unsigned LastPESLength);
 
     status_t parseAdaptationField(ABitReader *br, unsigned PID);
     status_t parseTS(ABitReader *br);
 
     void updatePCR(unsigned PID, uint64_t PCR, size_t byteOffsetFromStart);
+    unsigned peekPESLength(ABitReader *br);
 
     uint64_t mPCR[2];
     size_t mPCRBytes[2];

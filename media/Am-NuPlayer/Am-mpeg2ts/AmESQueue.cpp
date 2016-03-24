@@ -465,6 +465,7 @@ status_t AmElementaryStreamQueue::appendData(
             }
 
             case PCM_AUDIO:
+            case METADATA:
             {
                 break;
             }
@@ -613,6 +614,8 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnit() {
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
         case DTS:
             return dequeueAccessUnitDTS();
+        case METADATA:
+            return dequeueAccessUnitMetadata();
         default:
             CHECK_EQ((unsigned)mMode, (unsigned)MPEG_AUDIO);
             return dequeueAccessUnitMPEGAudio();
@@ -1623,6 +1626,27 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
     }
 
     return NULL;
+}
+
+sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMetadata() {
+    size_t size = mBuffer->size();
+    if (!size) {
+        return NULL;
+    }
+
+    sp<ABuffer> accessUnit = new ABuffer(size);
+    int64_t timeUs = fetchTimestamp(size);
+    accessUnit->meta()->setInt64("timeUs", timeUs);
+
+    memcpy(accessUnit->data(), mBuffer->data(), size);
+    mBuffer->setRange(0, 0);
+
+    if (mFormat == NULL) {
+        mFormat = new MetaData;
+        mFormat->setCString(kKeyMIMEType, MEDIA_MIMETYPE_DATA_TIMED_ID3);
+    }
+
+    return accessUnit;
 }
 
 }  // namespace android
