@@ -319,18 +319,27 @@ namespace android
             else
             {
                 float  noPacketTime = (ALooper::GetNowUs() - mFirstFailedAttemptUs) / 1E6;
-                ALOGV("no packets available for %.2f secs", noPacketTime);
-                if (noPacketTime > 12.0) //beyond 12S
+                ALOGV("no packets available for %.2f secs",noPacketTime);
+                if (noPacketTime>12.0) //beyond 12S
                 {
-                    ALOGI("no packets available beyond 12 secs,stop WifiDisplaySink now");
-                    sp<AMessage> notify = mStopNotify->dup();
-                    notify->post();
-                    mFirstFailedAttemptUs = ALooper::GetNowUs();
+                    int ret = -1;
+                    char value[PROPERTY_VALUE_MAX];
+                    ret = mSystemControlService->getPropertyInt(String16("sys.wfd.state"), 0);
+                    if (ret == 0)
+                    {
+                        ALOGI("no packets available beyond 12 secs,stop WifiDisplaySink now");
+                        sp<AMessage> notify = mStopNotify->dup();
+                        notify->post();
+                        mFirstFailedAttemptUs = ALooper::GetNowUs();
+                    }
+                    else if (ret == 2)
+                    {
+                        ALOGI("pause->play, reset noPacketTime!");
+                        mFirstFailedAttemptUs = ALooper::GetNowUs();
+                        mSystemControlService->setProperty(String16("sys.wfd.state"), String16("0"));
+                    }
                 }
-
-
             }
-
             return NULL;
         }
 

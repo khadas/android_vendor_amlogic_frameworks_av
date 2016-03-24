@@ -59,6 +59,7 @@ namespace android
         srand(time(0));
         mHDCPPort = 9000 + rand() % 100;
         setResolution(High);
+        property_set("sys.wfd.state","0"); //0-init play,1-normal->pause,2-pause->play
     }
 
     WifiDisplaySink::~WifiDisplaySink()
@@ -104,6 +105,24 @@ namespace android
     {
         sp<AMessage> msg = new AMessage(kWhatStop, this);
         msg->post();
+    }
+
+    void WifiDisplaySink::setPlay(void)
+    {
+        AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+        sendPlay(mSessionID, !mSetupURI.empty()? mSetupURI.c_str() : url.c_str());
+    }
+
+    void WifiDisplaySink::setPause(void)
+    {
+        AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+        sendPause(mSessionID, !mSetupURI.empty()? mSetupURI.c_str() : url.c_str());
+    }
+
+    void WifiDisplaySink::setTeardown(void)
+    {
+        AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+        sendTeardown(mSessionID, !mSetupURI.empty()? mSetupURI.c_str() : url.c_str());
     }
     // static
     bool WifiDisplaySink::ParseURL(
@@ -493,6 +512,34 @@ namespace android
         return OK;
     }
 
+
+    status_t WifiDisplaySink::onReceivePauseResponse(
+            int32_t sessionID, const sp<ParsedMessage> &msg) {
+        int32_t statusCode;
+
+        ALOGI("%s", __FUNCTION__);
+
+        if (!msg->getStatusCode(&statusCode)) {
+            return ERROR_MALFORMED;
+        }
+
+        if (statusCode != 200) {
+            return ERROR_UNSUPPORTED;
+        }
+
+       // sp<AMessage> msg1 = new AMessage(kWhatSinkNotify, mHandlerId);
+        //ALOGI("post msg kWhatSinkNotify - received msg pause Response");
+      //  msg1->setString("reason", "RTSP_PAUSE");
+      //  msg1->post();
+
+        // mState = UNDEFINED;
+        mState = PAUSED;
+
+        property_set("sys.wfd.state","1");
+
+        return OK;
+    }
+
     status_t WifiDisplaySink::onReceiveM2Response(
         int32_t sessionID, const sp<ParsedMessage> &msg)
     {
@@ -577,7 +624,6 @@ namespace android
             return err;
         }
 
-        mState = PAUSED;
 
         AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
 
@@ -662,6 +708,11 @@ namespace android
         {
             return ERROR_UNSUPPORTED;
         }
+
+        if (mState == PAUSED)
+            property_set("sys.wfd.state","2");
+        else
+            property_set("sys.wfd.state","0");
 
         mState = PLAYING;
 
@@ -792,6 +843,12 @@ namespace android
                 pos = content.find("wfd_uibc_capability", 0);
                 mNeedUibcCapability = ((pos != -1) ? true : false);
 
+                pos = content.find("wfd_connector_type", 0);
+                mNeedConnectorType = ((pos != -1) ? true :false);
+
+                pos = content.find("wfd_I2C", 0);
+                mNeedI2C = ((pos != -1) ? true :false);
+
                 onGetParameterRequest(sessionID, cseq, data);
             }
             else if (method == "SET_PARAMETER")
@@ -810,6 +867,7 @@ namespace android
         int32_t cseq,
         const sp<ParsedMessage> &data)
     {
+        save_sessionid_to_file("/data/data/com.amlogic.miracast/sessionId", sessionID);
         AString response = "RTSP/1.0 200 OK\r\n";
         AppendCommonResponse(&response, cseq);
         response.append("Public: org.wfa.wfd1.0, GET_PARAMETER, SET_PARAMETER\r\n");
@@ -823,6 +881,23 @@ namespace android
         CHECK_EQ(err, (status_t)OK);
     }
 
+    int WifiDisplaySink::save_sessionid_to_file(char* filepath, int32_t sessionID)
+    {
+        FILE *fpo = NULL;
+
+        fpo = fopen(filepath, "w+");
+        if (fpo == NULL ) {
+            ALOGI("failed to open output file %s", filepath);
+            return -1;
+        }
+
+        //fwrite(&sessionID, sizeof(int32_t), 1, fpo);
+        fprintf(fpo, "%d", sessionID);
+
+        fclose(fpo);
+
+        return 0;
+    }
     void WifiDisplaySink::prepareHDCP()
     {
         char prop[PROPERTY_VALUE_MAX];
@@ -867,6 +942,32 @@ namespace android
             }
         }
         mHDCPLock.unlock();
+    }
+
+    status_t WifiDisplaySink::sendPause(int32_t sessionID, const char *uri)
+    {
+        AString request = AStringPrintf("PAUSE %s RTSP/1.0\r\n", uri);
+        AppendCommonResponse(&request, mNextCSeq);
+        request.append(AStringPrintf("Session: %s\r\n", mPlaybackSessionID.c_str()));
+        request.append("\r\n");
+
+        ALOGI("\nSend Request:\n%s", request.c_str());
+
+        status_t err = mNetSession->sendRequest(
+                sessionID, request.c_str(), request.size());
+
+        if (err != OK) {
+            return err;
+        }
+
+        ALOGI("registerResponseHandler:id = %d, onReceivePauseResponse", mNextCSeq);
+
+        registerResponseHandler(
+                sessionID, mNextCSeq, &WifiDisplaySink::onReceivePauseResponse);
+
+        ++mNextCSeq;
+
+        return OK;
     }
 
     void WifiDisplaySink::onGetParameterRequest(
@@ -934,12 +1035,19 @@ namespace android
                      mRTPSink->getRTPPort());
 
         if (mNeedUibcCapability)
-            snprintf(body + strlen(body), sizeof(body) - strlen(body),
-                     "wfd_uibc_capability: input_category_list=GENERIC;generic_cap_list=Keyboard, Mouse, SingleTouch;hidc_cap_list=none;port=none\r\n");
+            snprintf(body+ strlen(body), sizeof(body) - strlen(body),
+                "wfd_uibc_capability: none\r\n");
 
-        //if(mNeedStandbyResumeCapability)
-            //snprintf(body+ strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: supported\r\n");
+        if (mNeedStandbyResumeCapability)
+            snprintf(body+ strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: none\r\n");
 
+        if (mNeedConnectorType)
+            snprintf(body+ strlen(body), sizeof(body) - strlen(body),
+                "wfd_connector_type: 00 00\r\n");
+
+        if (mNeedI2C)
+            snprintf(body+ strlen(body), sizeof(body) - strlen(body),
+                "wfd_I2C: none\r\n");
 
         AString response = "RTSP/1.0 200 OK\r\n";
         AppendCommonResponse(&response, cseq);
@@ -1070,6 +1178,7 @@ namespace android
     {
         AString request = AStringPrintf("TEARDOWN %s RTSP/1.0\r\n", uri);
         AppendCommonResponse(&request, mNextCSeq);
+        request.append(AStringPrintf("Session: %s\r\n", mPlaybackSessionID.c_str()));
         request.append("\r\n");
 
         ALOGI("\nSend Request:\n%s", request.c_str());
@@ -1117,6 +1226,14 @@ namespace android
         {
             AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
             status_t err = sendTeardown(sessionID, url.c_str());
+            CHECK_EQ(err, (status_t)OK);
+        } else if (strstr(content, "wfd_trigger_method: PAUSE\r\n") != NULL) {
+            AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+            status_t err = sendPause(sessionID, url.c_str());
+            CHECK_EQ(err, (status_t)OK);
+        } else if (strstr(content, "wfd_trigger_method: PLAY\r\n") != NULL) {
+            AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
+            status_t err = sendPlay(sessionID, url.c_str());
             CHECK_EQ(err, (status_t)OK);
         }
     }
