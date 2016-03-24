@@ -351,7 +351,13 @@ status_t    AmSuperPlayer::release()
 	if(NULL!=mSoftPara){
 		free((void*)mSoftPara);
 		mSoftPara = NULL;
-	}	
+	}
+	if (fd_valid) {
+		fd_valid=false;
+		close(mfd);
+		mfd=-1;
+	}
+
 	return NO_ERROR;
 }
 status_t    AmSuperPlayer::reset()
