@@ -256,8 +256,11 @@ status_t AmlogicPlayerRender::NativeWindowInit(void)
         }
         LOGI("mMinUndequeuedBufs:%d", mMinUndequeuedBufs);
     } else {
+        nativeWidth = 32;
+        nativeHeight = 32;
         native_window_set_usage(mNativeWindow.get(), GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP  | GRALLOC_USAGE_AML_VIDEO_OVERLAY);
-        native_window_set_buffers_format(mNativeWindow.get(), WINDOW_FORMAT_RGBA_8888);
+        native_window_set_buffers_geometry(mNativeWindow.get(), ALIGN(nativeWidth, 32), nativeHeight, WINDOW_FORMAT_RGBA_8888);
+        ///native_window_set_buffers_format(mNativeWindow.get(), WINDOW_FORMAT_RGBA_8888);
 		mWindowChanged = 3;
     }
     setVideoScalingMode_locked(mVideoScalingMode);
@@ -461,7 +464,7 @@ status_t AmlogicPlayerRender::onSizeChanged(Rect newR, Rect oldR)
 {
     TRACE();
     Mutex::Autolock l(mMutex);
-    if (!mEnableOsd) {
+    if (0/*!mEnableOsd*/) {
         nativeWidth = oldR.getWidth();
         nativeHeight = oldR.getHeight();
     }
