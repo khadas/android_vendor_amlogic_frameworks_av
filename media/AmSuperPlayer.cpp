@@ -311,6 +311,22 @@ bool        AmSuperPlayer::isPlaying()
 	if (mPlayer == 0) return false;
 	return mPlayer->isPlaying();
 }
+status_t    AmSuperPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
+{
+	TRACE();
+	Mutex::Autolock l(mMutex);
+	TRACE();
+	if (mPlayer == 0) return false;
+	return mPlayer->setPlaybackSettings(rate);
+}
+status_t    AmSuperPlayer::getPlaybackSettings(AudioPlaybackRate* rate /* nonnull */)
+{
+	TRACE();
+	Mutex::Autolock l(mMutex);
+	TRACE();
+	if (mPlayer == 0) return false;
+	return mPlayer->getPlaybackSettings(rate);
+}
 status_t    AmSuperPlayer::getCurrentPosition(int* msec)
 {
 	TRACE();

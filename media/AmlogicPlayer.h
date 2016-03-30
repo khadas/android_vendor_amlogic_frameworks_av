@@ -124,7 +124,8 @@ public:
     virtual status_t dump(int fd, const Vector<String16> &args) const;
     size_t countTracks() const;
     int match_name(const char *name,const char *machsetting);
-
+    virtual status_t    setPlaybackSettings(const AudioPlaybackRate& rate);
+    virtual status_t        getPlaybackSettings(AudioPlaybackRate* rate /* nonnull */);
 
 private:
     status_t    setdatasource(const char *path, int fd, int64_t offset, int64_t length, const KeyedVector<String8, String8> *headers);
@@ -277,6 +278,7 @@ private:
     int64_t mLastPosition;
     int mPlayTimeBac;
     int64_t realpositionBac;
+    AudioPlaybackRate mPlaybackSettings;
 };
 
 }; // namespace android

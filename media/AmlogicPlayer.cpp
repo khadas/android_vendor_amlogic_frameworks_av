@@ -218,7 +218,7 @@ AmlogicPlayer::AmlogicPlayer() :
     DtsHdHpsHint=0;
     AudioDualMonoNeed=0;
     AudioDualMonoSetOK=0;
-
+    mPlaybackSettings = AUDIO_PLAYBACK_RATE_DEFAULT;
 }
 
 int HistoryMgt(const char * path, int r0w1, int mTime)
@@ -1479,7 +1479,7 @@ status_t AmlogicPlayer::prepareAsync()
         return NO_ERROR;
     }
     mPlay_ctl.callback_fn.notify_fn = notifyhandle;
-    mPlay_ctl.callback_fn.update_interval = 1000;
+    mPlay_ctl.callback_fn.update_interval = 300;
     mPlay_ctl.audio_index = -1;
     mPlay_ctl.video_index = -1;
     mPlay_ctl.hassub = 1;  //enable subtitle
@@ -1710,7 +1710,6 @@ status_t AmlogicPlayer::seekTo(int position)
         mDelayUpdateTime = 2;
         player_timesearch(mPlayer_id, (float)position / 1000);
     }
-
     mSeekdone = true;
     mPlayTime = position;
     mLastPlayTimeUpdateUS = ALooper::GetNowUs();
@@ -1777,6 +1776,70 @@ bool AmlogicPlayer::isPlaying()
     } else {
         return false;
     }
+}
+status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
+{
+    Mutex::Autolock autoLock(mLock);
+    TRACE();
+    fastNotifyMode = 1;
+    AudioPlaybackRate rate_local = rate;
+    // cursory sanity check for non-audio and paused cases
+    if ((rate.mSpeed != 0.f && rate.mSpeed < AUDIO_TIMESTRETCH_SPEED_MIN)
+        || rate.mSpeed > AUDIO_TIMESTRETCH_SPEED_MAX
+        || rate.mPitch < AUDIO_TIMESTRETCH_SPEED_MIN
+        || rate.mPitch > AUDIO_TIMESTRETCH_SPEED_MAX) {
+        return BAD_VALUE;
+    }
+    TRACE();
+    status_t err = OK;
+    if (rate.mSpeed == 0.f) {
+        if (true & mRunning) {
+            err = pause();
+        }
+        if (err == OK) {
+            // save settings (using old speed) in case player is resumed
+            AudioPlaybackRate newRate = rate;
+            newRate.mSpeed = mPlaybackSettings.mSpeed;
+            mPlaybackSettings = newRate;
+        }
+        TRACE();
+        return err;
+    }
+    if (!(true & mRunning)) {
+        start();
+        pause();
+        usleep(100000);
+    }
+    int retry = 10;
+retry:
+    TRACE();
+    err = audio_set_playback_rate(mPlayer_id,&rate_local);
+    if (err != OK && retry-- > 0) {
+        usleep(50000);
+        goto retry;
+    }
+#if 0
+    if (mAudioPlayer != NULL) {
+        err = mAudioPlayer->setPlaybackRate(rate);
+    }
+#endif
+    if (err == OK) {
+        TRACE();
+        mPlaybackSettings = rate;
+        if (!(true & mRunning) || (mPaused == true)) {
+            start();
+        }
+    }
+    return err;
+}
+status_t AmlogicPlayer::getPlaybackSettings(AudioPlaybackRate *rate /* nonnull */) {
+    TRACE();
+    /*TODO read the actual rate value from audio track */
+    *rate = mPlaybackSettings;
+    if (mPaused == true) {
+        rate->mSpeed = 0.0f;
+    }
+    return OK;
 }
 const char* AmlogicPlayer::getStrAudioCodec(int type)
 {
@@ -3105,6 +3168,10 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             mStreamTime += mStreamTimeExtAddS * 1000;
         }
         *position = (int)(mStreamTime + (ALooper::GetNowUs() - mLastStreamTimeUpdateUS) / 1000); /*jast let uplevel know,we are playing,they don't care it.(netflix's bug/)*/
+    /* for CTS, round the timestamp  */
+        if (mPlaybackSettings.mSpeed != 1.0f) {
+            *position = (*position+500)/1000*1000;
+        }
         ///*position+=mStreamTimeExtAddS*1000;
 
     } else {

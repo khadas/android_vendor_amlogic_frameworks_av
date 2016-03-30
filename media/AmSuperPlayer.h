@@ -79,9 +79,8 @@ public:
 	static	player_type  Str2PlayerType(const char *str);
 	static  const char * PlayerType2Str(player_type type);
 	virtual status_t dump(int fd, const Vector<String16> &args) const;
-
-
-	
+    virtual status_t    setPlaybackSettings(const AudioPlaybackRate& rate);
+    virtual status_t        getPlaybackSettings(AudioPlaybackRate* rate /* nonnull */);
 private:
 	player_type 		SuperGetPlayerType(char *type,int videos,int audios);
 	int 				match_codecs(const char *filefmtstr,const char *fmtsetting);
