@@ -49,6 +49,9 @@ namespace android
         void start(const char *uri);
         void retryStart(int32_t uDelay);
         void stop(void);
+        void setPlay(void);
+        void setPause(void);
+        void setTeardown(void);
         void setSinkHandler(const sp<AHandler> &handler);
         void setResolution(int resolution);
         int getResolution();
@@ -118,7 +121,7 @@ namespace android
         sp<AMessage> mNotifyStop;
         int32_t mRTSPPort;
         int32_t mConnectionRetry;
-#define MAX_CONN_RETRY 5
+        #define MAX_CONN_RETRY 500
 
         /*add by yalong.liu*/
         bool mNeedAudioCodecs;
@@ -129,6 +132,8 @@ namespace android
         bool mNeedclientRtpPorts;
         bool mNeedStandbyResumeCapability;
         bool mNeedUibcCapability;
+        bool mNeedConnectorType;
+        bool mNeedI2C;
 
         // HDCP specific section >>>>
         bool mUsingHDCP;
@@ -150,6 +155,7 @@ namespace android
         status_t sendDescribe(int32_t sessionID, const char *uri);
         status_t sendSetup(int32_t sessionID, const char *uri);
         status_t sendPlay(int32_t sessionID, const char *uri);
+        status_t sendPause(int32_t sessionID, const char *uri);
         status_t sendTeardown(int32_t sessionID, const char *uri);
 
         status_t onReceiveM2Response(
@@ -164,10 +170,13 @@ namespace android
         status_t configureTransport(const sp<ParsedMessage> &msg);
 
         status_t onReceivePlayResponse(
-                int32_t sessionID, const sp<ParsedMessage> &msg);
+            int32_t sessionID, const sp<ParsedMessage> &msg);
+
+        status_t onReceivePauseResponse(
+            int32_t sessionID, const sp<ParsedMessage> &msg);
 
         status_t onReceiveTeardownResponse(
-                int32_t sessionID, const sp<ParsedMessage> &msg);
+            int32_t sessionID, const sp<ParsedMessage> &msg);
 
         void registerResponseHandler(
             int32_t sessionID, int32_t cseq, HandleRTSPResponseFunc func);
@@ -199,6 +208,8 @@ namespace android
         bool ParseURL(
             const char *url, AString *host, int32_t *port, AString *path,
             AString *user, AString *pass);
+
+        int save_sessionid_to_file(char* filepath, int32_t sessionID);
 
         DISALLOW_EVIL_CONSTRUCTORS(WifiDisplaySink);
     };
