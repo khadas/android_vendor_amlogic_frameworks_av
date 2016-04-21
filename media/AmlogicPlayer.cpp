@@ -593,12 +593,14 @@ AmlogicPlayer::SetCpuScalingOnAudio(float mul_audio)
 //static
 int AmlogicPlayer::GetCallingAPKName(char *name, int size)
 {
-    char path[64];
+    /*char path[64];*/
     int ret = -1;
     strcpy(name, "NA");
+    /*
     snprintf(path, 64, "/proc/%d/cmdline", IPCThreadState::self()->getCallingPid());
     ret = amsysfs_get_sysfs_str(path, name, 64);
     LOGI("GetCallingAPKName %s,name=[%s]", path, name);
+    */
     return ret;
 }
 AmlogicPlayer::~AmlogicPlayer()
