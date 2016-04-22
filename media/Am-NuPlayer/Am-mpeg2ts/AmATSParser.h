@@ -95,10 +95,10 @@ struct AmATSParser : public RefBase {
         STREAMTYPE_H265                 = 0x24,
         STREAMTYPE_PCM_AUDIO            = 0x83,
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
-        STREAMTYPE_DDP_EAC3_AUDIO       = 0x06,
         STREAMTYPE_DDP_AC3_AUDIO        = 0x81,
         STREAMTYPE_DDP_EC3_AUDIO        = 0x87,
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+        STREAMTYPE_PES_PRIVATE_DATA     = 0xff,  // unknown now, need to check it.
     };
 
 protected:
@@ -140,6 +140,9 @@ private:
     size_t mPCRBytes[2];
     int64_t mSystemTimeUs[2];
     size_t mNumPCRs;
+
+    static bool mNoAudio;
+    static bool mNoVideo;
 
     DISALLOW_EVIL_CONSTRUCTORS(AmATSParser);
 };

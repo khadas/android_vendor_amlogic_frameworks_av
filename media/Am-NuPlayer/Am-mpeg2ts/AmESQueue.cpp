@@ -40,11 +40,17 @@ namespace android {
 AmElementaryStreamQueue::AmElementaryStreamQueue(Mode mode, uint32_t flags)
     : mMode(mode),
       mFlags(flags),
+      mStreamType(-1),
       mHevcFindKey(false) {
+    memset(&mDCAParseCtx, 0, sizeof(DCAParseContext));
 }
 
 sp<MetaData> AmElementaryStreamQueue::getFormat() {
     return mFormat;
+}
+
+int32_t AmElementaryStreamQueue::getStreamType() {
+    return mStreamType;
 }
 
 void AmElementaryStreamQueue::clear(bool clearFormat) {
@@ -247,18 +253,80 @@ static bool IsSeeminglyValidMPEGAudioHeader(const uint8_t *ptr, size_t size) {
     return true;
 }
 
-#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
 static bool IsSeeminglyValidDDPAudioHeader(const uint8_t *ptr, size_t size) {
     if (size < 2) return false;
     if (ptr[0] == 0x0b && ptr[1] == 0x77) return true;
     if (ptr[0] == 0x77 && ptr[1] == 0x0b) return true;
     return false;
 }
-#endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+
+static bool IsSeeminglyValidDTSAudioHeader(const uint8_t *ptr, size_t size)
+{
+    uint32_t dca_sync_word = 0, word2 = 0;
+
+    if (size >= 8) {
+        dca_sync_word = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
+        word2 = (ptr[4] << 24) | (ptr[5] << 16) | (ptr[6] << 8) | ptr[7];
+    }
+
+#define AML_DCA_SW_CORE_16M          0x7ffe8001
+#define AML_DCA_SW_CORE_14M          0x1fffe800
+#define AML_DCA_SW_CORE_24M          0xfe80007f
+#define AML_DCA_SW_CORE_16             0xfe7f0180
+#define AML_DCA_SW_CORE_14             0xff1f00e8
+#define AML_DCA_SW_CORE_24             0x80fe7f01
+#define AML_DCA_SW_SUBSTREAM_M       0x64582025
+#define AML_DCA_SW_SUBSTREAM         0x58642520
+
+    /* 16-bit bit core stream*/
+    if( dca_sync_word == AML_DCA_SW_CORE_16    ||
+        dca_sync_word == AML_DCA_SW_CORE_14    ||
+        dca_sync_word == AML_DCA_SW_CORE_16M   ||
+        dca_sync_word == AML_DCA_SW_CORE_14M   ||
+        dca_sync_word == AML_DCA_SW_SUBSTREAM  ||
+        dca_sync_word == AML_DCA_SW_SUBSTREAM_M)
+          return true;
+
+    if ((dca_sync_word & 0xffffff00) == (AML_DCA_SW_CORE_24 & 0xffffff00) &&
+        ((word2 >> 16) & 0xFF) == (AML_DCA_SW_CORE_24 & 0xFF))
+        return true;
+
+    return false;
+}
 
 status_t AmElementaryStreamQueue::appendData(
         const void *data, size_t size, int64_t timeUs) {
     if (mBuffer == NULL || mBuffer->size() == 0) {
+
+        // this mode is audio in most time,
+        // so we check audio only.
+        // maybe need to change.
+        if (mMode == UNKNOWN_MODE) {
+            uint8_t *ptr = (uint8_t *)data;
+            for (size_t i = 0; i < size; ++i) {
+                if (IsSeeminglyValidDTSAudioHeader(&ptr[i], size - i)) {
+                    mMode = DTS;
+                    mStreamType = 1;
+                    ALOGI("We got DTS type here!");
+                    break;
+                }
+            }
+            if (mMode == UNKNOWN_MODE) {
+                for (size_t i = 0; i < size; ++i) {
+                    if (IsSeeminglyValidDDPAudioHeader(&ptr[i], size - i)) {
+                        mMode = DDP_AC3_AUDIO;
+                        mStreamType = 1;
+                        ALOGI("We got AC3 type here!");
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (mMode == UNKNOWN_MODE) {
+            return UNKNOWN_ERROR;
+        }
+
         switch (mMode) {
             case H264:
             case H265:
@@ -431,6 +499,33 @@ status_t AmElementaryStreamQueue::appendData(
             }
 
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+
+            case DTS:
+            {
+                uint8_t *ptr = (uint8_t *)data;
+                ssize_t startOffset = -1;
+                for (size_t i = 0; i < size; ++i) {
+                    if (IsSeeminglyValidDTSAudioHeader(&ptr[i], size - i)) {
+                        startOffset = i;
+                        break;
+                    }
+                }
+
+                if (startOffset < 0) {
+                    return ERROR_MALFORMED;
+                }
+
+                if (startOffset > 0) {
+                    ALOGI("found something resembling a DTS audio "
+                         "syncword at offset %ld",
+                         startOffset);
+                }
+
+                data = &ptr[startOffset];
+                size -= startOffset;
+                break;
+            }
+
             default:
                 TRESPASS();
                 break;
@@ -516,6 +611,8 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnit() {
         case DDP_EC3_AUDIO:
             return dequeueAccessUnitDDP();
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+        case DTS:
+            return dequeueAccessUnitDTS();
         default:
             CHECK_EQ((unsigned)mMode, (unsigned)MPEG_AUDIO);
             return dequeueAccessUnitMPEGAudio();
@@ -772,6 +869,93 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDDP() {
     return accessUnit;
 }
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+
+/** DCA syncwords, also used for bitstream type detection */
+#define DCA_MARKER_RAW_BE 0x7FFE8001
+#define DCA_MARKER_RAW_LE 0xFE7F0180
+#define DCA_MARKER_14B_BE 0x1FFFE800
+#define DCA_MARKER_14B_LE 0xFF1F00E8
+
+/** DCA-HD specific block starts with this marker. */
+#define DCA_HD_MARKER     0x64582025
+
+#define IS_DCA_MARKER(state, i, buf, buf_size) \
+ ((state == DCA_MARKER_14B_LE && (i < buf_size-2) && (buf[i+1] & 0xF0) == 0xF0 && buf[i+2] == 0x07) \
+ || (state == DCA_MARKER_14B_BE && (i < buf_size-2) && buf[i+1] == 0x07 && (buf[i+2] & 0xF0) == 0xF0) \
+ || state == DCA_MARKER_RAW_LE || state == DCA_MARKER_RAW_BE || state == DCA_HD_MARKER)
+
+sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDTS() {
+
+    const uint8_t *buf = mBuffer->data();
+    size_t total_size = mBuffer->size();
+
+    bool start_found = false, flush = false;
+    uint32_t state;
+    size_t i, offset = 0;
+
+    if (total_size > 0) {
+        start_found = mDCAParseCtx.frame_start_found;
+        state = mDCAParseCtx.state;
+        i = 0;
+        if (!start_found) {
+            for (; i < total_size; i++) {
+                state = (state << 8) | buf[i];
+                if (IS_DCA_MARKER(state, i, buf, total_size)) {
+                    if (!mDCAParseCtx.lastmarker
+                        || state == mDCAParseCtx.lastmarker
+                        || mDCAParseCtx.lastmarker == DCA_HD_MARKER) {
+                        start_found = true;
+                        mDCAParseCtx.lastmarker = state;
+                        break;
+                    }
+                }
+            }
+        }
+        if (start_found) {
+            for (; i < total_size; i++) {
+                mDCAParseCtx.size++;
+                state = (state << 8) | buf[i];
+                if (state == DCA_HD_MARKER && !mDCAParseCtx.hd_pos) {
+                    mDCAParseCtx.hd_pos = mDCAParseCtx.size;
+                }
+                if (IS_DCA_MARKER(state, i, buf, total_size)
+                    && (state == mDCAParseCtx.lastmarker || mDCAParseCtx.lastmarker == DCA_HD_MARKER)) {
+                    if (mDCAParseCtx.framesize > mDCAParseCtx.size) {
+                        continue;
+                    }
+                    // We have to check that we really read a full frame here, and that it isn't a pure HD frame, because their size is not constant.
+                    if (!mDCAParseCtx.framesize && state == mDCAParseCtx.lastmarker && state != DCA_HD_MARKER) {
+                        mDCAParseCtx.framesize = mDCAParseCtx.hd_pos ? mDCAParseCtx.hd_pos : mDCAParseCtx.size;
+                    }
+                    mDCAParseCtx.frame_start_found = 0;
+                    mDCAParseCtx.state = -1;
+                    mDCAParseCtx.size = 0;
+                    offset = i - 3;
+                    flush = true;
+                    break;
+                }
+            }
+        }
+        if (flush) {
+            sp<ABuffer> accessUnit = new ABuffer(offset);
+            memcpy(accessUnit->data(), buf, offset);
+            memmove(mBuffer->data(), mBuffer->data() + offset, mBuffer->size() - offset);
+            mBuffer->setRange(0, mBuffer->size() - offset);
+            int64_t timeUs = fetchTimestamp(offset);
+            accessUnit->meta()->setInt64("timeUs", timeUs);
+            if (mFormat == NULL) {
+                mFormat = new MetaData;
+                mFormat->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_DTSHD);
+                mFormat->setInt32(kKeyChannelCount, 0);
+                mFormat->setInt32(kKeySampleRate, 0);
+            }
+            return accessUnit;
+        }
+    }
+
+    return NULL;
+}
+
 int64_t AmElementaryStreamQueue::fetchTimestamp(size_t size) {
     int64_t timeUs = -1;
     bool first = true;

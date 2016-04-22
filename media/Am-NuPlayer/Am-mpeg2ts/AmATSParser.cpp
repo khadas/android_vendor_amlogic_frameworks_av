@@ -24,6 +24,7 @@
 #include "AmESQueue.h"
 #include "include/avc_utils.h"
 
+#include <cutils/properties.h>
 #include <media/stagefright/foundation/ABitReader.h>
 #include <media/stagefright/foundation/ABuffer.h>
 #include <media/stagefright/foundation/ADebug.h>
@@ -94,6 +95,7 @@ private:
     uint64_t mFirstPTS;
 
     status_t parseProgramMap(ABitReader *br);
+    unsigned checkStreamType(unsigned type);
 
     DISALLOW_EVIL_CONSTRUCTORS(Program);
 };
@@ -242,6 +244,29 @@ struct StreamInfo {
     unsigned mPID;
 };
 
+unsigned AmATSParser::Program::checkStreamType(unsigned type) {
+    switch (type) {
+        // must keep sync with .h
+        case STREAMTYPE_RESERVED:
+        case STREAMTYPE_MPEG1_VIDEO:
+        case STREAMTYPE_MPEG2_VIDEO:
+        case STREAMTYPE_MPEG1_AUDIO:
+        case STREAMTYPE_MPEG2_AUDIO:
+        case STREAMTYPE_MPEG2_AUDIO_ADTS:
+        case STREAMTYPE_MPEG4_VIDEO:
+        case STREAMTYPE_H264:
+        case STREAMTYPE_H265:
+        case STREAMTYPE_PCM_AUDIO:
+#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
+        case STREAMTYPE_DDP_AC3_AUDIO:
+        case STREAMTYPE_DDP_EC3_AUDIO:
+#endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+            return type;
+        default:
+            return STREAMTYPE_PES_PRIVATE_DATA;
+    }
+}
+
 status_t AmATSParser::Program::parseProgramMap(ABitReader *br) {
     unsigned table_id = br->getBits(8);
     ALOGV("  table_id = %u", table_id);
@@ -295,6 +320,11 @@ status_t AmATSParser::Program::parseProgramMap(ABitReader *br) {
 
         unsigned streamType = br->getBits(8);
         ALOGV("    stream_type = 0x%02x", streamType);
+
+        // hack for unknown type.
+        if (streamType == 0x06) {
+            streamType = checkStreamType(streamType);
+        }
 
         MY_LOGV("    reserved = %u", br->getBits(3));
 
@@ -418,6 +448,13 @@ status_t AmATSParser::Program::parseProgramMap(ABitReader *br) {
             sp<Stream> stream = new Stream(
                     this, info.mPID, info.mType, PCR_PID);
 
+            if (((stream->isAudio() || info.mType == 0x06) && AmATSParser::mNoAudio)
+                || (stream->isVideo() && AmATSParser::mNoVideo)) {
+                ALOGV("ignore %s stream(%d)!", stream->isAudio() ? "audio" : "video", info.mType);
+                stream.clear();
+                continue;
+            }
+
             mStreams.add(info.mPID, stream);
         }
     }
@@ -540,13 +577,17 @@ AmATSParser::Stream::Stream(
                     AmElementaryStreamQueue::DDP_AC3_AUDIO);
             break;
 
-        case STREAMTYPE_DDP_EAC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:
             // TODO FIXME verify!
             mQueue = new AmElementaryStreamQueue(
                     AmElementaryStreamQueue::DDP_EC3_AUDIO);
             break;
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+
+        case STREAMTYPE_PES_PRIVATE_DATA:
+            mQueue = new AmElementaryStreamQueue(
+                    AmElementaryStreamQueue::UNKNOWN_MODE);
+            break;
 
         default:
             break;
@@ -648,6 +689,20 @@ bool AmATSParser::Stream::isVideo() const {
         case STREAMTYPE_MPEG4_VIDEO:
             return true;
 
+        case STREAMTYPE_PES_PRIVATE_DATA:
+        {
+            if (mQueue) {
+                if (!mQueue->getStreamType()) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                ALOGE("Fatal error here, no ESQueue!");
+                return false;
+            }
+        }
+
         default:
             return false;
     }
@@ -660,11 +715,24 @@ bool AmATSParser::Stream::isAudio() const {
         case STREAMTYPE_MPEG2_AUDIO_ADTS:
         case STREAMTYPE_PCM_AUDIO:
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
-        case STREAMTYPE_DDP_EAC3_AUDIO:
         case STREAMTYPE_DDP_AC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
             return true;
+
+        case STREAMTYPE_PES_PRIVATE_DATA:
+        {
+            if (mQueue) {
+                if (mQueue->getStreamType() == 1) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                ALOGE("Fatal error here, no ESQueue!");
+                return false;
+            }
+        }
 
         default:
             return false;
@@ -976,6 +1044,10 @@ sp<MediaSource> AmATSParser::Stream::getSource(SourceType type) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+//static
+bool AmATSParser::mNoAudio = false;
+bool AmATSParser::mNoVideo = false;
+
 AmATSParser::AmATSParser(uint32_t flags)
     : mFlags(flags),
       mAbsoluteTimeAnchorUs(-1ll),
@@ -984,6 +1056,13 @@ AmATSParser::AmATSParser(uint32_t flags)
       mNumTSPacketsParsed(0),
       mNumPCRs(0) {
     mPSISections.add(0 /* PID */, new PSISection);
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.hls.no_audio", value, NULL)) {
+        mNoAudio = atoi(value);
+    }
+    if (property_get("media.hls.no_video", value, NULL)) {
+        mNoVideo = atoi(value);
+    }
 }
 
 AmATSParser::~AmATSParser() {
