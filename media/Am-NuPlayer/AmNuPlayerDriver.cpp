@@ -18,7 +18,6 @@
 #define LOG_TAG "NU-AmNuPlayerDriver"
 #include <inttypes.h>
 #include <utils/Log.h>
-
 #include "AmNuPlayerDriver.h"
 
 #include "AmNuPlayer.h"
@@ -543,13 +542,19 @@ void AmNuPlayerDriver::setAudioSink(const sp<AudioSink> &audioSink) {
     mAudioSink = audioSink;
 }
 
+
+
 status_t AmNuPlayerDriver::setParameter(
-        int /* key */, const Parcel & /* request */) {
-    return INVALID_OPERATION;
+        int key , const Parcel &  request ) {
+    Mutex::Autolock autoLock(mLock);
+    ALOGI("setParameter %d\n", key);
+    return mPlayer->setParameter(key,request);
 }
 
-status_t AmNuPlayerDriver::getParameter(int /* key */, Parcel * /* reply */) {
-    return INVALID_OPERATION;
+status_t AmNuPlayerDriver::getParameter(int  key , Parcel *  reply) {
+    Mutex::Autolock autoLock(mLock);
+    ALOGI("getParameter %d\n", key);
+    return mPlayer->getParameter(key,reply);
 }
 
 status_t AmNuPlayerDriver::getMetadata(

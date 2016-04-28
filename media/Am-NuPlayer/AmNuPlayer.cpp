@@ -18,6 +18,18 @@
 #define LOG_TAG "NU-AmNuPlayer"
 #include <utils/Log.h>
 
+#include <stdio.h>
+#include <assert.h>
+#include <limits.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sched.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include <libavcodec/avcodec.h>
+
+
 #include "AmNuPlayer.h"
 
 #include "AmHTTPLiveSource.h"
@@ -46,6 +58,7 @@
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MetaData.h>
 #include <gui/IGraphicBufferProducer.h>
+
 
 #include "avc_utils.h"
 
@@ -194,7 +207,11 @@ AmNuPlayer::AmNuPlayer()
       mPausedByClient(false),
       mAutoSwitch(-1) {
     clearFlushComplete();
-
+    DtshdApreTotal=0;
+    DtsHdStreamType=0;
+    DtsHdMulAssetHint=0;
+    DtsHdHpsHint=0;
+    mStrCurrentAudioCodec = NULL;
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.hls.wait-seconds", value, NULL)) {
         mWaitSeconds = atoi(value);
@@ -263,6 +280,394 @@ int32_t AmNuPlayer::interrupt_callback(android_thread_id_t thread_id) {
     }
     return 0;
 }
+int AmNuPlayer::getintfromString8(String8 &s, const char*pre){
+    int off;
+    int val = 0;
+    if ((off = s.find(pre, 0)) >= 0) {
+        sscanf(s.string() + off + strlen(pre), "%d", &val);
+    }
+    return val;
+}
+
+
+#define DTSM6_EXCHANGE_INFO_NODE "/sys/class/amaudio/debug"
+static void dtsm6_get_exchange_info(int *streamtype,int *APreCnt,int *APreSel,int *ApreAssetSel,int32_t *ApresAssetsArray,int *MulAssetHint,int *HPs_hint){
+    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes=0,i=0;
+
+    if (fd >= 0) {
+        uint8_t ubuf8[256]={0};
+        bytes=read(fd,ubuf8,256);
+
+        if (streamtype != NULL) {
+            uint8_t *pStreamType=(uint8_t *)strstr((const char*)ubuf8,"StreamType");
+            if (pStreamType != NULL) {
+               pStreamType+=10;
+               *streamtype=atoi((const char*)pStreamType);
+            }
+        }
+
+        if (APreCnt != NULL) {
+            uint8_t *pApreCnt=(uint8_t *)strstr((const char*)ubuf8,"ApreCnt");
+            if (pApreCnt != NULL) {
+               pApreCnt+=7;
+               *APreCnt=atoi((const char*)pApreCnt);
+            }
+        }
+
+        if (APreSel != NULL) {
+            uint8_t *pApreSel=(uint8_t *)strstr((const char*)ubuf8,"ApreSel");
+            if (pApreSel != NULL) {
+               pApreSel+=7;
+               *APreSel=atoi((const char*)pApreSel);
+            }
+        }
+
+        if (ApreAssetSel != NULL) {
+            uint8_t *pApreAssetSel=(uint8_t *)strstr((const char*)ubuf8,"ApreAssetSel");
+            if (pApreAssetSel != NULL) {
+                pApreAssetSel+=12;
+                *ApreAssetSel=atoi((const char*)pApreAssetSel);
+            }
+        }
+
+        if (ApresAssetsArray != NULL && APreCnt != NULL) {
+            uint8_t *pApresAssetsArray=(uint8_t *)strstr((const char*)ubuf8,"ApresAssetsArray");
+            if (pApresAssetsArray != NULL) {
+               pApresAssetsArray+=16;
+               for (i=0;i<*APreCnt;i++) {
+                 ApresAssetsArray[i]=pApresAssetsArray[i];
+                 ALOGI("[%s %d]ApresAssetsArray[%d]/%d",__FUNCTION__,__LINE__,i,ApresAssetsArray[i]);
+               }
+            }
+        }
+        if (MulAssetHint != NULL) {
+            uint8_t *pMulAssetHint=(uint8_t *)strstr((const char*)ubuf8,"MulAssetHint");
+            if (pMulAssetHint != NULL) {
+               pMulAssetHint+=12;
+               *MulAssetHint=atoi((const char*)pMulAssetHint);
+            }
+        }
+        if (HPs_hint != NULL) {
+            uint8_t *phps_hint=(uint8_t *)strstr((const char*)ubuf8,"HPSHint");
+            if (phps_hint != NULL) {
+               phps_hint +=7;
+               *HPs_hint=atoi((const char*)phps_hint);
+            }
+        }
+        close(fd);
+    }else{
+        ALOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
+       if (streamtype != NULL)  *streamtype=0;
+       if (APreCnt != NULL)     *APreCnt=0;
+       if (APreSel != NULL)     *APreSel=0;
+       if (ApreAssetSel != NULL)*ApreAssetSel=0;
+       if (HPs_hint != NULL)    *HPs_hint=0;
+       if (ApresAssetsArray != NULL&& APreCnt != NULL) memset(ApresAssetsArray,0,*APreCnt);
+    }
+}
+
+static void dtsm6_set_exchange_info(int *APreSel,int *ApreAssetSel)
+{
+    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes,pos=0;
+    if (fd >= 0) {
+       char ubuf8[128]={0};
+       if (APreSel != NULL) {
+           bytes=sprintf(ubuf8,"dtsm6_apre_sel_set%d",*APreSel);
+           write(fd, ubuf8, bytes);
+       }
+       if (ApreAssetSel != NULL) {
+           bytes=sprintf(ubuf8,"dtsm6_apre_assets_sel_set%d",*ApreAssetSel);
+           write(fd, ubuf8, bytes);
+       }
+       close(fd);
+    }else{
+       ALOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
+    }
+}
+static aformat_t audioTypeConvert(enum CodecID id)
+{
+    aformat_t format = (aformat_t)-1;
+    switch (id) {
+    case CODEC_ID_PCM_MULAW:
+        //format = AFORMAT_MULAW;
+        format = AFORMAT_ADPCM;
+        break;
+
+    case CODEC_ID_PCM_ALAW:
+        //format = AFORMAT_ALAW;
+        format = AFORMAT_ADPCM;
+        break;
+
+
+    case CODEC_ID_MP1:
+    case CODEC_ID_MP2:
+    case CODEC_ID_MP3:
+        format = AFORMAT_MPEG;
+        break;
+
+    case CODEC_ID_AAC_LATM:
+        format = AFORMAT_AAC_LATM;
+        break;
+
+
+    case CODEC_ID_AAC:
+        format = AFORMAT_AAC;
+        break;
+
+    case CODEC_ID_AC3:
+        format = AFORMAT_AC3;
+        break;
+    case CODEC_ID_EAC3:
+        format = AFORMAT_EAC3;
+        break;
+    case CODEC_ID_DTS:
+        format = AFORMAT_DTS;
+        break;
+
+    case CODEC_ID_PCM_S16BE:
+        format = AFORMAT_PCM_S16BE;
+        break;
+
+    case CODEC_ID_PCM_S16LE:
+        format = AFORMAT_PCM_S16LE;
+        break;
+
+    case CODEC_ID_PCM_U8:
+        format = AFORMAT_PCM_U8;
+        break;
+
+    case CODEC_ID_COOK:
+        format = AFORMAT_COOK;
+        break;
+
+    case CODEC_ID_ADPCM_IMA_WAV:
+    case CODEC_ID_ADPCM_MS:
+        format = AFORMAT_ADPCM;
+        break;
+    case CODEC_ID_AMR_NB:
+    case CODEC_ID_AMR_WB:
+        format =  AFORMAT_AMR;
+        break;
+    case CODEC_ID_WMAV1:
+    case CODEC_ID_WMAV2:
+        format =  AFORMAT_WMA;
+        break;
+    case CODEC_ID_FLAC:
+        format = AFORMAT_FLAC;
+        break;
+
+    case CODEC_ID_WMAPRO:
+        format = AFORMAT_WMAPRO;
+        break;
+
+    case CODEC_ID_PCM_BLURAY:
+        format = AFORMAT_PCM_BLURAY;
+        break;
+    case CODEC_ID_ALAC:
+        format = AFORMAT_ALAC;
+        break;
+    case CODEC_ID_VORBIS:
+        format =    AFORMAT_VORBIS;
+        break;
+    case CODEC_ID_APE:
+        format =    AFORMAT_APE;
+        break;
+    case CODEC_ID_PCM_WIFIDISPLAY:
+        format = AFORMAT_PCM_WIFIDISPLAY;
+        break;
+    default:
+        format = AFORMAT_UNSUPPORT;
+        ALOGV("audio codec_id=0x%x\n", id);
+    }
+    ALOGV("[audioTypeConvert]audio codec_id=0x%x format=%d\n", id, format);
+
+    return format;
+}
+
+status_t AmNuPlayer::updateMediaInfo(void) {
+    ALOGI("updateMediaInfo");
+    maudio_info_t *ainfo;
+    mvideo_info_t *vinfo;
+    mStreamInfo.stream_info.total_video_num = 0;
+    mStreamInfo.stream_info.total_audio_num = 0;
+    sp<AMessage> aformat= mSource->getFormat(true);  //audio
+    sp<AMessage> vformat= mSource->getFormat(false);   // video
+    if (vformat != NULL) {
+        vinfo = (mvideo_info_t *)malloc(sizeof(mvideo_info_t));
+        memset(vinfo, 0, sizeof(mvideo_info_t));
+        int32_t codecid=-1,width=-1,height=-1,bitrate=-1;
+        int64_t duration = -1;
+        vinfo->index = 0;
+        if (vformat->findInt32("code-id", &codecid)) {
+            vinfo->id = codecid;
+        }
+        if (vformat->findInt32("width", &width)) {
+            vinfo->width = width;
+        }
+        if (vformat->findInt32("height", &height)) {
+            vinfo->height = height;
+        }
+        if (vformat->findInt64("durationUs", &duration)) {
+             vinfo->duartion = duration;
+        }
+        if (vformat->findInt32("bit-rate", &bitrate)) {
+            vinfo->bit_rate = bitrate;
+        }
+        vinfo->format  = (vformat_t)0;
+        vinfo->aspect_ratio_num = 0;
+        vinfo->aspect_ratio_den = 0;
+        vinfo->frame_rate_num   = 0;
+        vinfo->frame_rate_den   = 0;
+        vinfo->video_rotation_degree = 0;
+        mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
+        mStreamInfo.stream_info.total_video_num++;
+    }
+    if (aformat != NULL) {
+        ainfo = (maudio_info_t *)malloc(sizeof(maudio_info_t));
+        memset(ainfo, 0, sizeof(maudio_info_t));
+        int32_t codecid=-1, bitrate=-1, samplerate=-1, channelcount=-1;
+        int64_t duration=-1;
+        ainfo->index = 0;
+        AString mime;
+        if (aformat->findInt32("code-id", &codecid)) {
+            ainfo->id = codecid;
+        }
+        if (aformat->findString("mime", &mime)) {
+            if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
+                ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
+                mStrCurrentAudioCodec = "DTSHD";
+                ainfo->id = CODEC_ID_DTS;
+            }
+        }
+        if (aformat->findInt32("bit-rate", &bitrate)) {
+            ainfo->bit_rate = bitrate;
+        }
+        if (aformat->findInt32("channel-count", &channelcount)) {
+            ainfo->channel = channelcount;
+        }
+        if (aformat->findInt32("sample-rate", &samplerate)) {
+            ainfo->sample_rate = samplerate;
+        }
+        if (vformat->findInt64("durationUs", &duration)) {
+            ainfo->duration = duration;
+        }
+        if (ainfo->id  > 0)
+            ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
+        ALOGI("aformat %d",ainfo->aformat);
+        mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
+        mStreamInfo.stream_info.total_audio_num++;
+
+    }
+    mStreamInfo.stream_info.cur_video_index = 0;
+    mStreamInfo.stream_info.cur_audio_index = 0;
+    mStreamInfo.stream_info.cur_sub_index   = -1;
+
+    return OK;
+
+}
+
+status_t AmNuPlayer::getMediaInfo(Parcel* reply){
+    //Mutex::Autolock autoLock(mLock);
+    ALOGI("AmNuPlayer::getMediaInfo");
+    int datapos=reply->dataPosition();
+    updateMediaInfo();
+    //filename
+    reply->writeString16(String16("-1"));
+    //duration
+    if (mStreamInfo.stream_info.duration > 0)
+        reply->writeInt32(mStreamInfo.stream_info.duration);
+    else
+        reply->writeInt32(-1);
+
+    reply->writeString16(String16("null"));
+
+    //bitrate
+      if (mStreamInfo.stream_info.bitrate > 0)
+        reply->writeInt32(mStreamInfo.stream_info.bitrate);
+    else
+        reply->writeInt32(-1);
+
+    //filetype
+    reply->writeInt32(mStreamInfo.stream_info.type);
+
+    /*select info*/
+    reply->writeInt32(mStreamInfo.stream_info.cur_video_index);
+    reply->writeInt32(mStreamInfo.stream_info.cur_audio_index);
+    reply->writeInt32(mStreamInfo.stream_info.cur_sub_index);
+    ALOGI("--cur video:%d cur audio:%d cur sub:%d \n",mStreamInfo.stream_info.cur_video_index,mStreamInfo.stream_info.cur_audio_index,mStreamInfo.stream_info.cur_sub_index);
+    /*build video info*/
+    reply->writeInt32(mStreamInfo.stream_info.total_video_num);
+    for (int i = 0;i < mStreamInfo.stream_info.total_video_num; i ++) {
+        reply->writeInt32(mStreamInfo.video_info[i]->index);
+        reply->writeInt32(mStreamInfo.video_info[i]->id);
+        reply->writeString16(String16("unknow"));
+        reply->writeInt32(mStreamInfo.video_info[i]->width);
+        reply->writeInt32(mStreamInfo.video_info[i]->height);
+        ALOGI("--video index:%d id:%d totlanum:%d width:%d height:%d \n",mStreamInfo.video_info[i]->index,mStreamInfo.video_info[i]->id,mStreamInfo.stream_info.total_video_num,mStreamInfo.video_info[i]->width,mStreamInfo.video_info[i]->height);
+    }
+
+    /*build audio info*/
+    reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
+    for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i ++) {
+        reply->writeInt32(mStreamInfo.audio_info[i]->index);
+        reply->writeInt32(mStreamInfo.audio_info[i]->id);
+        reply->writeInt32(mStreamInfo.audio_info[i]->aformat);
+        reply->writeInt32(mStreamInfo.audio_info[i]->channel);
+        reply->writeInt32(mStreamInfo.audio_info[i]->sample_rate);
+        ALOGI("--audio index:%d id:%d totlanum:%d channel:%d samplerate:%d aformat=%d\n",mStreamInfo.audio_info[i]->index,mStreamInfo.audio_info[i]->id,mStreamInfo.stream_info.total_audio_num,mStreamInfo.audio_info[i]->channel,mStreamInfo.audio_info[i]->sample_rate,mStreamInfo.audio_info[i]->aformat);
+    }
+
+    /*build subtitle info*/
+    reply->writeInt32(0);
+    reply->writeInt32(0);
+    reply->setDataPosition(datapos);
+    return OK;
+}
+
+
+
+status_t AmNuPlayer::setParameter(int key , const Parcel &  request ) {
+    if (KEY_PARAMETER_AML_PLAYER_SET_DTS_ASSET == key) {
+        int ApreID =0,ApreAssetSel;
+        const String16 uri16 = request.readString16();
+        String8 keyStr = String8(uri16);
+        ALOGI("setParameter %d=[%s]\n", key, keyStr.string());
+        ApreID = getintfromString8(keyStr, "dtsApre:");
+        ApreAssetSel=getintfromString8(keyStr, "dtsAsset:");
+        if (ApreID >= 0 && ApreAssetSel >= 0) {
+            dtsm6_set_exchange_info(&ApreID,&ApreAssetSel);
+        }
+    }else{
+        ALOGI("unsupport setParameter value!=%d\n", key);
+    }
+    return OK;
+}
+
+status_t AmNuPlayer::getParameter(int key, Parcel *reply){
+    if (key == KEY_PARAMETER_AML_PLAYER_GET_DTS_ASSET_TOTAL) {
+        if (mSource == NULL)
+            return INVALID_OPERATION;
+        int32_t codecid;
+        if (mStrCurrentAudioCodec != NULL && !strncmp(mStrCurrentAudioCodec,"DTS",3)) {
+            int32_t ApresAssetsArray[32]={0};
+            dtsm6_get_exchange_info(NULL,&DtshdApreTotal,NULL,NULL,ApresAssetsArray,NULL,NULL);
+            reply->writeInt32(DtshdApreTotal);
+            reply->writeInt32Array(32,ApresAssetsArray);
+        }else{
+            int32_t ApresAssetsArray[32]={0};
+            reply->writeInt32(0);
+            reply->writeInt32Array(32,ApresAssetsArray);
+        }
+    }else if (KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO == key) {
+        getMediaInfo(reply);
+    }else {
+        ALOGI("unsupport setParameter value!=%d\n", key);
+    }
+    return  OK;
+}
+
 
 void AmNuPlayer::setUID(uid_t uid) {
     mUIDValid = true;
@@ -1616,7 +2021,40 @@ status_t AmNuPlayer::getCurrentPosition(int64_t *mediaUs) {
     if (renderer == NULL) {
         return NO_INIT;
     }
+    //ALOGI("getcurrent:%s",(mStrCurrentAudioCodec != NULL) ? "dts" : "null" );
+    if ( mStrCurrentAudioCodec != NULL &&!strncmp(mStrCurrentAudioCodec,"DTS",3)) {
+        int stream_type=0;
+        int TotalApre=0;
+        int MulAssetHint=0;
+        int HPS_hint=0;
+        dtsm6_get_exchange_info(&stream_type,&TotalApre,NULL,NULL,NULL,&MulAssetHint,&HPS_hint);
+        ALOGI("%d:%d:%d:%d",stream_type,TotalApre,MulAssetHint,HPS_hint);
+        if (TotalApre != DtshdApreTotal && TotalApre>0 ) {
+            ALOGI("[%s %d]TotalApre changed:%d-->%d\n",__FUNCTION__,__LINE__,DtshdApreTotal,TotalApre);
+            DtshdApreTotal=TotalApre;
+            notifyListener(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_ASSET,0,NULL);
+        }
+        if (stream_type != DtsHdStreamType) {
+            ALOGI("[%s %d]DtsHdStreamType changed:%d-->%d\n",__FUNCTION__,__LINE__,DtsHdStreamType,stream_type);
+             DtsHdStreamType=stream_type;
+             if (DtsHdStreamType == 0x0)
+                notifyListener(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_ASSET,0,NULL);
+             if (DtsHdStreamType == 0x1)
+                notifyListener(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_EXPRESS,0,NULL);
+             else if (DtsHdStreamType==0x2)
+                notifyListener(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_HD_MASTER_AUDIO,0,NULL);
+        }
+        if (DtsHdMulAssetHint != MulAssetHint && MulAssetHint) {//TOTO:xiangliang.wang
+            ALOGI("[%s %d]MulAssetHint event send\n",__FUNCTION__,__LINE__);
+            notifyListener(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_MULASSETHINT,0,NULL);
+            DtsHdMulAssetHint=MulAssetHint;
+        }
 
+        if (HPS_hint && DtsHdHpsHint == 0) {
+            notifyListener(MEDIA_INFO,MEDIA_INFO_AMLOGIC_SHOW_DTS_HPS_NOTSUPPORT,0,NULL);
+            DtsHdHpsHint=1;
+        }
+    }
     return renderer->getCurrentPosition(mediaUs);
 }
 

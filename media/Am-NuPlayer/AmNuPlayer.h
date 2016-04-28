@@ -21,6 +21,7 @@
 #include <media/MediaPlayerInterface.h>
 #include <media/stagefright/foundation/AHandler.h>
 #include <NativeWindowWrapper.h>
+#include <mediainfo.h>
 
 namespace android {
 
@@ -77,6 +78,18 @@ struct AmNuPlayer : public AHandler {
     static void thread_uninterrupt();
     static int32_t interrupt_callback(android_thread_id_t thread_id);
 
+    status_t setParameter(int key, const Parcel &request);
+    status_t getParameter(int key, Parcel *reply);
+    int getintfromString8(String8 &s, const char*pre);
+    status_t getMediaInfo(Parcel* reply);
+    status_t updateMediaInfo(void);
+    //aformat_t audioTypeConvert(enum CodecID id);
+    char *mStrCurrentAudioCodec;
+    int DtshdApreTotal;
+    int DtsHdStreamType;
+    int DtsHdMulAssetHint;
+    int DtsHdHpsHint;
+
 protected:
     virtual ~AmNuPlayer();
 
@@ -88,6 +101,7 @@ public:
 
     static Mutex mThreadLock;
     static Vector<android_thread_id_t> mThreadId; // store the thread ids which need to be interrupted.
+    media_info_t        mStreamInfo;
 
 private:
     struct Decoder;

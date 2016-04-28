@@ -25,8 +25,8 @@ LOCAL_C_INCLUDES := \
 	$(TOP)/frameworks/native/include/media/openmax                \
     $(TOP)/external/curl/include                                  \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include
-
+    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include \
+    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amffmpeg
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
         libcrypto \
