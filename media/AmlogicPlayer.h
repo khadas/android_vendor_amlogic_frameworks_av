@@ -47,6 +47,8 @@ extern "C" {
 
 #include "am_media_private.h"
 
+#include <AmSysControl.h>
+
 typedef struct AmlogicPlayer_File {
     char            *datasource; /* Pointer to a FILE *, NULL. */
     int              seekable;
@@ -279,6 +281,8 @@ private:
     int mPlayTimeBac;
     int64_t realpositionBac;
     AudioPlaybackRate mPlaybackSettings;
+
+    bool mAuto3DDetected;
 };
 
 }; // namespace android

@@ -54,7 +54,6 @@
 #include <media/IMediaHTTPConnection.h>
 #include <media/IMediaHTTPService.h>
 
-
 extern int android_datasource_init(void);
 
 
@@ -141,6 +140,7 @@ AmlogicPlayer::AmlogicPlayer() :
     mDrmManagerClient(NULL),
     isHDCPFailed(false),
     isWidevineStreaming(false),
+    mAuto3DDetected(false),
     isSmoothStreaming(false)
 {
     Mutex::Autolock l(mMutex);
@@ -1630,6 +1630,11 @@ status_t AmlogicPlayer::stop()
     player_stop(mPlayer_id);
     mEnded= true;
     ///sendEvent(MEDIA_PLAYBACK_COMPLETE);
+
+    if (mAuto3DDetected) {
+        mAuto3DDetected = false;
+        amSCsetDisplay3DFormat(0); // close 3D
+    }
     return NO_ERROR;
 }
 
@@ -3208,6 +3213,11 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
             *position = realposition;
+            if (realposition >= 1000 && !mAuto3DDetected) {
+                mAuto3DDetected = true;
+                amsysfs_set_sysfs_int("/sys/module/di/parameters/det3d_en", 1); //enable di detect 3D format for local playing wxl add 20160429
+                amSCautoDetect3DForMbox();
+            }
         } else {
             //*position=((mPlayTime+500)/1000)*1000;
             *position = mPlayTime;
@@ -3350,6 +3360,7 @@ status_t AmlogicPlayer::reset()
     //mPaused = true;
     mRunning = false;
     mIgnoreMsg = false;
+    mAuto3DDetected = false;
     if (mTextDriver != NULL) {
         delete mTextDriver;
         mTextDriver = NULL;
