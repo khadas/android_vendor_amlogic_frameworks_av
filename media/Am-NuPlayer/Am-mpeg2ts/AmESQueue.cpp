@@ -628,15 +628,24 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
     }
 
     ABitReader bits(mBuffer->data(), 4);
-    CHECK_EQ(bits.getBits(8), 0xa0);
+    if (bits.getBits(8) != 0xa0) {
+        ALOGE("Unexpected bit values");
+        return NULL;
+    }
     unsigned numAUs = bits.getBits(8);
     bits.skipBits(8);
     unsigned quantization_word_length = bits.getBits(2);
     unsigned audio_sampling_frequency = bits.getBits(3);
     unsigned num_channels = bits.getBits(3);
 
-    CHECK_EQ(audio_sampling_frequency, 2);  // 48kHz
-    CHECK_EQ(num_channels, 1u);  // stereo!
+    if (audio_sampling_frequency != 2) {
+        ALOGE("Wrong sampling freq");
+        return NULL;
+    }
+    if (num_channels != 1u) {
+        ALOGE("Wrong channel #");
+        return NULL;
+    }
 
     if (mFormat == NULL) {
         mFormat = new MetaData;
@@ -681,7 +690,9 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
         return NULL;
     }
 
-    CHECK(!mRangeInfos.empty());
+    if (mRangeInfos.empty()) {
+        return NULL;
+    }
 
     const RangeInfo &info = *mRangeInfos.begin();
     if (mBuffer->size() < info.mLength) {
@@ -707,17 +718,26 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
 
         // adts_fixed_header
 
-        CHECK_EQ(bits.getBits(12), 0xfffu);
+        if (bits.getBits(12) != 0xfffu) {
+            ALOGE("Wrong atds_fixed_header");
+            return NULL;
+        }
         bits.skipBits(3);  // ID, layer
         bool protection_absent = bits.getBits(1) != 0;
 
         if (mFormat == NULL) {
             unsigned profile = bits.getBits(2);
-            CHECK_NE(profile, 3u);
+            if (profile == 3u) {
+                ALOGE("profile should not be 3");
+                return NULL;
+            }
             unsigned sampling_freq_index = bits.getBits(4);
             bits.getBits(1);  // private_bit
             unsigned channel_configuration = bits.getBits(3);
-            CHECK_NE(channel_configuration, 0u);
+            if (channel_configuration == 0u) {
+                ALOGE("channel_config should not be 0");
+                return NULL;
+            }
             bits.skipBits(2);  // original_copy, home
 
             mFormat = MakeAACCodecSpecificData(
@@ -727,8 +747,14 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
 
             int32_t sampleRate;
             int32_t numChannels;
-            CHECK(mFormat->findInt32(kKeySampleRate, &sampleRate));
-            CHECK(mFormat->findInt32(kKeyChannelCount, &numChannels));
+            if (!mFormat->findInt32(kKeySampleRate, &sampleRate)) {
+                ALOGE("SampleRate not found");
+                return NULL;
+            }
+            if (!mFormat->findInt32(kKeyChannelCount, &numChannels)) {
+                ALOGE("ChannelCount not found");
+                return NULL;
+            }
 
             ALOGI("found AAC codec config (%d Hz, %d channels)",
                  sampleRate, numChannels);
@@ -964,7 +990,9 @@ int64_t AmElementaryStreamQueue::fetchTimestamp(size_t size) {
     bool first = true;
 
     while (size > 0) {
-        CHECK(!mRangeInfos.empty());
+        if (mRangeInfos.empty()) {
+            return timeUs;
+        }
 
         RangeInfo *info = &*mRangeInfos.begin();
 
@@ -999,7 +1027,9 @@ int64_t AmElementaryStreamQueue::fetchTimestampAAC(size_t size) {
 
     size_t samplesize = size;
     while (size > 0) {
-        CHECK(!mRangeInfos.empty());
+        if (mRangeInfos.empty()) {
+            return timeUs;
+        }
 
         RangeInfo *info = &*mRangeInfos.begin();
 
@@ -1378,7 +1408,10 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGVideo() {
             // seqHeader without/with extension
 
             if (mFormat == NULL) {
-                CHECK_GE(size, 7u);
+                if (size < 7u) {
+                    ALOGE("Size too small");
+                    return NULL;
+                }
 
                 unsigned width =
                     (data[4] << 4) | data[5] >> 4;
@@ -1521,25 +1554,37 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
 
             case EXPECT_VISUAL_OBJECT_START:
             {
-                CHECK_EQ(chunkType, 0xb5);
+                if (chunkType != 0xb5) {
+                    ALOGE("Unexpected chunkType");
+                    return NULL;
+                }
                 state = EXPECT_VO_START;
                 break;
             }
 
             case EXPECT_VO_START:
             {
-                CHECK_LE(chunkType, 0x1f);
+                if (chunkType > 0x1f) {
+                    ALOGE("Unexpected chunkType");
+                    return NULL;
+                }
                 state = EXPECT_VOL_START;
                 break;
             }
 
             case EXPECT_VOL_START:
             {
-                CHECK((chunkType & 0xf0) == 0x20);
+                if ((chunkType & 0xf0) != 0x20) {
+                    ALOGE("Wrong chunkType");
+                    return NULL;
+                }
 
-                CHECK(ExtractDimensionsFromVOLHeader(
+                if (!ExtractDimensionsFromVOLHeader(
                             &data[offset], chunkSize,
-                            &width, &height));
+                            &width, &height)) {
+                    ALOGE("Failed to get dimension");
+                    return NULL;
+                }
 
                 state = WAIT_FOR_VOP_START;
                 break;

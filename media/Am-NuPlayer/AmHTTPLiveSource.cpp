@@ -23,6 +23,7 @@
 #include "AmAnotherPacketSource.h"
 #include "AmLiveDataSource.h"
 
+#include <cutils/properties.h>
 #include <media/IMediaHTTPService.h>
 #include <media/stagefright/foundation/ABuffer.h>
 #include <media/stagefright/foundation/ADebug.h>
@@ -51,7 +52,9 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
       mHasMetadata(false),
       mMetadataSelected(false),
       mHasSub(false),
-      mInterruptCallback(pfunc) {
+      mInterruptCallback(pfunc),
+      mBufferingAnchorUs(-1),
+      mDelayBufferingMS(0) {
     if (headers) {
         mExtraHeaders = *headers;
 
@@ -63,6 +66,10 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
 
             mExtraHeaders.removeItemsAt(index);
         }
+    }
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.hls.delay_buffering_ms", value, "10")) {
+        mDelayBufferingMS = atoi(value);
     }
 }
 
@@ -138,29 +145,43 @@ status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {
 
 status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         bool audio, sp<ABuffer> *accessUnit) {
-    if (mBuffering) {
-        if (!mLiveSession->haveSufficientDataOnAVTracks()) {
-            return -EWOULDBLOCK;
+    {
+        Mutex::Autolock autoLock(mLock);
+        if (mBuffering) {
+            if (!mLiveSession->haveSufficientDataOnAVTracks()) {
+                return -EWOULDBLOCK;
+            }
+            mBuffering = false;
+            mLiveSession->setBufferingStatus(false);
+            sp<AMessage> notify = dupNotify();
+            notify->setInt32("what", kWhatResumeOnBufferingEnd);
+            notify->post();
+            ALOGI("HTTPLiveSource buffering end!\n");
         }
-        mBuffering = false;
-        mLiveSession->setBufferingStatus(false);
-        sp<AMessage> notify = dupNotify();
-        notify->setInt32("what", kWhatResumeOnBufferingEnd);
-        notify->post();
-        ALOGI("HTTPLiveSource buffering end!\n");
+
+        bool needBuffering = false;
+        status_t finalResult = mLiveSession->hasBufferAvailable(audio, &needBuffering);
+        if (needBuffering) {
+            if (mBufferingAnchorUs < 0) {
+                mBufferingAnchorUs = ALooper::GetNowUs();
+                ALOGI("HTTPLiveSource delay buffering(%d)ms", mDelayBufferingMS);
+            }
+            if (ALooper::GetNowUs() - mBufferingAnchorUs >= mDelayBufferingMS * 1000ll) {
+                mBuffering = true;
+                mLiveSession->setBufferingStatus(true);
+                mBufferingAnchorUs = -1;
+                sp<AMessage> notify = dupNotify();
+                notify->setInt32("what", kWhatPauseOnBufferingStart);
+                notify->post();
+                ALOGI("HTTPLiveSource buffering start!\n");
+                return finalResult;
+            } else {
+                return -EWOULDBLOCK;
+            }
+        }
     }
 
-    bool needBuffering = false;
-    status_t finalResult = mLiveSession->hasBufferAvailable(audio, &needBuffering);
-    if (needBuffering) {
-        mBuffering = true;
-        mLiveSession->setBufferingStatus(true);
-        sp<AMessage> notify = dupNotify();
-        notify->setInt32("what", kWhatPauseOnBufferingStart);
-        notify->post();
-        ALOGI("HTTPLiveSource buffering start!\n");
-        return finalResult;
-    }
+    mBufferingAnchorUs = -1;
 
     return mLiveSession->dequeueAccessUnit(
             audio ? AmLiveSession::STREAMTYPE_AUDIO
