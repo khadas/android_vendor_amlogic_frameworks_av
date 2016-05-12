@@ -106,6 +106,7 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mPrepared(false),
       mPostPrepared(false),
       mNextPTSTimeUs(-1ll),
+      mBuffering(false),
       mMonitorQueueGeneration(0),
       mSubtitleGeneration(subtitleGeneration),
       mRefreshState(INITIAL_MINIMUM_RELOAD_DELAY),
@@ -848,7 +849,7 @@ void AmPlaylistFetcher::onMonitorQueue() {
 
     downloadMore = (bufferedDurationUs < durationToBufferUs);
 
-    if (finalResult == OK && (downloadMore || !mPostPrepared)) {
+    if (finalResult == OK && (downloadMore || !mPostPrepared || mBuffering )) {
         ALOGV("monitoring, buffered=%" PRId64 " < %" PRId64 "",
                 bufferedDurationUs, durationToBufferUs);
         // delay the next download slightly; hopefully this gives other concurrent fetchers
@@ -2388,5 +2389,10 @@ int64_t AmPlaylistFetcher::resumeThreshold(const sp<AMessage> &msg) {
 
     return 500000ll;
 }
+
+void AmPlaylistFetcher::setBufferingStatus(bool buffing) {
+    mBuffering =  buffing;
+}
+
 
 }  // namespace android

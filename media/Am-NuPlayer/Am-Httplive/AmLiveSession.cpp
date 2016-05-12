@@ -2515,5 +2515,17 @@ void AmLiveSession::setFrameRate(float frameRate) {
     notify->post();
 }
 
+void AmLiveSession::setBufferingStatus(bool buffing) {
+    for ( size_t  i = 0 ; i < mFetcherInfos.size() ; i++) {
+        uint32_t streamMask = mFetcherInfos.valueAt(i).mFetcher->getStreamTypeMask( );
+        if ( streamMask & STREAMTYPE_SUBTITLES ) {
+            continue;
+        }
+        mFetcherInfos.valueAt(i).mFetcher->setBufferingStatus(buffing);
+    }
+}
+
+
+
 }  // namespace android
 

@@ -103,6 +103,7 @@ struct AmLiveSession : public AHandler {
     float getFrameRate() const { return mFrameRate; };
 
     void setSubTrackIndex(size_t subTrackIndex) { mSubTrackIndex = subTrackIndex; }
+    void setBufferingStatus(bool buffing);
 
     enum {
         kWhatStreamsChanged,

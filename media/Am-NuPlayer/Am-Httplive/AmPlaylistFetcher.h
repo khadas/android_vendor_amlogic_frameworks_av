@@ -99,6 +99,7 @@ struct AmPlaylistFetcher : public AHandler {
 
     int64_t getSeekedTimeUs() const;
 
+    void setBufferingStatus(bool buffing) ;
 protected:
     virtual ~AmPlaylistFetcher();
     virtual void onMessageReceived(const sp<AMessage> &msg);
@@ -176,6 +177,7 @@ private:
     bool mPrepared;
     bool mPostPrepared;
     int64_t mNextPTSTimeUs;
+    bool mBuffering;
 
     int32_t mMonitorQueueGeneration;
     const int32_t mSubtitleGeneration;

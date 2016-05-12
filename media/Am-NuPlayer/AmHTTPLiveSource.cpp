@@ -143,6 +143,7 @@ status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
             return -EWOULDBLOCK;
         }
         mBuffering = false;
+        mLiveSession->setBufferingStatus(false);
         sp<AMessage> notify = dupNotify();
         notify->setInt32("what", kWhatResumeOnBufferingEnd);
         notify->post();
@@ -153,6 +154,7 @@ status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
     status_t finalResult = mLiveSession->hasBufferAvailable(audio, &needBuffering);
     if (needBuffering) {
         mBuffering = true;
+        mLiveSession->setBufferingStatus(true);
         sp<AMessage> notify = dupNotify();
         notify->setInt32("what", kWhatPauseOnBufferingStart);
         notify->post();
