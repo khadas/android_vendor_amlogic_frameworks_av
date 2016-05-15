@@ -6,7 +6,14 @@ LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
 
+LOCAL_KK=0
 ifeq ($(GPU_TYPE),t83x)
+LOCAL_KK:=1
+endif
+ifeq ($(GPU_ARCH),midgard)
+LOCAL_KK:=1
+endif
+ifeq ($(LOCAL_KK),1)
 LOCAL_CFLAGS += -DMALI_AFBC_GRALLOC=1
 else
 LOCAL_CFLAGS += -DMALI_AFBC_GRALLOC=0
