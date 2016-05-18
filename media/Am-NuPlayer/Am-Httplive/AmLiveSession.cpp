@@ -1086,11 +1086,20 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
     // we have we can make a better informed choice.
     size_t initialBandwidth = 0;
     size_t initialBandwidthIndex = 0;
+    uint32_t streamMask = 0;
+    uint32_t maxMask = 0;
+    AString audioURI, videoURI;
 
     if (mPlaylist->isVariantPlaylist()) {
+        BandwidthItem item;
+        /*check if contain both audio/video*/
+        for (size_t i = 0; i< mPlaylist->size(); i++) {
+            if (mPlaylist->getTypeURI(item.mPlaylistIndex, "audio", &audioURI))
+                maxMask |= indexToType(kAudioIndex);
+            if (mPlaylist->getTypeURI(item.mPlaylistIndex, "video", &videoURI))
+                maxMask |= indexToType(kVideoIndex);
+        }
         for (size_t i = 0; i < mPlaylist->size(); ++i) {
-            BandwidthItem item;
-
             item.mPlaylistIndex = i;
 
             sp<AMessage> meta;
@@ -1100,6 +1109,17 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
             unsigned long bandwidth;
             CHECK(meta->findInt32("bandwidth", (int32_t *)&item.mBandwidth));
 
+            streamMask = 0;
+            if (mPlaylist->getTypeURI(item.mPlaylistIndex, "audio", &audioURI))
+                streamMask |= indexToType(kAudioIndex);
+            if (mPlaylist->getTypeURI(item.mPlaylistIndex, "video", &videoURI))
+                streamMask |= indexToType(kVideoIndex);
+            /* pure audio mixed in audio/video list should return */
+            if (maxMask == (STREAMTYPE_AUDIO|STREAMTYPE_VIDEO) &&
+                    streamMask == STREAMTYPE_AUDIO) {
+                ALOGI("skip pure audio list in video/audio mix m3u8\n");
+                continue;
+            }
             if (initialBandwidth == 0) {
                 initialBandwidth = item.mBandwidth;
             }
