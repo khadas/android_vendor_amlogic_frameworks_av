@@ -977,7 +977,8 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     }
 
     /*realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;*/
-    //delayUs = realTimeUs - nowUs;
+    if (!mInSlowSync)/*when slowsync, do del before!!*/
+        delayUs = realTimeUs - nowUs;
     //ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
 
     // post 2 display refreshes before rendering is due
@@ -1173,7 +1174,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mAudioJumpedTimeUs = cur_time;
             mAjumpedNum ++ ;
             mTotalAudioJumpedTimeUs += diff_us;
-        } else if (mAudioTimeJump && mContinuous && (cur_time - mAudioJumpedTimeUs > 1000000ll)) {
+        } else if (mAudioTimeJump && mContinuous && (cur_time - mAudioJumpedTimeUs > 5000000ll)) {
             PTS_LOG("audio Discontinue timeout!");
             mAudioTimeJump = false;
             mAudioJumpedTimeUs = 0;
@@ -1193,7 +1194,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mVideoTimeJump = true;
             mVideoJumpedTimeUs = cur_time;
             mVjumpedNum ++ ;
-        } else if (mVideoTimeJump && mContinuous && (cur_time - mVideoJumpedTimeUs > 2000000ll)) {
+        } else if (mVideoTimeJump && mContinuous && (cur_time - mVideoJumpedTimeUs > 5000000ll)) {
             PTS_LOG("video Discontinue timeout!");
             mVideoTimeJump = false;
             mVideoJumpedTimeUs = 0;
