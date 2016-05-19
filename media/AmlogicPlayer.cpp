@@ -1631,12 +1631,10 @@ status_t AmlogicPlayer::stop()
     mEnded= true;
     ///sendEvent(MEDIA_PLAYBACK_COMPLETE);
 
-    /*
-    //close 3D auto detect for debug
     if (mAuto3DDetected) {
         mAuto3DDetected = false;
         amSCsetDisplay3DFormat(0); // close 3D
-    }*/
+    }
     return NO_ERROR;
 }
 
@@ -3215,13 +3213,10 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
             *position = realposition;
-            /*
-            //close 3D auto detect for debug
             if (realposition >= 1000 && !mAuto3DDetected) {
                 mAuto3DDetected = true;
-                amsysfs_set_sysfs_int("/sys/module/di/parameters/det3d_en", 1); //enable di detect 3D format for local playing wxl add 20160429
                 amSCautoDetect3DForMbox();
-            }*/
+            }
         } else {
             //*position=((mPlayTime+500)/1000)*1000;
             *position = mPlayTime;
