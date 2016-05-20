@@ -320,7 +320,7 @@ status_t ScreenMediaSource::start(int32_t client_id)
             return !OK;
         }
 
-        if (mScreenModule->common.methods->open((const hw_module_t *)mScreenModule, AML_SCREEN_SOURCE,
+        if (mScreenModule->common.methods->open((const hw_module_t *)mScreenModule, "1",
                 (struct hw_device_t**)&mScreenDev) < 0) {
             mScreenModule = NULL;
             ALOGE("[%s %d] open AML_SCREEN_SOURCE fail", __FUNCTION__, __LINE__);
