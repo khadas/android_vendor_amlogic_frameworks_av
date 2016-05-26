@@ -821,10 +821,10 @@ status_t AmATSParser::Stream::parsePES(ABitReader *br) {
     ALOGV("packet_startcode_prefix = 0x%08x", packet_startcode_prefix);
 
     if (packet_startcode_prefix != 1) {
-        ALOGV("Supposedly payload_unit_start=1 unit does not start "
+        ALOGI("Supposedly payload_unit_start=1 unit does not start "
              "with startcode.");
 
-        return ERROR_MALFORMED;
+        return BAD_VALUE;
     }
 
     CHECK_EQ(packet_startcode_prefix, 0x000001u);

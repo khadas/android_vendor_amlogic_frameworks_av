@@ -141,6 +141,7 @@ private:
         kWhatSwapped                    = 'swap',
         kWhatCheckSwitchDown            = 'ckSD',
         kWhatSwitchDown                 = 'sDwn',
+        kWhatPostPrepared               = 'pstP',
     };
 
     static const size_t kBandwidthHistoryBytes;
@@ -195,6 +196,7 @@ private:
     uint32_t mBuffTimeSec;
     int32_t mFailureWaitSec;
     int32_t mAbnormalWaitSec;
+    int32_t mStartBuffMSec;
 
     bool mFirstSniff;
     bool mCodecSpecificDataSend;

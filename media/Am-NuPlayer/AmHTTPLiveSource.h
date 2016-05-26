@@ -84,6 +84,10 @@ private:
     interruptcallback mInterruptCallback;
     android_thread_id_t mParentThreadId;
 
+    int32_t mDelayBufferingMS;
+    int64_t mBufferingAnchorUs;
+    Mutex mLock;
+
     void onSessionNotify(const sp<AMessage> &msg);
     void pollForRawData(
             const sp<AMessage> &msg, int32_t currentGeneration,

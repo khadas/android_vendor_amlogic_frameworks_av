@@ -130,6 +130,7 @@ private:
     };
 
     static const int64_t kMinPositionUpdateDelayUs;
+    static const int64_t kSlowSyncStepUs;
     static const int64_t kFrameJitterThresholdUs;
 
     sp<MediaPlayerBase::AudioSink> mAudioSink;
@@ -156,6 +157,8 @@ private:
     int32_t mChannel;
     int32_t mSampleRate;
 
+    bool mEnableSlowSync;
+    bool mInSlowSync;
     bool mQueueInitial;
     bool mRenderStarted;
     bool mAudioEOS;

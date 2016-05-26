@@ -72,6 +72,7 @@ AmLiveSession::AmLiveSession(
       mBuffTimeSec(2),
       mFailureWaitSec(0),
       mAbnormalWaitSec(0),
+      mStartBuffMSec(0),
       mFirstSniff(true),
       mCodecSpecificDataSend(false),
       mSeeked(false),
@@ -109,17 +110,17 @@ AmLiveSession::AmLiveSession(
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
         mDebugHandle = fopen("/data/tmp/read_pts.dat", "ab+");
     }
-    char value1[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.bufftime_s", value1, NULL)) {
-        mBuffTimeSec = atoi(value1);
+    if (property_get("media.hls.bufftime_s", value, NULL)) {
+        mBuffTimeSec = atoi(value);
     }
-    char value2[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.failure_wait_sec", value2, "30")) {
-        mFailureWaitSec = atoi(value2);
+    if (property_get("media.hls.failure_wait_sec", value, "30")) {
+        mFailureWaitSec = atoi(value);
     }
-    char value3[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.abnormal_wait_sec", value3, "3600")) {
-        mAbnormalWaitSec = atoi(value3);
+    if (property_get("media.hls.abnormal_wait_sec", value, "3600")) {
+        mAbnormalWaitSec = atoi(value);
+    }
+    if (property_get("media.hls.start_bufftime_ms", value, "300")) {
+        mStartBuffMSec = atoi(value);
     }
 
     mStreams[kAudioIndex] = StreamItem("audio");
@@ -291,6 +292,7 @@ status_t AmLiveSession::dequeueAccessUnit(
     }
 
     if (stream < STREAMTYPE_SUBTITLES) {
+#if 0
         // wait for counterpart
         sp<AmAnotherPacketSource> otherSource;
         uint32_t mask = mNewStreamMask & mStreamMask;
@@ -308,6 +310,7 @@ status_t AmLiveSession::dequeueAccessUnit(
         if (otherSource != NULL && !otherSource->hasBufferAvailable(&finalResult)) {
             return finalResult == OK ? -EAGAIN : finalResult;
         }
+#endif
 
         sp<AmAnotherPacketSource> discontinuityQueue  = mDiscontinuities.valueFor(stream);
         if (discontinuityQueue->hasBufferAvailable(&finalResult)) {
@@ -685,6 +688,36 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
             break;
         }
 
+        case kWhatPostPrepared:
+        {
+            int64_t min_dur = -1;
+            status_t err = OK;
+            for (size_t i = 0; i < mFetcherInfos.size(); i++) {
+                const sp<AmPlaylistFetcher> &fetcher = mFetcherInfos.valueAt(i).mFetcher;
+                uint32_t type = fetcher->getStreamTypeMask();
+                int64_t dur = 0ll;
+                if (type & STREAMTYPE_AUDIO) {
+                    dur = mPacketSources.valueFor(STREAMTYPE_AUDIO)->getBufferedDurationUs(&err);
+                    if (err == OK && (min_dur == -1 || min_dur > dur)) {
+                        min_dur = dur;
+                    }
+                }
+                if (type & STREAMTYPE_VIDEO) {
+                    dur = mPacketSources.valueFor(STREAMTYPE_VIDEO)->getBufferedDurationUs(&err);
+                    if (err == OK && (min_dur == -1 || min_dur > dur)) {
+                        min_dur = dur;
+                    }
+                }
+            }
+            if (min_dur >= mStartBuffMSec * 1000ll) {
+                ALOGI("buffered (%d)ms to notify prepared!", mStartBuffMSec);
+                postPrepared(OK);
+            } else {
+                msg->post(10000ll);
+            }
+            break;
+        }
+
         case kWhatFetcherNotify:
         {
             int32_t what;
@@ -862,7 +895,9 @@ void AmLiveSession::onMessageReceived(const sp<AMessage> &msg) {
                         }
 
                         if (allFetchersPrepared) {
-                            postPrepared(OK);
+                            mInPreparationPhase = false;
+                            sp<AMessage> prepared_msg = new AMessage(kWhatPostPrepared, this);
+                            prepared_msg->post();
                         }
                     }
                     break;
@@ -2490,7 +2525,7 @@ void AmLiveSession::checkBandwidth(bool * needFetchPlaylist) {
 }
 
 void AmLiveSession::postPrepared(status_t err) {
-    CHECK(mInPreparationPhase);
+    //CHECK(mInPreparationPhase);
 
     sp<AMessage> notify = mNotify->dup();
     if (err == OK || err == ERROR_END_OF_STREAM) {
