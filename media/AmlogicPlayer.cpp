@@ -141,6 +141,7 @@ AmlogicPlayer::AmlogicPlayer() :
     isHDCPFailed(false),
     isWidevineStreaming(false),
     mAuto3DDetected(false),
+    mSeekPos(0),
     isSmoothStreaming(false)
 {
     Mutex::Autolock l(mMutex);
@@ -1633,6 +1634,7 @@ status_t AmlogicPlayer::stop()
 
     if (mAuto3DDetected) {
         mAuto3DDetected = false;
+        mSeekPos = 0;
         amSCsetDisplay3DFormat(0); // close 3D
     }
     return NO_ERROR;
@@ -1670,6 +1672,9 @@ status_t AmlogicPlayer::seekTo(int position)
         sendEvent(MEDIA_SEEK_COMPLETE);
         return NO_ERROR;
     }
+
+    mSeekPos = ALooper::GetNowUs();
+    mAuto3DDetected = false;
 
     LOGI("seekTo:%d,player_get_state=%x,running=%d,Player time=%dms\n", position, player_get_state(mPlayer_id), mRunning, (int)(ALooper::GetNowUs() - PlayerStartTimeUS) / 1000);
     if (!mRunning || player_get_state(mPlayer_id) >= PLAYER_ERROR || player_get_state(mPlayer_id) == PLAYER_NOT_VALID_PID) {
@@ -3213,9 +3218,13 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
             *position = realposition;
-            if (realposition >= 1000 && !mAuto3DDetected) {
-                mAuto3DDetected = true;
-                amSCautoDetect3DForMbox();
+
+            if (realposition >= 3000 && !mAuto3DDetected) {//will cost 3s at least to detect 3D format by di
+                if (mSeekPos > 0 && (int64_t)(ALooper::GetNowUs() - mSeekPos) / 1000 >= 3000 || mSeekPos == 0) {
+                    mSeekPos = 0;
+                    mAuto3DDetected = true;
+                    amSCautoDetect3DForMbox();
+                }
             }
         } else {
             //*position=((mPlayTime+500)/1000)*1000;
@@ -3359,7 +3368,11 @@ status_t AmlogicPlayer::reset()
     //mPaused = true;
     mRunning = false;
     mIgnoreMsg = false;
-    mAuto3DDetected = false;
+    if (mAuto3DDetected) {
+        mAuto3DDetected = false;
+        mSeekPos = 0;
+        amSCsetDisplay3DFormat(0); // close 3D
+    }
     if (mTextDriver != NULL) {
         delete mTextDriver;
         mTextDriver = NULL;

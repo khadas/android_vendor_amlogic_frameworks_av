@@ -283,6 +283,7 @@ private:
     AudioPlaybackRate mPlaybackSettings;
 
     bool mAuto3DDetected;
+    int64_t mSeekPos;
 };
 
 }; // namespace android

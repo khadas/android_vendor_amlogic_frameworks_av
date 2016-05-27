@@ -52,17 +52,20 @@ const sp < ISystemControlService > &getSystemControlService() {
 }
 
 int amSCsetDisplay3DFormat(int format) {
+    int ret = -1;
     const sp < ISystemControlService > &scs = getSystemControlService();
     if (scs != 0) {
-        String16 v;
-        if (scs->setDisplay3DFormat(format)) {
-            return 0;
-        }
-        else {
-            ALOGE("amSCsetDisplay3DFormat getSystemControlService() is null");
+        String16 value;
+        if (scs->getProperty(String16("sys.auto3ddetect.enable"), value) && strcmp(String8(value).string(), "true") == 0) {
+            if (scs->setDisplay3DFormat(format)) {
+                ret = 0;
+            }
+            else {
+                ALOGE("amSCsetDisplay3DFormat getSystemControlService() is null");
+            }
         }
     }
-    return -1;
+    return ret;
 }
 
 int amSCgetDisplay3DFormat(void) {
@@ -79,7 +82,11 @@ int amSCgetDisplay3DFormat(void) {
 void amSCautoDetect3DForMbox() {
     const sp < ISystemControlService > &scs = getSystemControlService();
     if (scs != 0) {
-        scs->autoDetect3DForMbox();
+        String16 value;
+        if (scs->getProperty(String16("sys.auto3ddetect.enable"), value) && strcmp(String8(value).string(), "true") == 0) {
+            ALOGE("[amSCautoDetect3DForMbox]autoDetect3DForMbox");
+            scs->autoDetect3DForMbox();
+        }
     }
     else {
         ALOGE("amSCautoDetect3DForMbox getSystemControlService() is null");
