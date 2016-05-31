@@ -185,8 +185,10 @@ status_t    AmSuperPlayer::setDataSource(int fd, int64_t offset, int64_t length)
 #endif
 	// 0 origin mode --default,  player start when prepare request commign
 	// 1  new start mode ,player will start in setdatasource method
-	if(PropIsEnable("media.amplayer.startmode")==0)
-			return NO_ERROR;
+	if(PropIsEnable("media.amplayer.startmode")==0) {
+		mMutex.unlock();
+		return NO_ERROR;
+	}
 	prepareAsync_nolock();
 	mMutex.unlock();
 	//waite until libplayer prepare 
