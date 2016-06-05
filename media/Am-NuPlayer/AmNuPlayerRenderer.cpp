@@ -841,17 +841,21 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
     return !mAudioQueue.empty();
 }
 
+int64_t AmNuPlayer::Renderer::getDurationUsIfPlayedAtSampleRate(uint32_t numFrames) {
+    int32_t sampleRate = offloadingAudio() ?
+            mCurrentOffloadInfo.sample_rate : mCurrentPcmInfo.mSampleRate;
+    if (sampleRate == 0) {
+        ALOGE("sampleRate is 0 in %s mode", offloadingAudio() ? "offload" : "non-offload");
+        return 0;
+    }
+    // TODO: remove the (int32_t) casting below as it may overflow at 12.4 hours.
+    return (int64_t)((int32_t)numFrames * 1000000LL / sampleRate);
+}
+
+// Calculate duration of pending samples if played at normal rate (i.e., 1.0).
 int64_t AmNuPlayer::Renderer::getPendingAudioPlayoutDurationUs(int64_t nowUs) {
-#if 0
-    int64_t writtenAudioDurationUs =
-        mNumFramesWritten * 1000LL * mAudioSink->msecsPerFrame();
+    int64_t writtenAudioDurationUs = getDurationUsIfPlayedAtSampleRate(mNumFramesWritten);
     return writtenAudioDurationUs - getPlayedOutAudioDurationUs(nowUs);
-#endif
-    uint32_t numFramesPlayed;
-    mAudioSink->getPosition(&numFramesPlayed);
-    uint32_t numFramesPendingPlayout = mNumFramesWritten - numFramesPlayed;
-    int64_t realTimeOffsetUs = (mAudioSink->latency() / 2 + numFramesPendingPlayout * mAudioSink->msecsPerFrame()) * 1000ll;
-    return realTimeOffsetUs;
 }
 
 int64_t AmNuPlayer::Renderer::getRealTimeUs(int64_t mediaTimeUs, int64_t nowUs) {
@@ -914,7 +918,6 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     } else {
         int64_t mediaTimeUs;
         CHECK(entry.mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-
         if (mAnchorTimeMediaUs < 0) {
             if (!mHasAudio) {
                 setAnchorTime(mediaTimeUs, nowUs);
@@ -937,7 +940,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
         delayUs = realTimeUs - nowUs;
         if (mInSlowSync) {
             if (delayUs > kSlowSyncStepUs) {
-                delayUs = kSlowSyncStepUs;
+                realTimeUs = nowUs + kSlowSyncStepUs;
             }
         } else if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
             int64_t postDelayUs = 500000;
@@ -977,13 +980,13 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     }
 
     /*realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;*/
-    if (!mInSlowSync)/*when slowsync, do del before!!*/
-        delayUs = realTimeUs - nowUs;
+    delayUs = realTimeUs - nowUs;
     //ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
-
+    entry.mBuffer->meta()->setInt64("RealTimeUs", realTimeUs);
     // post 2 display refreshes before rendering is due
+    delayUs -= 2 * 1000000/30; /*send before 2 vsync,default 30hz*/
     mDrainVideoQueuePending = true;
-    msg->post(delayUs > 0 ? delayUs : 0 );
+    msg->post(delayUs > 0 ? delayUs : 0);
 
 }
 
@@ -1012,10 +1015,12 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         CHECK(entry->mBuffer->meta()->findInt64("timeUs", &realTimeUs));
     } else {
         int64_t mediaTimeUs;
-        CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-        mLastVideoDrainTimeUs = mediaTimeUs;
-        nowUs = ALooper::GetNowUs();
-        realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
+        if (!entry->mBuffer->meta()->findInt64("RealTimeUs", &realTimeUs)) {
+            CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
+            mLastVideoDrainTimeUs = mediaTimeUs;
+            nowUs = ALooper::GetNowUs();
+            realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
+        }
     }
 
     bool tooLate = false;
@@ -1064,7 +1069,7 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         }
     }
 
-    entry->mNotifyConsumed->setInt64("timestampNs", nowUs * 1000ll);
+    entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
     entry->mNotifyConsumed->setInt32("render", 1); // render anyhow
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
