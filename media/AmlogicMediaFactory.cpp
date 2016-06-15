@@ -187,6 +187,8 @@ int AmlogicMediaFactoryInit(void)
     ALOGV("register  AmSuperPlayerFactory err =%d\n", err);
     err = MediaPlayerFactory::registerFactory(new AmNuPlayerFactory(), AMNUPLAYER);
     ALOGV("register  AmNuPlayerFactory err =%d\n", err);
+    DataSource::RegisterDefaultSniffers();
+    ALOGV("register default sniffers\n");
 
     return 0;
 }
