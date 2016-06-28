@@ -245,7 +245,7 @@ MediaAlbumArt *AmlPlayerMetadataRetriever::extractAlbumArt()
     }
 
     if (mAlbumArt) {
-        return new MediaAlbumArt(*mAlbumArt);
+        return mAlbumArt;
     }
 
     return NULL;
