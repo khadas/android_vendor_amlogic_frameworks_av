@@ -1275,6 +1275,7 @@ FETCH:
         if (buffer == NULL) {  // maybe interrupt play
             status_t err = bytesRead;
             notifyError(err);
+            postMonitorQueue();
             goto FAIL;
         }
 
