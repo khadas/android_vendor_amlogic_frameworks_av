@@ -2172,6 +2172,7 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
     //trackCount+=
     LOGE("track_count:%d \n", trackCount);
     reply->writeInt32(trackCount);
+    char *lang = "und";
     for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
 
 
@@ -2189,11 +2190,16 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         }
         if (mhasAudio) {
             for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
+				char *p8tmp=NULL;
                 if (i == mStreamInfo.audio_info[m]->index) {
                     reply->writeInt32(2); // 2 fields
                     reply->writeInt32(MEDIA_TRACK_TYPE_AUDIO);
                     reply->writeString16(String16("audio/"));
-                    reply->writeString16(String16("und"));
+                    if (strlen(mStreamInfo.audio_info[m]->language))
+                         p8tmp = mStreamInfo.audio_info[m]->language;
+                    else
+                         p8tmp = lang;
+                    reply->writeString16(String16(p8tmp));
                     //continue;
                     break;
                 }
@@ -2202,12 +2208,17 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         //need to judge type, support 3gpp inband sub only
         if (mhasSub) {
             for (int m = 0; m < mStreamInfo.stream_info.total_sub_num; m++) {
+				char *p8tmp=NULL;
                 if (i == mStreamInfo.sub_info[m]->index) {
                     reply->writeInt32(2); // 2 fields
                     reply->writeInt32(MEDIA_TRACK_TYPE_TIMEDTEXT);
                     LOGE("we found 3gpp sub index:%d  id:%d  i:%d \n", mStreamInfo.sub_info[m]->index, mStreamInfo.sub_info[m]->id, i);
                     reply->writeString16(String16("text/"));
-                    reply->writeString16(String16("und"));
+                    if (strlen(mStreamInfo.sub_info[m]->sub_language))
+                       p8tmp = mStreamInfo.sub_info[m]->sub_language;
+                    else
+                       p8tmp = lang;
+                    reply->writeString16(String16(p8tmp));
                     break;
                     //continue;
                 }
