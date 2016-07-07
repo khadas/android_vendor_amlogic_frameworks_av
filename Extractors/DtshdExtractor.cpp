@@ -733,6 +733,8 @@ int Dcahd_probe( unsigned char *buf,int size)
    int i32Index=0;
    int result=0;
    unsigned int ui32Sync_word=0,ui32Sync_word2=0;
+   int first_sync_Detected=0,first_sync_pos=-1;
+   unsigned int ui32Sword0_save=0;
    for (i32Index=0; i32Index+7<size;i32Index++)
    {
         ui32Sync_word    = buf[i32Index];      ui32Sync_word <<= 8;
@@ -746,9 +748,19 @@ int Dcahd_probe( unsigned char *buf,int size)
         ui32Sync_word2  |= buf[i32Index + 7];
         result=AmlDcaDmuxMatchDTSSync2(ui32Sync_word,ui32Sync_word2);
         if (result) {
-            ALOGI("SyncWord detect: ui32Sync_word/0x%x ui32Sync_word2/0x%x ",ui32Sync_word,ui32Sync_word2);
-            break;
-        }
+            //ALOGI("SyncWord detect: ui32Sync_word/0x%x ui32Sync_word2/0x%x ",ui32Sync_word,ui32Sync_word2);
+            if (first_sync_Detected == 0){
+                first_sync_Detected=1;
+                first_sync_pos=i32Index;
+                ui32Sword0_save=ui32Sync_word;
+                ALOGI("dts first_sync_pos/%d ",first_sync_pos);
+            }else if(first_sync_Detected == 1){
+                if (ui32Sword0_save == ui32Sync_word){
+                   ALOGI("DTS Frame detected");
+                   break;
+                }
+            }
+         }
     }
 
     return result;
@@ -765,7 +777,7 @@ bool SniffDcahd(const sp<DataSource> &source, String8 *mimeType, float *confiden
     if (Dcahd_probe(tmp,i32BytesToRead)>0)
     {
         mimeType->setTo(MEDIA_MIMETYPE_AUDIO_DTSHD);
-        *confidence = 0.19f;
+        *confidence = 0.31f;
         return true;
     } else {
         return false;
