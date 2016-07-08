@@ -364,7 +364,10 @@ int IsTheSameVfmPathDefault(char * path)
     return 1;
 }
 
+#define DISABLE_VIDEO "/sys/class/video/disable_video"
+
 typedef void *(*DTVPRelease)();
+int set_sys_int(const char *path, int val);
 
 void CheckTVPEnable()
 {
@@ -382,6 +385,8 @@ void CheckTVPEnable()
             if (TVPRelease)
                 TVPRelease();
         }
+        set_sys_int(DISABLE_VIDEO, 1);
+        free_cma_buffer();
         tvp_mm_disable(0);
     }
 }
@@ -543,7 +548,7 @@ bool IsVrVmUrl( const char* url) {
      else return false;
 }
 
-#define DISABLE_VIDEO "/sys/class/video/disable_video"
+
 void
 AmlogicPlayer::VideoViewOn(void)
 {
