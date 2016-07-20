@@ -284,6 +284,7 @@ private:
 
     bool mAuto3DDetected;
     int64_t mSeekPos;
+    Parcel* mParcel;
 };
 
 }; // namespace android

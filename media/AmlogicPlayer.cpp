@@ -217,6 +217,7 @@ AmlogicPlayer::AmlogicPlayer() :
     DtsHdStreamType=0;
     DtsHdMulAssetHint=0;
     DtsHdHpsHint=0;
+    mParcel = NULL;
     AudioDualMonoNeed=0;
     AudioDualMonoSetOK=0;
     mPlaybackSettings = AUDIO_PLAYBACK_RATE_DEFAULT;
@@ -613,6 +614,10 @@ AmlogicPlayer::~AmlogicPlayer()
 {
     LOGV("AmlogicPlayer destructor\n");
     Mutex::Autolock l(mMutex);
+    if (mParcel != NULL) {
+        delete mParcel;
+        mParcel = NULL;
+    }
     release();
     if (mStrCurrentAudioCodec) {
         free(mStrCurrentAudioCodec);
@@ -968,6 +973,38 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
         free(sub);
     }
     break;
+    case PLAYER_EVENTS_BLURAY_INFO: {
+        LOGD("PLAYER_EVENTS_BLURAY_INFO");
+        bluray_info_t *info = (bluray_info_t *)ext1;
+        switch (info->info) {
+            case BLURAY_STREAM_PATH: {
+                if (mParcel != NULL)
+                    delete mParcel;
+                mParcel = new Parcel();
+                mParcel->freeData();
+                mParcel->writeString16(String16(info->stream_path));
+                mParcel->writeInt32(info->stream_info_num);
+                for (int i = 0; i < info->stream_info_num; i++) {
+                    mParcel->writeInt32(info->stream_info[i].type);
+                    mParcel->writeString16(String16(info->stream_info[i].lang));
+                }
+                mParcel->writeInt32(info->chapter_num);
+                for (int i = 0; i < info->chapter_num; i++) {
+                    mParcel->writeInt32(info->chapter_info[i].start);
+                    mParcel->writeInt32(info->chapter_info[i].duration);
+                }
+
+                if (mParcel->dataSize() > 0)
+                    sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, mParcel);
+                else
+                    sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, NULL);
+                break;
+            }
+            default:
+                break;
+        }
+        break;
+    }
     default:
         break;
     }

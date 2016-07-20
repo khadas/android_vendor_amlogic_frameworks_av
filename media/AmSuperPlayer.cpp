@@ -526,6 +526,15 @@ void AmSuperPlayer::Notify(void* cookie, int msg, int ext1, int ext2,const Parce
 	TRACE();
 	Mutex::Autolock N(mNotifyMutex);
 	LOGV("cookie=%p,msg=%x,ext1=%x,ext2=%x\n",cookie,msg,ext1,ext2);
+	if (msg == MEDIA_BLURAY_INFO) {
+		if ((mPlayer == NULL) && (oldmsg_num < 9) && (!subplayer_inited)) {
+			oldmsg[oldmsg_num].msg=msg;
+			oldmsg[oldmsg_num].ext1=ext1;
+			oldmsg[oldmsg_num].ext2=ext2;
+			oldmsg[oldmsg_num].obj=obj;
+			oldmsg_num++;
+		}
+	}
 	switch(msg){
 			case MEDIA_NOP:	
 				break;
