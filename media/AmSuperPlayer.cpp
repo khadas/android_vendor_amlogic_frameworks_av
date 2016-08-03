@@ -129,20 +129,10 @@ status_t    AmSuperPlayer::setDataSource(const sp<IMediaHTTPService> &httpServic
 	Mutex::Autolock l(mMutex);
 	TRACE();
 	mHTTPService = httpService;
-	if(muri!=NULL) free((void*)muri);
-	if((strncmp(uri,"http://",7)==0 || strncmp(uri,"https://",8)==0) &&
-		!IS_LOCAL_HTTP(uri) && /*not local http server.*/
-		PropIsEnable("media.amplayer.widevineenable")&&!IsManifestUrl(uri)&&
-		!strstr(uri, ".m3u8")){
-		char *turi;
-		turi=(char *)malloc(strlen(uri)+16);
-		sprintf(turi,"widevine%s",strchr(uri,':'));///changed the xxxx://..... to widevine:///
-		muri=turi;
-		mOUrl=uri;
-		isSwitchURL=true;
-	}else{
-		muri=strdup(uri);
-	}
+	isSwitchURL=false;
+	if (muri != NULL)
+		free((void*)muri);
+	muri=strdup(uri);
 	if (headers) {
         mheaders = *headers;
     }
@@ -712,7 +702,7 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
                     && !strstr(type, "hevc"))   /* hevc/h.265 in ts format not support by libplayer now */
             return AMLOGIC_PLAYER;
         //}
-        if (PropIsEnable("media.amplayer.widevineenable") && match_codecs(type, "drm,DRM,DRMdemux"))
+        if (match_codecs(type, "drm,DRM,DRMdemux"))
             return AMLOGIC_PLAYER;	/* 	if DRM allways goto AMLOGIC_PLAYER	*/
         else if (match_codecs(type, "Demux_no_prot")) {
             return AMLOGIC_PLAYER;  //for SS
@@ -909,29 +899,23 @@ Retry:
 				FileTypeReady=!amplayer->GetFileType(&filetype,&mvideo,&maudio);
 				TRACE();		
 		}
-		if(FileTypeReady){
+		if (FileTypeReady) {
 			LOGV("SuperGetPlayerType:type=%s,videos=%d,audios=%d\n",filetype,mvideo,maudio);
 			newtype=SuperGetPlayerType(filetype,mvideo,maudio);
 			LOGV("GET New type =%d\n",newtype);
-			if(isSwitchURL)
-			{
-				/*in drm switch mode,and if not drm,we may need to more check,*/
-				if(strstr(filetype,"DRMdemux")==NULL && strcasestr(filetype,"drm")==NULL &&  mOUrl.length()>0)
-				{	/*not drm streaming,goto old url,*/
-					if(muri!=NULL) free((void*)muri);
-					muri=strdup(mOUrl.string());
-					needretry=1;	
-					isSwitchURL=false;
+			if (strncmp(filetype,"DRMdemux", 8) == 0 && isSwitchURL == false) {
+				needretry=1;
+				LOGE("widevine retry set Data Source muri %s\n", muri);
+				if (strncmp(muri,"http://",7) == 0 || strncmp(muri,"https://",8) == 0) {
+					char *turi;
+					turi=(char *)malloc(strlen(muri)+16);
+					sprintf(turi,"widevine%s",strchr(muri,':'));///changed the xxxx://..... to widevine:///
+					muri=turi;
+					LOGE("widevine after switch url %s\n", muri);
 				}
+				isSwitchURL=true;
 			}
-		}else if(isSwitchURL && mOUrl.length()>0){		
-		 	/*is switched url for widevine,switched to orignal url,and try again*/
-			if(muri!=NULL) free((void*)muri);
-			muri=strdup(mOUrl.string());
-			needretry=1;	
-			isSwitchURL=false;
-		}else{
-			
+		} else {
 			newtype=SuperGetPlayerType(NULL,0,0);
 		}
 	}

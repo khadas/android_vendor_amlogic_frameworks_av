@@ -671,8 +671,7 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     if (PropIsEnable("media.amplayer.useandroidhttp") &&  !strncmp(uri, "http://", strlen("http://"))) {
         mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
         return setdatasource(mSouceProtocol->GetPathString(), -1, 0, 0x7ffffffffffffffLL, NULL);
-    } else if ((PropIsEnable("media.amplayer.widevineenable") &&
-                !strncmp(uri, "widevine://", strlen("widevine://"))) && !isNormalHLS) {
+    } else if (!strncmp(uri, "widevine://", strlen("widevine://")) && !isNormalHLS) {
         mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
         if (mSouceProtocol.get() != NULL) {
             mPlay_ctl.auto_buffing_enable = 1;
