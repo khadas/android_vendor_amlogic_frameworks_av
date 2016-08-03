@@ -206,6 +206,9 @@ AmNuPlayer::~AmNuPlayer() {
     if (mEnableFrameRate && mAutoSwitch > 0) {
         amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", mAutoSwitch);
     }
+    if (mSource != NULL) {
+        mSource->disconnect();
+    }
 }
 
 // static

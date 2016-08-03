@@ -75,9 +75,8 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
 
 AmNuPlayer::HTTPLiveSource::~HTTPLiveSource() {
     ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
+    disconnect();
     if (mLiveSession != NULL) {
-        mLiveSession->disconnect();
-
         mLiveLooper->unregisterHandler(mLiveSession->id());
         //mLiveLooper->unregisterHandler(this);
         mLiveLooper->stop();
@@ -115,6 +114,10 @@ void AmNuPlayer::HTTPLiveSource::prepareAsync() {
 }
 
 void AmNuPlayer::HTTPLiveSource::start() {
+}
+void AmNuPlayer::HTTPLiveSource::disconnect() {
+    if (mLiveSession != NULL)
+        mLiveSession->disconnect();
 }
 
 void AmNuPlayer::HTTPLiveSource::setParentThreadId(android_thread_id_t thread_id) {
