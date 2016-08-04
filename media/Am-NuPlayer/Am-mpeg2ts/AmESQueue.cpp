@@ -725,21 +725,20 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
         bits.skipBits(3);  // ID, layer
         bool protection_absent = bits.getBits(1) != 0;
 
+        unsigned profile = bits.getBits(2);
+        if (profile == 3u) {
+            ALOGE("profile should not be 3");
+            return NULL;
+        }
+        unsigned sampling_freq_index = bits.getBits(4);
+        bits.getBits(1);  // private_bit
+        unsigned channel_configuration = bits.getBits(3);
+        if (channel_configuration == 0u) {
+            ALOGE("channel_config should not be 0");
+            return NULL;
+        }
+        bits.skipBits(2);  // original_copy, home
         if (mFormat == NULL) {
-            unsigned profile = bits.getBits(2);
-            if (profile == 3u) {
-                ALOGE("profile should not be 3");
-                return NULL;
-            }
-            unsigned sampling_freq_index = bits.getBits(4);
-            bits.getBits(1);  // private_bit
-            unsigned channel_configuration = bits.getBits(3);
-            if (channel_configuration == 0u) {
-                ALOGE("channel_config should not be 0");
-                return NULL;
-            }
-            bits.skipBits(2);  // original_copy, home
-
             mFormat = MakeAACCodecSpecificData(
                     profile, sampling_freq_index, channel_configuration);
 
@@ -755,13 +754,31 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
                 ALOGE("ChannelCount not found");
                 return NULL;
             }
-
             ALOGI("found AAC codec config (%d Hz, %d channels)",
                  sampleRate, numChannels);
         } else {
-            // profile_ObjectType, sampling_frequency_index, private_bits,
-            // channel_configuration, original_copy, home
-            bits.skipBits(12);
+            CHECK_LE(sampling_freq_index, 11u);
+            static const int32_t kSamplingFreq[] = {
+                96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
+                16000, 12000, 11025, 8000
+            };
+            int32_t sampleRate = kSamplingFreq[sampling_freq_index];
+            int32_t numChannels = channel_configuration;
+            int curSampleRate, curNumChannels;
+
+            if (!mFormat->findInt32(kKeySampleRate, &curSampleRate)) {
+                ALOGE("SampleRate not found");
+                return NULL;
+            }
+            if (!mFormat->findInt32(kKeyChannelCount, &curNumChannels)) {
+                ALOGE("ChannelCount not found");
+                return NULL;
+            }
+            if (curSampleRate != sampleRate || curNumChannels != numChannels) {
+                mFormat->setInt32(kKeySampleRate, sampleRate);
+                mFormat->setInt32(kKeyChannelCount, numChannels);
+                ALOGI("reset sample rate %d, channel %d\n", sampleRate, numChannels);
+            }
         }
 
         // adts_variable_header
