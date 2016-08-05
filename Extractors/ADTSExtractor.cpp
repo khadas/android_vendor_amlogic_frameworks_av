@@ -28,14 +28,15 @@
 #include <media/stagefright/MetaData.h>
 #include <utils/String8.h>
 
-namespace android {
+namespace android
+{
 
 struct ADTSSource : public MediaSource {
 public:
     ADTSSource(const sp<DataSource> &source,
-              const sp<MetaData> &meta,
-              const Vector<uint64_t> &offset_vector,
-              int64_t frame_duration_us);
+               const sp<MetaData> &meta,
+               const Vector<uint64_t> &offset_vector,
+               int64_t frame_duration_us);
 
     virtual status_t start(MetaData *params = NULL);
     virtual status_t stop();
@@ -43,7 +44,7 @@ public:
     virtual sp<MetaData> getFormat();
 
     virtual status_t read(
-            MediaBuffer **buffer, const ReadOptions *options = NULL);
+        MediaBuffer **buffer, const ReadOptions *options = NULL);
 
 protected:
     virtual ~ADTSSource();
@@ -57,7 +58,7 @@ private:
     int64_t mCurrentTimeUs;
     bool mStarted;
     MediaBufferGroup *mGroup;
-	
+
     Vector<uint64_t> mOffsetVector;
     int64_t mFrameDurationUs;
 
@@ -70,8 +71,7 @@ private:
 // Returns the sample rate based on the sampling frequency index
 uint32_t get_adts_samplerate(const uint8_t sf_index)
 {
-    static const uint32_t sample_rates[] =
-    {
+    static const uint32_t sample_rates[] = {
         96000, 88200, 64000, 48000, 44100, 32000,
         24000, 22050, 16000, 12000, 11025, 8000
     };
@@ -83,7 +83,8 @@ uint32_t get_adts_samplerate(const uint8_t sf_index)
     return 0;
 }
 
-static size_t get_Adts_FrameLength(const sp<DataSource> &source, off64_t offset, size_t* headerSize) {
+static size_t get_Adts_FrameLength(const sp<DataSource> &source, off64_t offset, size_t* headerSize)
+{
 
     const size_t kAdtsHeaderLengthNoCrc = 7;
     const size_t kAdtsHeaderLengthWithCrc = 9;
@@ -125,7 +126,8 @@ static size_t get_Adts_FrameLength(const sp<DataSource> &source, off64_t offset,
 ADTSExtractor::ADTSExtractor(const sp<DataSource> &source)
     : mDataSource(source),
       mInitCheck(NO_INIT),
-      mFrameDurationUs(0) {
+      mFrameDurationUs(0)
+{
     String8 mimeType;
     float confidence;
     if (!SniffADTS(mDataSource, &mimeType, &confidence, NULL)) {
@@ -146,19 +148,19 @@ ADTSExtractor::ADTSExtractor(const sp<DataSource> &source)
     channel = (header[0] & 0x1) << 2 | (header[1] >> 6);
 
     mMeta = new MetaData;//MakeAACCodecSpecificData(profile, sf_index, channel);
-	mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE);
-	mMeta->setInt32(kKeySampleRate, sr);
+    mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE);
+    mMeta->setInt32(kKeySampleRate, sr);
     mMeta->setInt32(kKeyChannelCount, channel);
-	
+
     off64_t offset = 0;
     off64_t streamSize, numFrames = 0;
     size_t frameSize = 0;
     int64_t duration = 0;
 
     if (mDataSource->getSize(&streamSize) == OK) {
-         while (offset < streamSize) {
+        while (offset < streamSize) {
             if ((frameSize = get_Adts_FrameLength(source, offset, NULL)) == 0) {
-                	break;
+                break;
             }
 
             mOffsetVector.push(offset);
@@ -176,10 +178,12 @@ ADTSExtractor::ADTSExtractor(const sp<DataSource> &source)
     mInitCheck = OK;
 }
 
-ADTSExtractor::~ADTSExtractor() {
+ADTSExtractor::~ADTSExtractor()
+{
 }
 
-sp<MetaData> ADTSExtractor::getMetaData() {
+sp<MetaData> ADTSExtractor::getMetaData()
+{
     sp<MetaData> meta = new MetaData;
 
     if (mInitCheck != OK) {
@@ -191,11 +195,13 @@ sp<MetaData> ADTSExtractor::getMetaData() {
     return meta;
 }
 
-size_t ADTSExtractor::countTracks() {
+size_t ADTSExtractor::countTracks()
+{
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> ADTSExtractor::getTrack(size_t index) {
+sp<MediaSource> ADTSExtractor::getTrack(size_t index)
+{
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }
@@ -203,7 +209,8 @@ sp<MediaSource> ADTSExtractor::getTrack(size_t index) {
     return new ADTSSource(mDataSource, mMeta, mOffsetVector, mFrameDurationUs);
 }
 
-sp<MetaData> ADTSExtractor::getTrackMetaData(size_t index, uint32_t flags) {
+sp<MetaData> ADTSExtractor::getTrackMetaData(size_t index, uint32_t flags)
+{
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }
@@ -217,9 +224,9 @@ sp<MetaData> ADTSExtractor::getTrackMetaData(size_t index, uint32_t flags) {
 const size_t ADTSSource::kMaxFrameSize = 8192;
 
 ADTSSource::ADTSSource(
-        const sp<DataSource> &source, const sp<MetaData> &meta,
-        const Vector<uint64_t> &offset_vector,
-        int64_t frame_duration_us)
+    const sp<DataSource> &source, const sp<MetaData> &meta,
+    const Vector<uint64_t> &offset_vector,
+    int64_t frame_duration_us)
     : mDataSource(source),
       mMeta(meta),
       mOffset(0),
@@ -227,16 +234,19 @@ ADTSSource::ADTSSource(
       mStarted(false),
       mGroup(NULL),
       mOffsetVector(offset_vector),
-      mFrameDurationUs(frame_duration_us) {
+      mFrameDurationUs(frame_duration_us)
+{
 }
 
-ADTSSource::~ADTSSource() {
+ADTSSource::~ADTSSource()
+{
     if (mStarted) {
         stop();
     }
 }
 
-status_t ADTSSource::start(MetaData *params) {
+status_t ADTSSource::start(MetaData *params)
+{
     CHECK(!mStarted);
 
     mOffset = 0;
@@ -248,7 +258,8 @@ status_t ADTSSource::start(MetaData *params) {
     return OK;
 }
 
-status_t ADTSSource::stop() {
+status_t ADTSSource::stop()
+{
     CHECK(mStarted);
 
     delete mGroup;
@@ -258,12 +269,14 @@ status_t ADTSSource::stop() {
     return OK;
 }
 
-sp<MetaData> ADTSSource::getFormat() {
+sp<MetaData> ADTSSource::getFormat()
+{
     return mMeta;
 }
 
 status_t ADTSSource::read(
-        MediaBuffer **out, const ReadOptions *options) {
+    MediaBuffer **out, const ReadOptions *options)
+{
     *out = NULL;
 
     int64_t seekTimeUs;
@@ -290,7 +303,7 @@ status_t ADTSSource::read(
 
     frameSizeWithoutHeader = frameSize;// - headerSize;
     if (mDataSource->readAt(mOffset /*+ headerSize*/, buffer->data(),
-                frameSizeWithoutHeader) != (ssize_t)frameSizeWithoutHeader) {
+                            frameSizeWithoutHeader) != (ssize_t)frameSizeWithoutHeader) {
         buffer->release();
         buffer = NULL;
 
@@ -311,28 +324,34 @@ status_t ADTSSource::read(
 ////////////////////////////////////////////////////////////////////////////////
 
 bool SniffADTS(
-        const sp<DataSource> &source, String8 *mimeType, float *confidence,
-        sp<AMessage> *) {
-       
+    const sp<DataSource> &source, String8 *mimeType, float *confidence,
+    sp<AMessage> *)
+{
+
     uint8_t header[4];
-	
+
     if (source->readAt(0, &header, 4) != 4) {
         return false;
     }
 
     // ADTS syncword
     if ((header[0] == 0xff) && ((header[1] & 0xf6) == 0xf0)) {
-		uint8_t channel = (header[2] & 0x1) << 2 | (header[3] >> 6);
-		if(channel <= 2){
-			if(((header[2] >> 6) & 0x3) == 1){
-				ALOGI("adts:yes LC\n");
-				return false;
-			} 
-		}
-		ALOGI("profile=%d\n", (header[2] >> 6) & 0x3);
-		ALOGI("adts:yes, channel:%d\n",channel);
+        //android aac decoder has some profile support limit,
+        //we limit some profile goes to our faad decode,use libfaad.
+        //AAC LC/HE-AAC V1/V2/ELD goes to google aac decoder. others goes to libfaad
+        uint8_t channel = (header[2] & 0x1) << 2 | (header[3] >> 6);
+        int profile = (header[2] >> 6) & 0x3;
+        if (channel <= 2) {
+            //LC,HE-AAC,LD
+            if (profile  == 1 || profile == 4 || profile == 22) {
+                ALOGI("profile %d goes google aac decoder\n", profile);
+                return false;
+            }
+        }
+        ALOGI("profile=%d,use libfaad\n", (header[2] >> 6) & 0x3);
+        ALOGI("adts:yes, channel:%d\n", channel);
         *mimeType = MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE;
-        *confidence = 0.2;
+        *confidence = 0.3;
         return true;
     }
 
