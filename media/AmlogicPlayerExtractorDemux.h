@@ -15,7 +15,7 @@ extern "C" {
 #include <media/MediaPlayerInterface.h>
 #include <media/AudioTrack.h>
 #include <WVMExtractor.h>
-#include "SStreamingExtractor.h"
+//#include "SStreamingExtractor.h"
 namespace android
 {
 
@@ -26,6 +26,7 @@ namespace android
 #include <utils/RefBase.h>
 #include <utils/threads.h>
 
+//class SStreamingExtractor;
 
 #define BUF_TYPE_VIDEO      0
 #define BUF_TYPE_AUDIO      1
@@ -73,11 +74,11 @@ private:
     int64_t mLastAudioTimeUs;
     sp<DataSource> mReadDataSouce;
     sp<WVMExtractor> mWVMExtractor;
-    sp<SStreamingExtractor> mSSExtractor;
-    sp<MediaExtractor> mMediaExtractor;
+    //sp<SStreamingExtractor> mSSExtractor;
+    sp<IMediaExtractor> mMediaExtractor;
     //sp<MediaSource> mTrack;
-    sp<MediaSource>mVideoTrack;
-    sp<MediaSource>mAudioTrack;
+    sp<IMediaSource>mVideoTrack;
+    sp<IMediaSource>mAudioTrack;
     MediaBuffer *mBuffer;
     char *smimeType;
     float confidence;

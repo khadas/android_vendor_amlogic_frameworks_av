@@ -350,10 +350,11 @@ status_t AmLiveSession::dequeueAccessUnit(
         }
         // need to send HEVC CodecSpecificData, lost when seek instantly after start.
         if (mSeeked == true && mCodecSpecificData != NULL && !mCodecSpecificDataSend) {
+            /*
             int cast_size = HEVCCastSpecificData(mCodecSpecificData, mCodecSpecificDataSize);
             if (cast_size > 0) {
                 mCodecSpecificDataSize = cast_size;
-            }
+            }*/
             sp<ABuffer> tmpAU = new ABuffer(mCodecSpecificDataSize);
             memcpy(tmpAU->data(), mCodecSpecificData, mCodecSpecificDataSize);
             (*accessUnit) = tmpAU;
@@ -1590,6 +1591,8 @@ sp<AmM3UParser> AmLiveSession::fetchPlaylist(
     if (curPlaylistHash != NULL) {
         memcpy(curPlaylistHash, hash, sizeof(hash));
     }
+#else
+    uint8_t *forWarning = curPlaylistHash;
 #endif
 
 PASS_THROUGH:

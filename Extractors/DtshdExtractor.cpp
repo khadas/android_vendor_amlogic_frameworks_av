@@ -688,7 +688,7 @@ size_t DtshdExtractor::countTracks()
     return mInitCheck != OK ? 0 : 1;
 }
 
-sp<MediaSource> DtshdExtractor::getTrack(size_t index)
+sp<IMediaSource> DtshdExtractor::getTrack(size_t index)
 {
     if (index >= 1) {
         return NULL;

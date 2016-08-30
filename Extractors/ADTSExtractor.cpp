@@ -200,7 +200,7 @@ size_t ADTSExtractor::countTracks()
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> ADTSExtractor::getTrack(size_t index)
+sp<IMediaSource> ADTSExtractor::getTrack(size_t index)
 {
     if (mInitCheck != OK || index > 0) {
         return NULL;

@@ -3431,7 +3431,7 @@ size_t AsfExtractor::countTracks()
 
 }
 
-sp<MediaSource> AsfExtractor::getTrack(size_t index)
+sp<IMediaSource> AsfExtractor::getTrack(size_t index)
 {
     if (index >= 1) {
         return NULL;

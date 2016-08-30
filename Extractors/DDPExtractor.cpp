@@ -120,7 +120,7 @@ size_t DDPExtractor::countTracks() {
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> DDPExtractor::getTrack(size_t index) {
+sp<IMediaSource> DDPExtractor::getTrack(size_t index) {
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }

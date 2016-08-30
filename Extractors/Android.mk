@@ -1,7 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-include frameworks/av/media/libstagefright/codecs/common/Config.mk
+#include frameworks/av/media/libstagefright/codecs/common/Config.mk
 
 LOCAL_SRC_FILES:=                         \
 	ADIFExtractor.cpp                         \
@@ -50,6 +50,7 @@ LOCAL_SHARED_LIBRARIES += \
 LOCAL_C_INCLUDES+= \
 	$(TOP)/frameworks/av/media/libstagefright/include  \
 	$(TOP)/frameworks/av/media/libmediaplayerservice  \
+	$(TOP)/frameworks/av/amlogic/include \
 	$(TOP)/external/ffmpeg
 
 LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
@@ -66,7 +67,7 @@ endif
 LOCAL_CLANG := true
 
 
-include  $(TOP)/frameworks/av/amlogic/config.mk
+#include  $(TOP)/frameworks/av/amlogic/config.mk
 LOCAL_MODULE:= libstagefright_extrator
 
 LOCAL_MODULE_TAGS := optional

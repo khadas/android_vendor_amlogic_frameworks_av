@@ -438,18 +438,20 @@ static const int32_t clztab_8bit[256]={
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+/*
 static INLINE int __builtin_clz(uint32_t x)
 {
 	
     if(x&0xff000000)
-		return clztab_8bit[x>>24];
+		return (int)clztab_8bit[x>>24];
 	else if(x&0x00ff0000)
-		return 8+clztab_8bit[x>>16];
+		return (int)(8+clztab_8bit[x>>16]);
 	else if(x&0x0000ff00)
-		return 16+clztab_8bit[x>>8];
+		return (int)(16+clztab_8bit[x>>8]);
 	else
-		return 24+clztab_8bit[x];
+		return (int)(24+clztab_8bit[x]);
 }
+*/
 
 #define FASTCLZ(x) __builtin_clz((x))
 #define fast_log2(x) (31 - FASTCLZ(x))

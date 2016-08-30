@@ -33,7 +33,7 @@ struct AmLiveDataSource;
 struct AmM3UParser;
 struct MediaExtractor;
 struct MediaBuffer;
-struct String8;
+class String8;
 
 struct AmPlaylistFetcher : public AHandler {
     static const int64_t kMinBufferedDurationUs;

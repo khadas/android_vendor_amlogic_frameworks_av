@@ -1999,7 +1999,7 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
 
 void AmPlaylistFetcher::sniff(const sp<ABuffer> &buffer) {
     sp<DataSource> dataSource = new HLSDataSource(buffer);
-    mExtractor = MediaExtractor::Create(dataSource);
+    //mExtractor = MediaExtractor::Create(dataSource);
     if (mExtractor == NULL) {
         ALOGI("lzhnpng: sniff error");
         return;
@@ -2011,6 +2011,7 @@ void AmPlaylistFetcher::sniff(const sp<ABuffer> &buffer) {
         return;
     }
 
+/*
     for (size_t i = 0; i < numtracks; ++i) {
         const char *mime;
         sp<MetaData> meta = mExtractor->getTrackMetaData(i);
@@ -2028,6 +2029,7 @@ void AmPlaylistFetcher::sniff(const sp<ABuffer> &buffer) {
             mVideoSource = new AmAnotherPacketSource(track->getFormat());
         }
     }
+    */
 }
 
 void AmPlaylistFetcher::readFromNonTsFile() {

@@ -170,27 +170,28 @@ OMX_ERRORTYPE SoftAlac::internalSetParameter(
             }
             return OMX_ErrorNone;
         }
+        /*
         case OMX_IndexParamAudioAlac:
-		{
+        {
             const OMX_AUDIO_PARAM_ALACTYPE *AlacParams =(const OMX_AUDIO_PARAM_ALACTYPE *)params;
             if (AlacParams->nPortIndex != 0) {
                 return OMX_ErrorUndefined;
             }
 
-			avctx->sample_rate   = AlacParams->nSamplesPerSec;
-			avctx->channels      = AlacParams->nChannels;
-			avctx->extradata_size= AlacParams->extradata_size;
-			avctx->extradata     = (uint8_t*)av_malloc(avctx->extradata_size);
-	        if(avctx->extradata==NULL)
-	        {
-		       ALOGE("malloc space for alac->avctx.extradata failed!!\n");
-	           return OMX_ErrorInsufficientResources ;
-	        }
-			memcpy(avctx->extradata,AlacParams->extradata,avctx->extradata_size);
-			alac_decode_init(avctx);
+            avctx->sample_rate   = AlacParams->nSamplesPerSec;
+            avctx->channels      = AlacParams->nChannels;
+            avctx->extradata_size = AlacParams->extradata_size;
+            avctx->extradata     = (uint8_t*)av_malloc(avctx->extradata_size);
+            if (avctx->extradata == NULL)
+            {
+                ALOGE("malloc space for alac->avctx.extradata failed!!\n");
+                return OMX_ErrorInsufficientResources ;
+            }
+            memcpy(avctx->extradata,AlacParams->extradata,avctx->extradata_size);
+            alac_decode_init(avctx);
             init_flag=1;
-			return OMX_ErrorNone;
-        }
+            return OMX_ErrorNone;
+        }*/
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);
     }

@@ -64,7 +64,7 @@ namespace android
 {
 
 
-class TimedTextDriver;
+//class TimedTextDriver;
 
 class AmlogicPlayer : public MediaPlayerInterface
 {
@@ -257,7 +257,7 @@ private:
     char CallingAPkName[64];
     //for new start mode
     wp<MediaPlayerBase> mListener;
-    TimedTextDriver *mTextDriver;
+    //TimedTextDriver *mTextDriver;
     sp<MediaSource> mSubSource;
     bool enableOSDVideo;
 

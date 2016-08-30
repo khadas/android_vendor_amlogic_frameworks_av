@@ -547,7 +547,7 @@ size_t AIFFExtractor::countTracks() {
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> AIFFExtractor::getTrack(size_t index) {
+sp<IMediaSource> AIFFExtractor::getTrack(size_t index) {
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }

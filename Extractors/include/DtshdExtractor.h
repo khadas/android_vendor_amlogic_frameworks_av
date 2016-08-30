@@ -24,7 +24,7 @@ public:
     DtshdExtractor(const sp<DataSource> &source);
 
     virtual size_t countTracks();
-    virtual sp<MediaSource> getTrack(size_t index);
+    virtual sp<IMediaSource> getTrack(size_t index);
     virtual sp<MetaData> getTrackMetaData(size_t index, uint32_t flags);
     virtual sp<MetaData> getMetaData();
 	status_t init();

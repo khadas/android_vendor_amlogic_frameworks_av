@@ -490,7 +490,7 @@ status_t AmElementaryStreamQueue::appendData(
 
                 if (startOffset > 0) {
                     ALOGI("found something resembling a DDP audio "
-                         "syncword at offset %ld",
+                         "syncword at offset %d",
                          startOffset);
                 }
 
@@ -518,7 +518,7 @@ status_t AmElementaryStreamQueue::appendData(
 
                 if (startOffset > 0) {
                     ALOGI("found something resembling a DTS audio "
-                         "syncword at offset %ld",
+                         "syncword at offset %d",
                          startOffset);
                 }
 
@@ -862,7 +862,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDDP() {
     {
         sp<MetaData> meta = new MetaData;
         //TODO: Shoud this be EC3 or AC3 or if statement?
-        meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_EC3);
+        //meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_EC3);
 
         // Zero values entered to prevent crash
         int32_t sampleRate = 0;
@@ -991,7 +991,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDTS() {
             accessUnit->meta()->setInt64("timeUs", timeUs);
             if (mFormat == NULL) {
                 mFormat = new MetaData;
-                mFormat->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_DTSHD);
+                //mFormat->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_DTSHD);
                 mFormat->setInt32(kKeyChannelCount, 0);
                 mFormat->setInt32(kKeySampleRate, 0);
             }
@@ -1093,6 +1093,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
     const uint8_t *nalStart;
     size_t nalSize;
     bool frame_start_found = false;
+    /*
     while ((err = HEVC_getNextNALUnit(&data, &size, &nalStart, &nalSize, false)) == OK) {
         if (nalSize == 0) continue;
         unsigned nalType = (nalStart[0] >> 1) & 0x3f;
@@ -1161,6 +1162,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
         nals.push(pos);
         totalSize += nalSize;
     }
+    */
     CHECK_EQ(err, (status_t)-EAGAIN);
     return NULL;
 }

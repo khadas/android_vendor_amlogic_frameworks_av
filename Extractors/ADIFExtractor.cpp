@@ -102,7 +102,7 @@ size_t ADIFExtractor::countTracks() {
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> ADIFExtractor::getTrack(size_t index) {
+sp<IMediaSource> ADIFExtractor::getTrack(size_t index) {
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }

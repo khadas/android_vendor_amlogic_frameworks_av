@@ -229,9 +229,9 @@ typedef signed short int16_t;
 typedef signed char int8_t;
 # endif
 #endif
-#if HAVE_UNISTD_H
+//#if HAVE_UNISTD_H
 //# include <unistd.h>
-#endif
+//#endif
 
 #ifndef HAVE_FLOAT32_T
 typedef float float32_t;

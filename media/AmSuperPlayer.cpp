@@ -41,7 +41,7 @@
 
 //#include "MidiFile.h"
 #include "TestPlayerStub.h"
-#include "StagefrightPlayer.h"
+//#include "StagefrightPlayer.h"
 #include "AmNuPlayerDriver.h"
 
 #include <media/IMediaHTTPService.h>
@@ -784,7 +784,7 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
             break;
         case STAGEFRIGHT_PLAYER:
             LOGV(" create StagefrightPlayer");
-            p = new StagefrightPlayer;
+            //p = new StagefrightPlayer;
             break;
         case AMNUPLAYER:
             LOGV(" create AmNuPlayer");

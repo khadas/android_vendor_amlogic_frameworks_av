@@ -26,22 +26,25 @@ LOCAL_C_INCLUDES:= \
     $(TOP)/frameworks/native/include/media/openmax \
     $(TOP)/frameworks/av/include \
     $(TOP)/frameworks/av/media/libstagefright \
+    $(TOP)/frameworks/av/amlogic/include \
     $(TOP)/external/ffmpeg \
     $(LOCAL_PATH)/include
 
 LOCAL_SHARED_LIBRARIES := \
+    libbinder \
     libcutils \
     libamffmpeg \
     libmedia \
     libstagefright \
     libstagefright_foundation \
-    libutils
+    libutils \
+    libmedia_amlogic_support
 
 LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in FFmpeg.
 
 
-include  $(TOP)/frameworks/av/amlogic/config.mk
-LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
+#include  $(TOP)/frameworks/av/amlogic/config.mk
+#LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
 
 
 LOCAL_MODULE_TAGS := optional

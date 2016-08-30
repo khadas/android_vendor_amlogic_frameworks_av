@@ -509,7 +509,7 @@ size_t AmFFmpegExtractor::countTracks() {
     return mSources.size();
 }
 
-sp<MediaSource> AmFFmpegExtractor::getTrack(size_t index) {
+sp<IMediaSource> AmFFmpegExtractor::getTrack(size_t index) {
     Mutex::Autolock autoLock(mLock);
     if (index >= mSources.size()) {
         return NULL;

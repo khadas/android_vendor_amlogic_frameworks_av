@@ -84,7 +84,7 @@ size_t THDExtractor::countTracks() {
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> THDExtractor::getTrack(size_t index) {
+sp<IMediaSource> THDExtractor::getTrack(size_t index) {
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }

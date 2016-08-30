@@ -106,7 +106,7 @@ size_t LATMExtractor::countTracks() {
     return mInitCheck == OK ? 1 : 0;
 }
 
-sp<MediaSource> LATMExtractor::getTrack(size_t index) {
+sp<IMediaSource> LATMExtractor::getTrack(size_t index) {
     if (mInitCheck != OK || index > 0) {
         return NULL;
     }

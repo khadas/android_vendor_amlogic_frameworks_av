@@ -26,6 +26,8 @@
 #include <sys/stat.h>
 #include <utils/threads.h>
 
+#include <arpa/inet.h>
+
 #include <linux/videodev2.h>
 #include <hardware/hardware.h>
 #include <hardware/aml_screen.h>

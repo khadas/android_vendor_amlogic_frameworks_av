@@ -39,7 +39,7 @@
 #include "AmlogicPlayerExtractorDemux.h"
 #include <binder/IPCThreadState.h>
 #include <SubSource.h>
-#include <media/stagefright/timedtext/TimedTextDriver.h>
+//#include <media/stagefright/timedtext/TimedTextDriver.h>
 //#include <ui/Overlay.h>
 #define  TRACE()    LOGV("[%s::%d]\n",__FUNCTION__,__LINE__)
 //#define  TRACE()
@@ -192,7 +192,7 @@ AmlogicPlayer::AmlogicPlayer() :
     mLastStreamTimeUpdateUS = ALooper::GetNowUs();
     mVideoScalingMode = NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW;
     CallingAPkName[0] = '\0';
-    mTextDriver = NULL;
+    //mTextDriver = NULL;
     mListener = this;
     mSubSource = NULL;
     enableOSDVideo = false;
@@ -1589,6 +1589,7 @@ status_t AmlogicPlayer::start()
     mLastPlayTimeUpdateUS = ALooper::GetNowUs();
     mDelayUpdateTime = 1;
 
+    /*
     //sendEvent(MEDIA_PLAYER_STARTED);
     // wake up render thread
     //sub ops
@@ -1600,7 +1601,7 @@ status_t AmlogicPlayer::start()
         //may has sub but we can not support
         //so we just set invalid num
         //player_sid(mPlayer_id, 0xffff);
-    }
+    }*/
     sendEvent(MEDIA_STARTED, 0, 0);
     return NO_ERROR;
 }
@@ -1618,6 +1619,7 @@ status_t AmlogicPlayer::stop()
     if (mPlayerRender.get() != NULL) {
         mPlayerRender->Stop();
     }
+    /*
     //stop textdriver
     if (mTextDriver != NULL) {
         delete mTextDriver;
@@ -1628,7 +1630,7 @@ status_t AmlogicPlayer::stop()
         }
         mSubSource = NULL;
         LOGV("delete TextDriver\n");
-    }
+    }*/
     mPaused = true;
     mRunning = false;
     mLatestPauseState = true;
@@ -1777,9 +1779,10 @@ status_t AmlogicPlayer::pause()
         SetCpuScalingOnAudio(1);
         mChangedCpuFreq = false;
     }
+    /*
     if (mTextDriver != NULL) {
         mTextDriver->pause();
-    }
+    }*/
     LatestPlayerState = PLAYER_PAUSE;
     return NO_ERROR;
 }
@@ -2117,7 +2120,7 @@ status_t AmlogicPlayer::updateMediaInfo(void)
         for (i = 0; i < mStreamInfo.stream_info.total_sub_num; i ++) {
             if (mStreamInfo.sub_info[i] && mStreamInfo.sub_info[i]->internal_external == 0) {
 
-                ret=snprintf(tmp + boffset, buflen - boffset, "sid:%d,lang:%s", mStreamInfo.sub_info[i]->id, mStreamInfo.sub_info[i]->sub_language ? mStreamInfo.sub_info[i]->sub_language : "unkown");
+                ret=snprintf(tmp + boffset, buflen - boffset, "sid:%d,lang:%s", mStreamInfo.sub_info[i]->id, mStreamInfo.sub_info[i]->sub_language);
                 boffset += ret>0?ret:0;
 				if (i < mStreamInfo.stream_info.total_sub_num) {
 
@@ -2128,9 +2131,9 @@ status_t AmlogicPlayer::updateMediaInfo(void)
                 //add inband sub, 3gpp support only,codec_id from ffmpeg
 #define CODEC_ID_MOV_TEXT 0x17005
                 if (mStreamInfo.sub_info[i]->sub_type == CODEC_ID_MOV_TEXT) { //CODEC_ID_MOV_TEXT
-                    if (mTextDriver == NULL) {
-                        mTextDriver = new TimedTextDriver(mListener,mHTTPService);
-                    }
+                    //if (mTextDriver == NULL) {
+                    //    mTextDriver = new TimedTextDriver(mListener,mHTTPService);
+                    //}
                     if (mSubSource == NULL) {
                         mSubSource = new SubSource;
                     }
@@ -2139,7 +2142,7 @@ status_t AmlogicPlayer::updateMediaInfo(void)
                         continue;
                     }
 
-                    ret = mTextDriver->addInBandTextSource(mStreamInfo.sub_info[i]->index, mSubSource);
+                    //ret = mTextDriver->addInBandTextSource(mStreamInfo.sub_info[i]->index, mSubSource);
                     LOGE("add inband sub index:%d id:%d , ret:%d \n", mStreamInfo.sub_info[i]->index, mStreamInfo.sub_info[i]->id, ret);
                 }
             }
@@ -2169,9 +2172,9 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
                     mStreamInfo.stream_info.total_sub_num;
     if (trackCount > totalTrack)
         trackCount = totalTrack;
-    if (mTextDriver != NULL) {
-        trackCount += mTextDriver->countExternalTracks();
-    }
+    //if (mTextDriver != NULL) {
+    //    trackCount += mTextDriver->countExternalTracks();
+    //}
     //? fix it,need add subtitle.
     //trackCount+=
     LOGE("track_count:%d \n", trackCount);
@@ -2230,9 +2233,9 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         }
 
     }
-    if (mTextDriver != NULL) {
-        mTextDriver->getExternalTrackInfo(reply);
-    }
+    //if (mTextDriver != NULL) {
+        //mTextDriver->getExternalTrackInfo(reply);
+    //}
     return OK;
 }
 
@@ -2267,9 +2270,9 @@ int32_t AmlogicPlayer::getSelectedTrack(const Parcel& request) const
             }
             break;
         case MEDIA_TRACK_TYPE_TIMEDTEXT:
-            if (mhasSub && mTextDriver!= NULL) {
-                return mTextDriver->getSelectedTrack();
-            }
+            //if (mhasSub && mTextDriver!= NULL) {
+            //    return mTextDriver->getSelectedTrack();
+            //}
             break;
         default:break;
     }
@@ -2465,14 +2468,14 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
             reply->writeInt32(mStreamInfo.sub_info[i]->index);
             reply->writeInt32(mStreamInfo.sub_info[i]->id);
             reply->writeInt32(mStreamInfo.sub_info[i]->sub_type);
-            if (mStreamInfo.sub_info[i]->sub_language != NULL) 
+            //if (mStreamInfo.sub_info[i]->sub_language != NULL)
                 reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));
         }
 
         reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
         for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
             reply->writeInt32(mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid);
-            if (mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name != NULL)
+            //if (mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name != NULL)
                 reply->writeString16(String16(mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name));
         }
 
@@ -2485,9 +2488,9 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
 size_t AmlogicPlayer::countTracks() const
 {
     int n = mStreamInfo.stream_info.nb_streams;
-    if (mTextDriver != NULL) {
-        n += mTextDriver->countExternalTracks();
-    }
+    //if (mTextDriver != NULL) {
+    //    n += mTextDriver->countExternalTracks();
+    //}
     return n;
 }
 
@@ -2550,6 +2553,7 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
                 if (mStreamInfo.sub_info[m]->id >= 0) {
                     LOGE("switch audio track,id:%d,pid:%d\n", trackIndex, mStreamInfo.sub_info[m]->id);
                     SubSource *mSub = (SubSource *)mSubSource.get();
+                    /*
                     if (select && mSub != NULL && mTextDriver != NULL) {
                         mSub->sub_cur_id = m;
                         if (true == mRunning) {
@@ -2564,15 +2568,17 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
                         err = mTextDriver->unselectTrack(trackIndex);
                         //mSub->sub_cur_id=-1;//no need to set
                         return err;
-                    }
+                    }*/
                     return OK;
                 }
             }
         }
 
     }
+
     //outband case
     status_t err = OK;
+    /*
     if (select && mTextDriver != NULL) {
         err = mTextDriver->selectTrack(trackIndex);
         if (err == OK) {
@@ -2583,7 +2589,7 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
     } else if (mTextDriver != NULL) {
         err = mTextDriver->unselectTrack(trackIndex);
     }
-
+    */
 
     return err;
 }
@@ -2617,29 +2623,29 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
     }
     case INVOKE_ID_ADD_EXTERNAL_SOURCE: {
         Mutex::Autolock autoLock(mLock);
-        if (mTextDriver == NULL) {
-            mTextDriver = new TimedTextDriver(mListener,mHTTPService);
-        }
+        //if (mTextDriver == NULL) {
+        //    mTextDriver = new TimedTextDriver(mListener,mHTTPService);
+        //}
         String8 uri(request.readString16());
         String8 mimeType(request.readString16());
         size_t nTracks = countTracks();
-        return mTextDriver->addOutOfBandTextSource(nTracks, uri, mimeType);
+        //return mTextDriver->addOutOfBandTextSource(nTracks, uri, mimeType);
         //LOGV("Get ADD_EXTERNAL_SOURCE not support\n");
         //return ERROR_UNSUPPORTED;
     }
     case INVOKE_ID_ADD_EXTERNAL_SOURCE_FD: {
         Mutex::Autolock autoLock(mLock);
-        if (mTextDriver == NULL) {
-            mTextDriver = new TimedTextDriver(mListener,mHTTPService);
-        }
+        //if (mTextDriver == NULL) {
+            //mTextDriver = new TimedTextDriver(mListener,mHTTPService);
+        //}
         int fd         = request.readFileDescriptor();
         off64_t offset = request.readInt64();
         off64_t length  = request.readInt64();
         String8 mimeType(request.readString16());
         size_t nTracks = countTracks();
         LOGV("add outof band trackindex:%d \n", nTracks);
-        return mTextDriver->addOutOfBandTextSource(
-                   nTracks, fd, offset, length, mimeType);
+        //return mTextDriver->addOutOfBandTextSource(
+        //           nTracks, fd, offset, length, mimeType);
         //LOGV("Get INVOKE_ID_ADD_EXTERNAL_SOURCE_FD not support\n");
         //return ERROR_UNSUPPORTED;
     }
@@ -3391,6 +3397,7 @@ status_t AmlogicPlayer::reset()
         mSeekPos = 0;
         amSCsetDisplay3DFormat(0); // close 3D
     }
+    /*
     if (mTextDriver != NULL) {
         delete mTextDriver;
         mTextDriver = NULL;
@@ -3399,7 +3406,7 @@ status_t AmlogicPlayer::reset()
             sub_src->stop();
         }
         mSubSource = NULL;
-    }
+    }*/
     return NO_ERROR;
 }
 
@@ -3544,9 +3551,9 @@ status_t AmlogicPlayer::dump_subtitleinfo(int fd, media_info_t mStreamInfo)const
         result.append(buffer);
         snprintf(buffer, SIZE, " SubtitleSize[%lld]", mStreamInfo.sub_info[i]->subtitle_size);
         result.append(buffer);
-        if (mStreamInfo.sub_info[i]->sub_language != NULL) {
+        //if (mStreamInfo.sub_info[i]->sub_language != NULL) {
             snprintf(buffer, SIZE, " SubLanguage[%s]", mStreamInfo.sub_info[i]->sub_language);
-        }
+        //}
         result.append(buffer);
         result.append("\n");
         write(fd, result.string(), result.size());
@@ -3717,18 +3724,18 @@ int AmlogicPlayer::set_cur_dispmode(int mode)
         case 0:
             property_set(prop_3d,"0");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3doff");
-            SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
+            //SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
             break;
         case 1:
             property_set(prop_3d,"1");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3dlr");
-            SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
+            //SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
             LOGV("set display mode, set 3dlr \n");
             break;
         case 2:
             property_set(prop_3d,"2");
             amsysfs_set_sysfs_str(mHDMIConfigFile, "3dtb");
-            SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
+            //SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
             LOGV("set display mode, set 3dtb \n");
             break;
         default:

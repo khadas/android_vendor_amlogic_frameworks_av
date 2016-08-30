@@ -154,8 +154,8 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         }
         extractor = mWVMExtractor;
     } else {
-        extractor = MediaExtractor::Create(mDataSource,
-                mSniffedMIME.empty() ? NULL: mSniffedMIME.c_str());
+        //extractor = MediaExtractor::Create(mDataSource,
+        //        mSniffedMIME.empty() ? NULL: mSniffedMIME.c_str());
     }
 
     if (extractor == NULL) {
@@ -200,6 +200,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         return UNKNOWN_ERROR;
     }
 
+/*
     for (size_t i = 0; i < numtracks; ++i) {
         sp<MediaSource> track = extractor->getTrack(i);
 
@@ -261,7 +262,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
             }
         }
     }
-
+*/
     mBitrate = totalBitrate;
 
     return OK;

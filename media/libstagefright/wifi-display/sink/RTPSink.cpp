@@ -329,7 +329,7 @@ namespace android
         for (clientRtp = 15550;; clientRtp += 2)
         {
             int32_t rtpSession;
-            mNetSession->setRTPConnectionState(true);
+            //mNetSession->setRTPConnectionState(true);
             status_t err = mNetSession->createUDPSession(
                                clientRtp, rtpNotify, &rtpSession);
 
@@ -339,7 +339,7 @@ namespace android
                 continue;
             }
 
-            mNetSession->setRTPConnectionState(false);
+            //mNetSession->setRTPConnectionState(false);
 
             int32_t rtcpSession;
             err = mNetSession->createUDPSession(
@@ -434,6 +434,7 @@ namespace android
                 break;
             }
 
+            /*
             case ANetworkSession::kWhatRTPConnect:
             {
                 AString sourceHost;
@@ -448,7 +449,7 @@ namespace android
                     connect(sourceHost.c_str(), rtpprot, rtpprot + 1);
                 }
                 break;
-            }
+            }*/
 
             default:
                 TRESPASS();

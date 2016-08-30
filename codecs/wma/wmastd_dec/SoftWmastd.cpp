@@ -173,6 +173,7 @@ OMX_ERRORTYPE SoftWmastd::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR
             return OMX_ErrorNone;
         }
 
+        /*
         case OMX_IndexParamAudioAsf:
         {
             const OMX_AUDIO_PARAM_ASFTYPE *AsfParams =
@@ -200,6 +201,7 @@ OMX_ERRORTYPE SoftWmastd::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR
 			init_flag=1;
             return OMX_ErrorNone;
         }
+        */
 
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);

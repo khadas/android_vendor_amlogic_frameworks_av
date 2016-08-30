@@ -535,11 +535,13 @@ status_t AmNuPlayer::updateMediaInfo(void) {
             ainfo->id = codecid;
         }
         if (aformat->findString("mime", &mime)) {
+            /*
             if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
                 ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
                 mStrCurrentAudioCodec = "DTSHD";
                 ainfo->id = CODEC_ID_DTS;
             }
+            */
         }
         if (aformat->findInt32("bit-rate", &bitrate)) {
             ainfo->bit_rate = bitrate;
@@ -2567,8 +2569,8 @@ void AmNuPlayer::sendTimedTextData(const sp<ABuffer> &buffer) {
     if (size > 0) {
         CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
         flag |= TextDescriptions::IN_BAND_TEXT_3GPP;
-        TextDescriptions::getParcelOfDescriptions(
-                (const uint8_t *)data, size, flag, timeUs / 1000, &parcel);
+        //TextDescriptions::getParcelOfDescriptions(
+        //        (const uint8_t *)data, size, flag, timeUs / 1000, &parcel);
     }
 
     if ((parcel.dataSize() > 0)) {

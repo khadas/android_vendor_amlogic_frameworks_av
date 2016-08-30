@@ -144,6 +144,7 @@ OMX_ERRORTYPE SoftApe::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR pa
             return OMX_ErrorNone;
         }
 
+        /*
         case OMX_IndexParamAudioApe:
         {
             const OMX_AUDIO_PARAM_APETYPE *ApeParams =(const OMX_AUDIO_PARAM_APETYPE *)params;
@@ -164,7 +165,7 @@ OMX_ERRORTYPE SoftApe::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR pa
 	        ape_decode_init(&ApeCtx,extradata,extradata_size,channels,bits_per_coded_sample);
 			init_flag=1;
             return OMX_ErrorNone;
-        }
+        }*/
 
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);

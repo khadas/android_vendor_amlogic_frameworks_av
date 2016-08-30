@@ -26,6 +26,8 @@
 #include <sys/stat.h>
 #include <utils/threads.h>
 
+#include <arpa/inet.h>
+
 #include <cutils/properties.h>
 #include <media/ICrypto.h>
 #include <pthread.h>

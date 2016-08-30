@@ -155,14 +155,16 @@ OMX_ERRORTYPE SoftADPCM::internalSetParameter(
                 return OMX_ErrorUndefined;
             }
 
-						if (pcmParams->nBlockAlign < 4) {
-							ALOGI("adpcm: block_align not valid: %d\n", pcmParams->nBlockAlign);
-							return OMX_ErrorUndefined;
-						}
+            /*
+            if (pcmParams->nBlockAlign < 4) {
+                ALOGI("adpcm: block_align not valid: %d\n", pcmParams->nBlockAlign);
+                return OMX_ErrorUndefined;
+            }
 
             mNumChannels = pcmParams->nChannels;
-						mSampleRate = pcmParams->nSamplingRate;
-						mBlockAlign = pcmParams->nBlockAlign;
+            mSampleRate = pcmParams->nSamplingRate;
+            mBlockAlign = pcmParams->nBlockAlign;
+            */
             return OMX_ErrorNone;
         }
 

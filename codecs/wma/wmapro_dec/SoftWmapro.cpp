@@ -171,25 +171,27 @@ OMX_ERRORTYPE SoftWmapro::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR
             return OMX_ErrorNone;
         }
 
+        /*
         case OMX_IndexParamAudioAsf:
         {
             const OMX_AUDIO_PARAM_ASFTYPE *AsfParams =
-                (const OMX_AUDIO_PARAM_ASFTYPE *)params;
+            (const OMX_AUDIO_PARAM_ASFTYPE *)params;
 
             if (AsfParams->nPortIndex != 0) {
                 return OMX_ErrorUndefined;
             }
             wfext.nSamplesPerSec =AsfParams->nSamplesPerSec;
-			wfext.nChannels      =AsfParams->nChannels;
-	        wfext.nBlockAlign    =AsfParams->nBlockAlign;
-			wfext.wFormatTag     = switch_id_tag(AsfParams->wFormatTag);
-			wfext.nAvgBytesPerSec=AsfParams->nAvgBitratePerSec>>3;
-			wfext.extradata_size =AsfParams->extradata_size;
-			wfext.extradata      =(unsigned char*)AsfParams->extradata;
-			wmapro_dec_set_property(wmactx,WMAPRO_Set_WavFormat,&wfext);
-			init_flag=1;
+            wfext.nChannels      =AsfParams->nChannels;
+            wfext.nBlockAlign    =AsfParams->nBlockAlign;
+            wfext.wFormatTag     = switch_id_tag(AsfParams->wFormatTag);
+            wfext.nAvgBytesPerSec=AsfParams->nAvgBitratePerSec>>3;
+            wfext.extradata_size =AsfParams->extradata_size;
+            wfext.extradata      =(unsigned char*)AsfParams->extradata;
+            wmapro_dec_set_property(wmactx,WMAPRO_Set_WavFormat,&wfext);
+            init_flag=1;
             return OMX_ErrorNone;
         }
+        */
 
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);

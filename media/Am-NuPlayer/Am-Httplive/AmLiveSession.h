@@ -35,7 +35,7 @@ struct IMediaHTTPService;
 struct AmLiveDataSource;
 struct AmM3UParser;
 struct AmPlaylistFetcher;
-struct Parcel;
+class Parcel;
 
 typedef int32_t (*interruptcallback)(android_thread_id_t thread_id);
 

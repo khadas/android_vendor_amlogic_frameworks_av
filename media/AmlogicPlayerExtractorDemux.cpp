@@ -139,8 +139,8 @@ int AmlogicPlayerExtractorDemux::BasicInit(void)
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMPEG2PS);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMatroska);
 #endif
-    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
-    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
+    //AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
+    //AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
     return 0;
 }
 
@@ -192,8 +192,8 @@ AmlogicPlayerExtractorDemux::AmlogicPlayerExtractorDemux(AVFormatContext *s)
             mWVMExtractor->setAdaptiveStreamingMode(true);
             mMediaExtractor = mWVMExtractor;
         } else if(!strcasecmp(smimeType, MEDIA_MIMETYPE_CONTAINER_PR)){
-            mSSExtractor = new SStreamingExtractor(mReadDataSouce.get());
-            mMediaExtractor = mSSExtractor;
+            //mSSExtractor = new SStreamingExtractor(mReadDataSouce.get());
+            //mMediaExtractor = mSSExtractor;
         }else {
             mMediaExtractor = MediaExtractor::Create(mReadDataSouce.get(), smimeType);
         }
@@ -544,7 +544,7 @@ retry:
 
 #if (BOARD_WIDEVINE_SUPPORTLEVEL == 3)
             if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"DRMdemux",8)==0){//wv
-                memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                 pkt->size = size;
                 pkt->pts = TimeUs * 9 / 100;
             }
@@ -552,20 +552,20 @@ retry:
 
 #ifndef BOARD_PLAYREADY_TVP
             if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//SS or PR
-                memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                 pkt->size = size;
                 pkt->pts = TimeUs * 9 / 100;
             }
 #else
             if(!IsDRM&&s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//SS
-                memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                 pkt->size = size;
                 pkt->pts = TimeUs * 9 / 100;
             }
 #endif
 #if (BOARD_WIDEVINE_SUPPORTLEVEL == 1)
             if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"DRMdemux",8)==0){//wv
-                char *videoreales = (char *)(mBuffer->data() + mBuffer->range_offset());
+                char *videoreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                 if (video_isdrminfo) {
                     pkt->pts = TimeUs * 9 / 100;
                     drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, video_isdrminfo);
@@ -580,7 +580,7 @@ retry:
 #endif
 #ifdef BOARD_PLAYREADY_TVP
             if(IsDRM&&s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//PR
-                char *videoreales = (char *)(mBuffer->data() + mBuffer->range_offset());
+                char *videoreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                 if (video_isdrminfo) {
                     pkt->pts = TimeUs * 9 / 100;
                     drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, video_isdrminfo);
@@ -683,27 +683,27 @@ retry:
 
 #if (BOARD_WIDEVINE_SUPPORTLEVEL == 3)
                 if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"DRMdemux",8)==0){//wv
-                    memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                    memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                     pkt->size = size;
                     pkt->pts = TimeUs * 9 / 100;
                 }
 #endif
 #ifndef BOARD_PLAYREADY_TVP
                 if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//SS or PR
-                    memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                    memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                     pkt->size = size;
                     pkt->pts = TimeUs * 9 / 100;
                 }
 #else
                 if(!IsDRM&&s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//SS
-                    memcpy((char *)pkt->data, (const char *)(mBuffer->data() + mBuffer->range_offset()), size);
+                    memcpy((char *)pkt->data, (const char *)((unsigned long)mBuffer->data() + mBuffer->range_offset()), size);
                     pkt->size = size;
                     pkt->pts = TimeUs * 9 / 100;
                 }
 #endif
 #if (BOARD_WIDEVINE_SUPPORTLEVEL == 1)
                 if(s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"DRMdemux",8)==0){//wv
-                    char *audioreales = (char *)(mBuffer->data() + mBuffer->range_offset());
+                    char *audioreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                     pkt->pts = TimeUs * 9 / 100;
                     drm_stronedrminfo((char *)pkt->data, audioreales, audioreal_pktsize, pkt->pts, BUF_TYPE_AUDIO, audio_isdrminfo);
                     pkt->size = size;
@@ -712,7 +712,7 @@ retry:
 #endif
 #ifdef BOARD_PLAYREADY_TVP
                 if(IsDRM&&s&&s->iformat&&s->iformat->name&&memcmp(s->iformat->name,"Demux_no_prot",13)==0){//PR
-                    char *audioreales = (char *)(mBuffer->data() + mBuffer->range_offset());
+                    char *audioreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                     pkt->pts = TimeUs * 9 / 100;
                     drm_stronedrminfo((char *)pkt->data, audioreales, audioreal_pktsize, pkt->pts, BUF_TYPE_AUDIO, audio_isdrminfo);
                     pkt->size = size;
@@ -760,7 +760,7 @@ int AmlogicPlayerExtractorDemux::Close(AVFormatContext *s)
         LOGV("Clear AudioTrack");
     }
     mWVMExtractor.clear();
-    mSSExtractor.clear();
+    //mSSExtractor.clear();
     mMediaExtractor.clear();
     if (mBuffer != NULL) {
         mBuffer->release();
