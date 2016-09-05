@@ -30,6 +30,7 @@ LOCAL_C_INCLUDES:= \
     $(LOCAL_PATH)/include
 
 LOCAL_SHARED_LIBRARIES := \
+    libbinder \
     libcutils \
     libamffmpeg \
     libmedia \

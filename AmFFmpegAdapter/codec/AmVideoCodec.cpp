@@ -19,7 +19,8 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "AmVideoCodec"
 #include <utils/Log.h>
-
+#include <binder/IPCThreadState.h>
+#include <fcntl.h>
 #include "codec/AmVideoCodec.h"
 #include "AmFFmpegUtils.h"
 
@@ -79,6 +80,22 @@ int32_t AmVideoCodec::video_decode_init(const char * codecMime, VIDEO_INFO_T *vi
     }
 
     int32_t thread_num = GetCPUCoreCount();
+
+    if (id == AV_CODEC_ID_VP8) {
+        char callProcess[64];
+        memset(callProcess, 0x0, sizeof(callProcess));
+        sprintf(callProcess,"/proc/%d/cmdline", IPCThreadState::self()->getCallingPid());
+        int fd = open(callProcess, O_RDONLY);
+            if (fd > 0) {
+                read(fd, callProcess, 64);
+                close(fd);
+            }
+            // ALOGD("callProcess:%s\n", callProcess);
+
+            if (!strcmp(callProcess,"com.google.android.xts.media")) {
+                thread_num = 1;
+            }
+    }
     ALOGI("decoder thread num : %d\n", thread_num);
     if (mCodec->capabilities & CODEC_CAP_FRAME_THREADS) {
         av_opt_set(mctx, "thread_type", "frame", 0);
