@@ -544,32 +544,32 @@ namespace android
             ALOGI("HDCP Enabled!!!");
             Parcel data;
             data.writeInt32(1);
-            //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
+            mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
         }
         //mPlayer->setVideoSurfaceTexture(
         //        mBufferProducer != NULL ? mBufferProducer : mSurface->getSurfaceTexture());
         mPlayer->setVideoSurfaceTexture(mSurface->getIGraphicBufferProducer());
         Parcel request;
-        //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_DIS_AUTO_BUFFER, request);
+        mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_DIS_AUTO_BUFFER, request);
         mPlayer->prepareAsync();
         request.writeString16(String16("freerun_mode:60"));
-        //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_FREERUN_MODE, request);
+        mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_FREERUN_MODE, request);
         mPlayer->start();
     }
 
     void TunnelRenderer::destroyPlayer()
     {
         Parcel request;
-        //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_ENA_AUTO_BUFFER, request);
+        mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_ENA_AUTO_BUFFER, request);
         request.writeString16(String16("freerun_mode:0"));
-        //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_FREERUN_MODE, request);
+        mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_FREERUN_MODE, request);
         mPlayerClient.clear();
         mStreamSource.clear();
         if (mIsHDCP)
         {
             Parcel data;
             data.writeInt32(0);
-            //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
+            mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX, data);
         }
         mSystemControlService->setProperty(String16("media.libplayer.wfd"), String16("0"));
         mSystemControlService->setProperty(String16("media.libplayer.fastswitch"), String16(""));
