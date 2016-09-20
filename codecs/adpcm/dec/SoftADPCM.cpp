@@ -45,7 +45,8 @@ SoftADPCM::SoftADPCM(
 	  mIsIma(true),
 	  mNumChannels(2),
 	  mSampleRate(8000),
-	  mBlockAlign(0),
+	  /* TODO: this default val to fix 7.0 has no "nBlockAlign", but may cause bugs*/
+	  mBlockAlign(4),
 	  mOutputPortSettingsChange(NONE),
       mSignalledError(false) {
 	  if (!strcmp(name, "OMX.google.adpcm.ms.decoder")) {
@@ -160,11 +161,11 @@ OMX_ERRORTYPE SoftADPCM::internalSetParameter(
                 ALOGI("adpcm: block_align not valid: %d\n", pcmParams->nBlockAlign);
                 return OMX_ErrorUndefined;
             }
-
+            */
             mNumChannels = pcmParams->nChannels;
             mSampleRate = pcmParams->nSamplingRate;
-            mBlockAlign = pcmParams->nBlockAlign;
-            */
+            /*mBlockAlign = pcmParams->nBlockAlign;*/
+
             return OMX_ErrorNone;
         }
 

@@ -7,6 +7,8 @@
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/MediaDefs.h>
 #include "wma_dec_api.h"
+#include <OMX_Audio_EX_AML.h>
+
 namespace android {
 
 template<class T>

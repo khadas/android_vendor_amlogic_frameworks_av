@@ -22,6 +22,8 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/foundation/ADebug.h>
 #include <string.h>
+#include <OMX_Audio_EX_AML.h>
+
 namespace android {
 
 template<class T>

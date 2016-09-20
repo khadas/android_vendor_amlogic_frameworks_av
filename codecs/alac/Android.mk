@@ -11,7 +11,8 @@ LOCAL_SRC_FILES :=               \
 
 LOCAL_C_INCLUDES := \
         frameworks/av/media/libstagefright/include \
-        frameworks/native/include/media/openmax 
+        frameworks/native/include/media/openmax \
+        vendor/amlogic/frameworks/av/codecs/include
 #        frameworks/base/media/libstagefright/include \
 #        frameworks/base/include/media/stagefright/openmax \
 

@@ -8,6 +8,8 @@
 #include <media/stagefright/MediaDefs.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <OMX_Audio_EX_AML.h>
+
 namespace android {
 
 template<class T>

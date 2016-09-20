@@ -5,6 +5,7 @@
 #include "SoftApe.h"
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/MediaDefs.h>
+#include <OMX_Audio_EX_AML.h>
 
 namespace android {
 
