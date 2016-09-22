@@ -224,7 +224,7 @@ AmNuPlayer::~AmNuPlayer() {
         amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", mAutoSwitch);
     }
     if (mSource != NULL) {
-        mSource->disconnect();
+        mSource->release();
     }
 }
 

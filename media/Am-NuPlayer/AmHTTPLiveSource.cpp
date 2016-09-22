@@ -75,7 +75,7 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
 
 AmNuPlayer::HTTPLiveSource::~HTTPLiveSource() {
     ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
-    disconnect();
+    release();
     if (mLiveSession != NULL) {
         mLiveLooper->unregisterHandler(mLiveSession->id());
         //mLiveLooper->unregisterHandler(this);
@@ -115,7 +115,7 @@ void AmNuPlayer::HTTPLiveSource::prepareAsync() {
 
 void AmNuPlayer::HTTPLiveSource::start() {
 }
-void AmNuPlayer::HTTPLiveSource::disconnect() {
+void AmNuPlayer::HTTPLiveSource::release() {
     if (mLiveSession != NULL)
         mLiveSession->disconnect();
 }
