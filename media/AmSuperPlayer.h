@@ -39,7 +39,7 @@ typedef struct notify_msg{
 
 class AmSuperPlayer : public MediaPlayerInterface{ 
 public:
-	                    AmSuperPlayer();
+	                AmSuperPlayer(pid_t pid);
                         ~AmSuperPlayer();
 
     virtual void        onFirstRef();
@@ -89,8 +89,9 @@ private:
 	sp<MediaPlayerBase>	CreatePlayer();
 	static  int         startThread(void*);
 	
-            int         initThread();
-	
+	int         initThread();
+
+	pid_t               mPID;
 	Mutex               mMutex;
 	Mutex               mNotifyMutex;
 	notify_msg_t		oldmsg[10];

@@ -44,16 +44,14 @@ extern "C" {
 #endif
 
 int am_registerAmExSniffs(void) {
-/*
-	DataSource::RegisterSniffer_l(SniffADTS);
-	DataSource::RegisterSniffer_l(SniffADIF);
-	DataSource::RegisterSniffer_l(SniffLATM);
-	DataSource::RegisterSniffer_l(SniffAsf);
-	DataSource::RegisterSniffer_l(SniffAIFF);
-	DataSource::RegisterSniffer_l(SniffTHD);
-	DataSource::RegisterSniffer_l(SniffDDP);
-	DataSource::RegisterSniffer_l(SniffDcahd);
-	*/
+	DataSource::RegisterSniffer(SniffADTS);
+	DataSource::RegisterSniffer(SniffADIF);
+	DataSource::RegisterSniffer(SniffLATM);
+	DataSource::RegisterSniffer(SniffAsf);
+	DataSource::RegisterSniffer(SniffAIFF);
+	DataSource::RegisterSniffer(SniffTHD);
+	DataSource::RegisterSniffer(SniffDDP);
+	DataSource::RegisterSniffer(SniffDcahd);
 	return 0;
 }
 

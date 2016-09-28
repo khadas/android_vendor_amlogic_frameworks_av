@@ -42,6 +42,7 @@
 //#include "MidiFile.h"
 #include "TestPlayerStub.h"
 //#include "StagefrightPlayer.h"
+#include "nuplayer/NuPlayerDriver.h"
 #include "AmNuPlayerDriver.h"
 
 #include <media/IMediaHTTPService.h>
@@ -69,8 +70,9 @@ namespace android {
 #define IS_LOCAL_HTTP(uri) (uri && (strcasestr(uri,"://127.0.0.1") || strcasestr(uri,"://localhost")))
 #define IS_HTTP(uri) (uri && (strncmp(uri, "http", strlen("http")) == 0 || strncmp(uri, "shttp", strlen("shttp")) == 0 || strncmp(uri, "https", strlen("https")) == 0))
 bool IsManifestUrl( const char* url);
-AmSuperPlayer::AmSuperPlayer() :
+AmSuperPlayer::AmSuperPlayer(pid_t pid) :
     mPlayer(0),
+    mPID(pid),
 	mState(STATE_ERROR)
 {
 	TRACE();
@@ -505,7 +507,7 @@ status_t    AmSuperPlayer::getParameter(int key, Parcel *reply)
 		}
 
         if(key==KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO &&
-            ((mPlayer->playerType()!=AMLOGIC_PLAYER) && (mPlayer->playerType()!=STAGEFRIGHT_PLAYER))){
+            ((mPlayer->playerType()!=AMLOGIC_PLAYER)/* && (mPlayer->playerType()!=NU_PLAYER)*/)){
             LOGV("[%s::%d] playertype=%d, \n",__FUNCTION__,__LINE__, mPlayer->playerType());
             return 0;
         }
@@ -618,26 +620,20 @@ bool AmSuperPlayer::PropIsEnable(const char* str)
 }
 player_type  AmSuperPlayer::Str2PlayerType(const char *str)
 {
-	if(strcmp(str,"PV_PLAYER")==0)
-		return PV_PLAYER;
-	else if(strcmp(str,"SONIVOX_PLAYER")==0)
-		return SONIVOX_PLAYER;
-	else if(strcmp(str,"STAGEFRIGHT_PLAYER")==0)
-		return STAGEFRIGHT_PLAYER;
+    if (strcmp(str,"NU_PLAYER") == 0)
+        return NU_PLAYER;
 	else if(strcmp(str,"AMLOGIC_PLAYER")==0)
 		return AMLOGIC_PLAYER;
 	else if(strcmp(str,"AMSUPER_PLAYER")==0)
 		return AMSUPER_PLAYER;
 	/*default*/
-	return STAGEFRIGHT_PLAYER;
+	return NU_PLAYER;
 }
 
 const char *  AmSuperPlayer::PlayerType2Str(player_type type)
 {
 	switch(type){
-		case     PV_PLAYER: 			return "PV_PLAYER";
-		case     SONIVOX_PLAYER: 		return "SONIVOX_PLAYER";
-		case     STAGEFRIGHT_PLAYER: 	return "STAGEFRIGHT_PLAYER";
+		case     NU_PLAYER: 	return "NU_PLAYER";
 		case     AMLOGIC_PLAYER: 		return "AMLOGIC_PLAYER";
 		case     AMSUPER_PLAYER: 		return "AMSUPER_PLAYER";
 		case     TEST_PLAYER: 			return "TEST_PLAYER";
@@ -688,9 +684,9 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
     if (NULL != mSoftPara && match_codecs(type,mSoftPara)) {
         LOGV("%s type will use soft-decoder,force-list:%s\n",type,mSoftPara);
         if (match_codecs(type,"midi,mmf,mdi")) {
-            return SONIVOX_PLAYER;
+            return AMNUPLAYER;
         } else {
-            return STAGEFRIGHT_PLAYER;
+            return NU_PLAYER;
         }
     }
     if (amplayer_enabed && type != NULL)
@@ -726,7 +722,7 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
                     return AMNUPLAYER;
                 }
             }
-            return STAGEFRIGHT_PLAYER;
+            return NU_PLAYER;
         }
 PASS_THROUGH:
         if (videos>0)
@@ -744,10 +740,8 @@ PASS_THROUGH:
         }
 
     }
-
     if (match_codecs(type,"midi,mmf,mdi"))
-        return SONIVOX_PLAYER;
-
+        return AMNUPLAYER;
     if (match_codecs(type,"m4a")) {
         ret=property_get("media.amsuperplayer.m4aplayer",value,NULL);
         if (ret>0) {
@@ -763,28 +757,22 @@ PASS_THROUGH:
     }
 #endif
     if (PropIsEnable("media.stagefright.enable-player")) {
-        return STAGEFRIGHT_PLAYER;
+        return NU_PLAYER;
     }
 
-    return STAGEFRIGHT_PLAYER;
+    return NU_PLAYER;
 }
 
 static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
-        notify_callback_f notifyFunc)
+        notify_callback_f notifyFunc, pid_t pid)
 {
 
     sp<MediaPlayerBase> p;
 	LOGV("createPlayer");
     switch (playerType) {
-		case PV_PLAYER:
-            break;
-        case SONIVOX_PLAYER:
-            LOGV(" create MidiFile");
-            p = new AmNuPlayerDriver();
-            break;
-        case STAGEFRIGHT_PLAYER:
-            LOGV(" create StagefrightPlayer");
-            //p = new StagefrightPlayer;
+        case NU_PLAYER:
+            LOGV(" create NuPlayer");
+            p = new NuPlayerDriver(pid);
             break;
         case AMNUPLAYER:
             LOGV(" create AmNuPlayer");
@@ -796,7 +784,7 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
             break;
 		case AMSUPER_PLAYER:
 			 LOGV("Create AmSuperPlayer ");
-			p = new AmSuperPlayer;
+			p = new AmSuperPlayer(pid);
 			break;
 		case AMLOGIC_PLAYER:
 			#ifdef BUILD_WITH_AMLOGIC_PLAYER
@@ -840,7 +828,7 @@ Retry:
 		oldmsg_num=0;
 		memset(oldmsg,0,sizeof(oldmsg));
 	}
-	p=android::createPlayer(newtype, this,notify);
+	p=android::createPlayer(newtype, this,notify, mPID);
 	if (!p->hardwareOutput()) {
         static_cast<MediaPlayerInterface*>(p.get())->setAudioSink(mAudioSink);
     }

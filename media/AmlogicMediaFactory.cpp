@@ -124,9 +124,9 @@ public:
         return 1.0;
     }
 
-    virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
+    virtual sp<MediaPlayerBase> createPlayer(pid_t pid) {
         ALOGV("Create Amsuperplayer stub");
-        return new AmSuperPlayer();
+        return new AmSuperPlayer(pid);
     }
 };
 

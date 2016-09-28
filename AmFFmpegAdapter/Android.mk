@@ -44,7 +44,7 @@ LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in
 
 
 #include  $(TOP)/frameworks/av/amlogic/config.mk
-#LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
 
 
 LOCAL_MODULE_TAGS := optional
