@@ -129,7 +129,10 @@ ssize_t AmlogicPlayerStreamSourceListener::read(
 
     if (mQueue.empty()) {
         mSendDataNotification = true;
-        mSource->onBufferAvailable(0x80000001);
+        uint32_t sourceFlags = mSource->flags();
+        if (sourceFlags & IStreamSource::kFlagAlignedVideoData) {
+            mSource->onBufferAvailable(0x80000001);
+        }
         if(blockMode){
             mOnWaitData = true;
             mCondition.waitRelative(mLock, milliseconds_to_nanoseconds(10));
