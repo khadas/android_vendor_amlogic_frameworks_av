@@ -154,6 +154,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
 
             // skip over DASH & MS-SS.
             if ((len >= 4 && !strcasecmp(".mpd", &url[len - 4]))
+                || (len >= 4 && !strcasecmp(".wvm", &url[len - 4]))
                 || (strstr(url, ".ism/") || strstr(url, ".isml/"))) {
                 return 0.0;
             }
