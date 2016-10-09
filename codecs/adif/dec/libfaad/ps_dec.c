@@ -28,11 +28,14 @@
 ** $Id: ps_dec.c,v 1.16 2009/01/26 22:32:31 menno Exp $
 **/
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
 #include "common.h"
 
 #ifdef PS_DEC
 
-#include <stdlib.h>
 #include "ps_dec.h"
 #include "ps_tables.h"
 

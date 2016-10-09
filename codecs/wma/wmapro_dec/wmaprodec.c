@@ -86,6 +86,11 @@
 * subframe in order to reconstruct the output samples.
 */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+
 #include "get_bits.h"
 #include "put_bits.h"
 #include "wma-fixed-debug.h"

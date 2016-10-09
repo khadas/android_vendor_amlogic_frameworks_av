@@ -2,6 +2,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 //-----------------------------
+#include <stdio.h>
+#include <stdarg.h>
 //code modified my myself:
 #include "common.h"
 //-----------------------------
@@ -47,7 +49,7 @@
  * Stuff which is only useful for libav* developers.
  */
 #define AV_LOG_DEBUG    48
-/*
+
 static INLINE void av_log(void* avcl, int level, const char *fmt, ...)
 {
     char buffer[128];
@@ -58,6 +60,6 @@ static INLINE void av_log(void* avcl, int level, const char *fmt, ...)
     if(level < AV_LOG_VERBOSE)
         printf("%s", buffer);
 }
-*/
+
 #endif
 
