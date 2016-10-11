@@ -51,7 +51,7 @@ LOCAL_C_INCLUDES+= \
 	$(TOP)/frameworks/av/media/libstagefright/include  \
 	$(TOP)/frameworks/av/media/libmediaplayerservice  \
 	$(TOP)/frameworks/av/amlogic/include \
-	$(TOP)/external/ffmpeg
+	$(TOP)/vendor/amlogic/external/ffmpeg
 
 LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
 

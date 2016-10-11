@@ -7,7 +7,7 @@ LOCAL_SRC_FILES:= AmThumbnail.cpp
 LOCAL_C_INCLUDES:= \
     $(TOP)/frameworks/av/include \
     $(LOCAL_PATH)/include \
-    $(TOP)/external/ffmpeg \
+    $(TOP)/vendor/amlogic/external/ffmpeg \
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \

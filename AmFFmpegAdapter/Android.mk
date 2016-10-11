@@ -27,7 +27,7 @@ LOCAL_C_INCLUDES:= \
     $(TOP)/frameworks/av/include \
     $(TOP)/frameworks/av/media/libstagefright \
     $(TOP)/frameworks/av/amlogic/include \
-    $(TOP)/external/ffmpeg \
+    $(TOP)/vendor/amlogic/external/ffmpeg \
     $(LOCAL_PATH)/include
 
 LOCAL_SHARED_LIBRARIES := \

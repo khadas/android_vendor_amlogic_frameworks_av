@@ -25,7 +25,7 @@ LOCAL_STATIC_LIBRARIES :=       \
 LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/              \
     $(TOP)/frameworks/av/include/media \
-    $(TOP)/external/ffmpeg \
+    $(TOP)/vendor/amlogic/external/ffmpeg \
     $(TOP)/external/icu/icu4c/source/common				\
     $(TOP)/external/icu/icu4c/source/i18n					\
 
