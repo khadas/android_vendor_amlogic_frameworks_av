@@ -129,6 +129,7 @@ AmNuPlayer::Renderer::Renderer(
     mTotalAudioJumpedTimeUs = 0;
     mDebugLevel = 0;
     mLastInfoTime = 0;
+    mVideoFrameOutNum = 0;
     int ret;
     if (property_get("media.hls.ptsdebug", value, NULL) > 0) {
         if ((sscanf(value, "%d", &ret)) > 0) {
@@ -910,13 +911,12 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     int64_t delayUs;
     int64_t nowUs = ALooper::GetNowUs();
     int64_t realTimeUs;
+    int64_t mediaTimeUs;
     if (mFlags & FLAG_REAL_TIME) {
-        int64_t mediaTimeUs;
         CHECK(entry.mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
         realTimeUs = mediaTimeUs;
         delayUs = mediaTimeUs - ALooper::GetNowUs();
     } else {
-        int64_t mediaTimeUs;
         CHECK(entry.mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
         if (mAnchorTimeMediaUs < 0) {
             if (!mHasAudio) {
@@ -986,6 +986,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     // post 2 display refreshes before rendering is due
     delayUs -= 2 * 1000000/30; /*send before 2 vsync,default 30hz*/
     mDrainVideoQueuePending = true;
+	if (delayUs < 0) delayUs = 0;
     msg->post(delayUs > 0 ? delayUs : 0);
 
 }
@@ -1020,11 +1021,14 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
             mLastVideoDrainTimeUs = mediaTimeUs;
             nowUs = ALooper::GetNowUs();
             realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
+        } else {
+            entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs);
+            mLastVideoDrainTimeUs = mediaTimeUs;
         }
     }
 
     bool tooLate = false;
-
+    int render = 1;
     if (!mPaused) {
         if (nowUs == -1) {
             nowUs = ALooper::GetNowUs();
@@ -1050,6 +1054,25 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
                        (realTimeUs + mAnchorTimeMediaUs - mAnchorTimeRealUs)));
             }
         }*/
+        if (mVideoLateByUs > 10000) {/*always < 0  for smooth rend*/
+            if (mVideoLateByUs < 50000) {
+                render = (mVideoFrameOutNum % 7) != 1; /*drop 1/7*/
+            } else if (mVideoLateByUs < 100000) {
+                render = (mVideoFrameOutNum % 6) != 1; /*drop 1/6*/
+            } else if (mVideoLateByUs < 200000) {
+                render = (mVideoFrameOutNum % 5) != 1; /*drop 1/5*/
+            } else if (mVideoLateByUs < 300000) {
+                render = (mVideoFrameOutNum % 4) != 1; /*drop 1/4*/
+            }  else if (mVideoLateByUs < 600000) {
+                render = (mVideoFrameOutNum % 3) != 1; /*drop 1/3*/
+            } else if (mVideoLateByUs < 100000) {
+                render = (mVideoFrameOutNum % 2) != 1; /*drop 1/2*/
+            } else if (mVideoLateByUs < 2000000) {
+                render = (mVideoFrameOutNum % 3) == 1; /*drop 2/3*/
+            } else {
+                render = (mVideoFrameOutNum % 5) == 1; /*drop 4/5*/
+            }
+        }
     } else {
         setVideoLateByUs(0);
         if (!mVideoSampleReceived && !mHasAudio) {
@@ -1068,9 +1091,9 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
             mTotalAudioJumpedTimeUs = 0;
         }
     }
-
+    mVideoFrameOutNum++;
     entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
-    entry->mNotifyConsumed->setInt32("render", 1); // render anyhow
+    entry->mNotifyConsumed->setInt32("render", render);
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
     entry = NULL;

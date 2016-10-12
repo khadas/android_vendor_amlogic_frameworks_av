@@ -242,6 +242,7 @@ private:
     int mSmootOutNum;
     int64_t mLastVideoEnqueueUs;
     int64_t mLastAudioEnqueueUs;
+    int64_t mVideoFrameOutNum;
 /*av sync--add by zz end*/
 
     sp<AWakeLock> mWakeLock;

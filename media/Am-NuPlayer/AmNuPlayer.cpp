@@ -224,7 +224,7 @@ AmNuPlayer::~AmNuPlayer() {
         amsysfs_set_sysfs_int("/sys/class/tv/policy_fr_auto_switch", mAutoSwitch);
     }
     if (mSource != NULL) {
-        mSource->disconnect();
+        mSource->release();
     }
 }
 
@@ -535,13 +535,11 @@ status_t AmNuPlayer::updateMediaInfo(void) {
             ainfo->id = codecid;
         }
         if (aformat->findString("mime", &mime)) {
-            /*
             if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
                 ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
                 mStrCurrentAudioCodec = "DTSHD";
                 ainfo->id = CODEC_ID_DTS;
             }
-            */
         }
         if (aformat->findInt32("bit-rate", &bitrate)) {
             ainfo->bit_rate = bitrate;

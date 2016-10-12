@@ -78,6 +78,9 @@ struct AmNuPlayer::Source : public AHandler {
     // Explicitly disconnect the underling data source
     virtual void disconnect() {}
 
+    // for http disconnect
+    virtual void release() {}
+
     // Returns OK iff more data was available,
     // an error or ERROR_END_OF_STREAM if not.
     virtual status_t feedMoreTSData() = 0;
