@@ -33,6 +33,7 @@ namespace android
 #define BUF_TYPE_SUBTITLE   2
 
 #define TYPE_DRMINFO   0x80
+#define TYPE_PATTERN   0x40
 
 
 class AmlogicPlayerExtractorDemux : public RefBase

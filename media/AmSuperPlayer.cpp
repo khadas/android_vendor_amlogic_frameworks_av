@@ -891,7 +891,7 @@ Retry:
 			LOGV("SuperGetPlayerType:type=%s,videos=%d,audios=%d\n",filetype,mvideo,maudio);
 			newtype=SuperGetPlayerType(filetype,mvideo,maudio);
 			LOGV("GET New type =%d\n",newtype);
-			if (strncmp(filetype,"DRMdemux", 8) == 0 && isSwitchURL == false) {
+			if (filetype && strncmp(filetype,"DRMdemux", 8) == 0 && isSwitchURL == false && muri) {
 				needretry=1;
 				LOGE("widevine retry set Data Source muri %s\n", muri);
 				if (strncmp(muri,"http://",7) == 0 || strncmp(muri,"https://",8) == 0) {

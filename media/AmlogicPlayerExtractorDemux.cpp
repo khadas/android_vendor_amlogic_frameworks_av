@@ -72,10 +72,13 @@ int drm_stronedrminfo(char *outpktdata, char *addr,
     drminfo.drm_pktsize = size;
     drminfo.drm_pktpts = pts;
     int dsize;
-    if (isdrminfo == 1) { //infoonly
+    if (isdrminfo) { //infoonly
         drminfo.drm_hasesdata = 0;
         drminfo.drm_phy = (uint32_t)addr;
-        drminfo.drm_flag = TYPE_DRMINFO;
+        if (isdrminfo == 1)
+            drminfo.drm_flag = TYPE_DRMINFO; //compatible to pr
+        else
+            drminfo.drm_flag = isdrminfo;//wv
         memcpy(outpktdata, &drminfo, sizeof(drminfo_t));
         //LOGV(" ######## phyaddr = drminfo.drm_phy [0x%x] type[%d]\n",drminfo.drm_phy,type);
     } else { //info+es;
@@ -140,7 +143,7 @@ int AmlogicPlayerExtractorDemux::BasicInit(void)
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMatroska);
 #endif
     //AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
-    //AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
+    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
     return 0;
 }
 
@@ -508,6 +511,7 @@ retry:
                     LOGV("[%s]video reach end of stream err=%d\n", __FUNCTION__,err);
                     return err;
                 }
+                LOGE("mVideoTrack->read err %d\n", err);
                 return -100001;
             }
 
@@ -568,7 +572,7 @@ retry:
                 char *videoreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                 if (video_isdrminfo) {
                     pkt->pts = TimeUs * 9 / 100;
-                    drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, video_isdrminfo);
+                    drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, TYPE_DRMINFO|TYPE_PATTERN);
                     pkt->size = size;
                     pkt->flags |= AV_PKT_FLAG_ISDECRYPTINFO;
                 } else {
@@ -651,6 +655,7 @@ retry:
                         LOGV("[%s]audio reach end of stream pkt->size=%d err=0x%x\n", __FUNCTION__, pkt->size, err);
                         return err;
                     } 
+                    LOGE("mAudioTrack->read err %d\n", err);
                     return -100002;
             }
                 uint32_t size = mBuffer->range_length();
