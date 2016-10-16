@@ -142,7 +142,7 @@ int AmlogicPlayerExtractorDemux::BasicInit(void)
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMPEG2PS);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffMatroska);
 #endif
-    //AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
+    AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffSmoothStreaming);
     AmlogicPlayerExtractorDataSource::RegisterExtractorSniffer(SniffWVM);
     return 0;
 }
@@ -195,8 +195,8 @@ AmlogicPlayerExtractorDemux::AmlogicPlayerExtractorDemux(AVFormatContext *s)
             mWVMExtractor->setAdaptiveStreamingMode(true);
             mMediaExtractor = mWVMExtractor;
         } else if(!strcasecmp(smimeType, MEDIA_MIMETYPE_CONTAINER_PR)){
-            //mSSExtractor = new SStreamingExtractor(mReadDataSouce.get());
-            //mMediaExtractor = mSSExtractor;
+            mSSExtractor = new SStreamingExtractor(mReadDataSouce.get());
+            mMediaExtractor = mSSExtractor;
         }else {
             mMediaExtractor = MediaExtractor::Create(mReadDataSouce.get(), smimeType);
         }
@@ -587,7 +587,7 @@ retry:
                 char *videoreales = (char *)((unsigned long)mBuffer->data() + mBuffer->range_offset());
                 if (video_isdrminfo) {
                     pkt->pts = TimeUs * 9 / 100;
-                    drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, video_isdrminfo);
+                    drm_stronedrminfo((char *)pkt->data, videoreales, videoreal_pktsize, pkt->pts, BUF_TYPE_VIDEO, TYPE_DRMINFO|TYPE_PATTERN);
                     pkt->size = size;
                     pkt->flags |= AV_PKT_FLAG_ISDECRYPTINFO;
                 } else {
@@ -765,7 +765,7 @@ int AmlogicPlayerExtractorDemux::Close(AVFormatContext *s)
         LOGV("Clear AudioTrack");
     }
     mWVMExtractor.clear();
-    //mSSExtractor.clear();
+    mSSExtractor.clear();
     mMediaExtractor.clear();
     if (mBuffer != NULL) {
         mBuffer->release();

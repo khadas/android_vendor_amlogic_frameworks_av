@@ -31,7 +31,7 @@
 
 #include "AmlogicPlayerExtractorDemux.h"
 
-//#include "SStreamingExtractor.h"
+#include "SStreamingExtractor.h"
 
 
 
@@ -42,7 +42,7 @@ namespace android {
 
 static Mutex gSSMutex;
 
-/*
+
 const char *PR_MIME_TYPE = "application/vnd.ms-playready";
 
 
@@ -96,7 +96,7 @@ sp<MetaData> SStreamingExtractor::getMetaData() {
     return mRealExtractor->getMetaData();
 }
 
-sp<MediaSource> SStreamingExtractor::getTrack(size_t index) {
+sp<IMediaSource> SStreamingExtractor::getTrack(size_t index) {
     if (mRealExtractor == NULL ) {
         return NULL;
     }
@@ -162,6 +162,6 @@ bool SniffSmoothStreaming(
     }
     return false;
 }
-*/
+
 } //namespace android
 
