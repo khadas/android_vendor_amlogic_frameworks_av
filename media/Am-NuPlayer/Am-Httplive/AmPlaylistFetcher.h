@@ -19,6 +19,8 @@
 #define PLAYLIST_FETCHER_H_
 
 #include <media/stagefright/foundation/AHandler.h>
+#include <media/IMediaExtractor.h>
+#include <media/IMediaSource.h>
 
 #include "AmATSParser.h"
 #include "AmLiveSession.h"
@@ -27,12 +29,12 @@ namespace android {
 
 struct ABuffer;
 struct AmAnotherPacketSource;
-struct DataSource;
+class DataSource;
 struct HTTPBase;
 struct AmLiveDataSource;
 struct AmM3UParser;
 struct MediaExtractor;
-struct MediaBuffer;
+class MediaBuffer;
 class String8;
 
 struct AmPlaylistFetcher : public AHandler {
@@ -194,9 +196,9 @@ private:
 
     sp<AmATSParser> mTSParser;
 
-    sp<MediaExtractor> mExtractor;
-    sp<MediaSource> mAudioTrack;
-    sp<MediaSource> mVideoTrack;
+    sp<IMediaExtractor> mExtractor;
+    sp<IMediaSource> mAudioTrack;
+    sp<IMediaSource> mVideoTrack;
     sp<AmAnotherPacketSource> mAudioSource;
     sp<AmAnotherPacketSource> mVideoSource;
 

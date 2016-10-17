@@ -129,7 +129,7 @@ sp<MetaData> AmNuPlayer::GenericSource::getFileFormatMeta() const {
 }
 
 status_t AmNuPlayer::GenericSource::initFromDataSource() {
-    sp<MediaExtractor> extractor;
+    sp<IMediaExtractor> extractor;
 
     CHECK(mDataSource != NULL);
 
@@ -154,8 +154,8 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         }
         extractor = mWVMExtractor;
     } else {
-        //extractor = MediaExtractor::Create(mDataSource,
-        //        mSniffedMIME.empty() ? NULL: mSniffedMIME.c_str());
+        extractor = MediaExtractor::Create(mDataSource,
+                mSniffedMIME.empty() ? NULL: mSniffedMIME.c_str());
     }
 
     if (extractor == NULL) {
@@ -200,9 +200,9 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         return UNKNOWN_ERROR;
     }
 
-/*
+
     for (size_t i = 0; i < numtracks; ++i) {
-        sp<MediaSource> track = extractor->getTrack(i);
+        sp<IMediaSource> track = extractor->getTrack(i);
 
         sp<MetaData> meta = extractor->getTrackMetaData(i);
 
@@ -262,7 +262,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
             }
         }
     }
-*/
+
     mBitrate = totalBitrate;
 
     return OK;
@@ -815,7 +815,7 @@ void AmNuPlayer::GenericSource::onMessageReceived(const sp<AMessage> &msg) {
       {
           int32_t trackIndex;
           CHECK(msg->findInt32("trackIndex", &trackIndex));
-          const sp<MediaSource> source = mSources.itemAt(trackIndex);
+          const sp<IMediaSource> source = mSources.itemAt(trackIndex);
 
           Track* track;
           const char *mime;
@@ -1027,7 +1027,7 @@ void AmNuPlayer::GenericSource::onGetFormatMeta(sp<AMessage> msg) const {
 }
 
 sp<MetaData> AmNuPlayer::GenericSource::doGetFormatMeta(bool audio) const {
-    sp<MediaSource> source = audio ? mAudioTrack.mSource : mVideoTrack.mSource;
+    sp<IMediaSource> source = audio ? mAudioTrack.mSource : mVideoTrack.mSource;
 
     if (source == NULL) {
         return NULL;
@@ -1270,7 +1270,7 @@ status_t AmNuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select
         return OK;
     }
 
-    const sp<MediaSource> source = mSources.itemAt(trackIndex);
+    const sp<IMediaSource> source = mSources.itemAt(trackIndex);
     sp<MetaData> meta = source->getFormat();
     const char *mime;
     CHECK(meta->findCString(kKeyMIMEType, &mime));

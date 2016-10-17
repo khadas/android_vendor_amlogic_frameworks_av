@@ -727,6 +727,10 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
 PASS_THROUGH:
         if (videos>0)
             return AMLOGIC_PLAYER;
+        if (match_codecs(type,"ogg")) {
+            /*ogg use Nuplayer for cts*/
+            return NU_PLAYER;
+        }
         audio_all=PropIsEnable("media.amplayer.audio-all");
         if (audios>0 && audio_all )
             return AMLOGIC_PLAYER;

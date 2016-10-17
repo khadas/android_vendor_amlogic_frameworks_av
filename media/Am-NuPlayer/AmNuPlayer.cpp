@@ -2566,9 +2566,14 @@ void AmNuPlayer::sendTimedTextData(const sp<ABuffer> &buffer) {
     Parcel parcel;
     if (size > 0) {
         CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
-        flag |= TextDescriptions::IN_BAND_TEXT_3GPP;
-        //TextDescriptions::getParcelOfDescriptions(
-        //        (const uint8_t *)data, size, flag, timeUs / 1000, &parcel);
+        int32_t global = 0;
+        if (buffer->meta()->findInt32("global", &global) && global) {
+            flag |= TextDescriptions::GLOBAL_DESCRIPTIONS;
+        } else {
+            flag |= TextDescriptions::LOCAL_DESCRIPTIONS;
+        }
+        TextDescriptions::getParcelOfDescriptions(
+                (const uint8_t *)data, size, flag, timeUs / 1000, &parcel);
     }
 
     if ((parcel.dataSize() > 0)) {

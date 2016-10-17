@@ -46,6 +46,7 @@ LOCAL_STATIC_LIBRARIES := \
         libamhttplive \
         libammpeg2ts \
         libstagefright_hevcutils \
+        libstagefright_timedtext \
         libcurl_base \
         libcurl_common
 

@@ -1095,6 +1095,7 @@ void AmLiveSession::onConnect(const sp<AMessage> &msg) {
         BandwidthItem item;
         /*check if contain both audio/video*/
         for (size_t i = 0; i< mPlaylist->size(); i++) {
+            item.mPlaylistIndex = i;
             if (mPlaylist->getTypeURI(item.mPlaylistIndex, "audio", &audioURI))
                 maxMask |= indexToType(kAudioIndex);
             if (mPlaylist->getTypeURI(item.mPlaylistIndex, "video", &videoURI))

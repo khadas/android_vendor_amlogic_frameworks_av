@@ -33,7 +33,7 @@ struct AmAnotherPacketSource;
 struct ARTSPController;
 struct DataSource;
 struct IMediaHTTPService;
-struct MediaSource;
+struct IMediaSource;
 class MediaBuffer;
 struct NuCachedSource2;
 class WVMExtractor;
@@ -101,11 +101,11 @@ private:
 
     struct Track {
         size_t mIndex;
-        sp<MediaSource> mSource;
+        sp<IMediaSource> mSource;
         sp<AmAnotherPacketSource> mPackets;
     };
 
-    Vector<sp<MediaSource> > mSources;
+    Vector<sp<IMediaSource> > mSources;
     Track mAudioTrack;
     int64_t mAudioTimeUs;
     int64_t mAudioLastDequeueTimeUs;
