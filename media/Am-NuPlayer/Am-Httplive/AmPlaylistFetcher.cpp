@@ -901,7 +901,7 @@ status_t AmPlaylistFetcher::refreshPlaylist() {
                 return err;
             } else {
                 if (ALooper::GetNowUs() - mFailureAnchorTimeUs >= mOpenFailureRetryUs) {
-                    ALOGI("[%s:%d] open failure retry time exceed %lld us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
+                    ALOGI("[%s:%d] open failure retry time exceed %" PRId64 " us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
                     return httpCode;
                 } else {
                     return err;
@@ -1202,7 +1202,7 @@ void AmPlaylistFetcher::onDownloadNext() {
 
         if (length > 0) {
             range_offset = (int64_t)(length * (mStartTimeUs / (double)(item_durationUs)));
-            ALOGI("seek to seq num(%d), offset(%lld), length(%lld)", mSeqNumber, range_offset, length);
+            ALOGI("seek to seq num(%d), offset(%" PRId64 "), length(%" PRId64 ")", mSeqNumber, range_offset, length);
         } else {
             mSeekedTimeUs = getSegmentStartTimeUs(mSeqNumber);
             ALOGI("not support range, cannot seek by byte!");
@@ -1243,7 +1243,7 @@ FETCH:
                 mFailureAnchorTimeUs = ALooper::GetNowUs();
             } else {
                 if (ALooper::GetNowUs() - mFailureAnchorTimeUs >= mOpenFailureRetryUs) {
-                    ALOGI("[%s:%d] open failure retry time exceed %lld us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
+                    ALOGI("[%s:%d] open failure retry time exceed %" PRId64 " us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
                     status_t err = bytesRead;
                     notifyError(-cfc_handle->http_code);
                     goto FAIL;
@@ -1293,7 +1293,7 @@ FETCH:
                 mFailureAnchorTimeUs = ALooper::GetNowUs();
             } else {
                 if (ALooper::GetNowUs() - mFailureAnchorTimeUs >= mOpenFailureRetryUs) {
-                    ALOGI("[%s:%d] open failure retry time exceed %lld us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
+                    ALOGI("[%s:%d] open failure retry time exceed %" PRId64 " us", __FUNCTION__, __LINE__, mOpenFailureRetryUs);
                     notifyError(err);
                     goto FAIL;
                 }
@@ -1320,7 +1320,7 @@ FETCH:
                 // we don't have access to all the segment before the current
                 // one.
                 mNextPTSTimeUs = getSegmentStartTimeUs(mSeqNumber);
-                ALOGI("segment start time : %lld us on %s", mNextPTSTimeUs, startup ? "startup" : "discontinuity");
+                ALOGI("segment start time : %" PRId64 " us on %s", mNextPTSTimeUs, startup ? "startup" : "discontinuity");
             }
 
             // do not handle time discontinuity here.
@@ -1416,7 +1416,7 @@ FETCH:
 
     if (total_size && item_durationUs) {
         mSegmentBytesPerSec = total_size / (float)(item_durationUs / 1E6); // just an approximate value.
-        ALOGI("segment duration : %lld us, size : %d bytes, bytes per second : %lld", item_durationUs, total_size, mSegmentBytesPerSec);
+        ALOGI("segment duration : %" PRId64 " us, size : %zd bytes, bytes per second : %" PRId64 "", item_durationUs, total_size, mSegmentBytesPerSec);
     }
 
     if (mPlaylist->isComplete() && mSeqNumber == lastSeqNumberInPlaylist && !total_size) {

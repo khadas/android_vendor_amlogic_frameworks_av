@@ -119,7 +119,7 @@ int AmFFmpegByteIOAdapter::read(uint8_t* buf, int amt) {
     ssize_t result = 0;
     uint64_t pos = mNextReadPos;
 
-    ALOGV("readAt pos %lld amt %d", pos, amt);
+    ALOGV("readAt pos %" PRId64 " amt %d", pos, amt);
     result = mSource->readAt(pos, buf, amt);
     if (result > 0) {
         mNextReadPos += result;
@@ -162,7 +162,7 @@ int64_t AmFFmpegByteIOAdapter::seek(int64_t offset, int whence) {
     }
 
     if ((target < 0) || (target > size)) {
-        ALOGW("Invalid seek request to %lld (size: %lld).", target, size);
+        ALOGW("Invalid seek request to %" PRId64 " (size: %" PRId64 ").", target, size);
         return -1;
     }
 

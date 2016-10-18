@@ -1461,7 +1461,7 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
             CHECK(msg->findInt64("seekTimeUs", &seekTimeUs));
             CHECK(msg->findInt32("needNotify", &needNotify));
 
-            ALOGV("kWhatSeek seekTimeUs=%lld us, needNotify=%d",
+            ALOGV("kWhatSeek seekTimeUs=%" PRId64 " us, needNotify=%d",
                     seekTimeUs, needNotify);
 
             // temporarily close auto frame-rate to avoid black srceen when seek
@@ -2106,7 +2106,7 @@ void AmNuPlayer::processDeferredActions() {
 }
 
 void AmNuPlayer::performSeek(int64_t seekTimeUs, bool needNotify) {
-    ALOGV("performSeek seekTimeUs=%lld us (%.2f secs), needNotify(%d)",
+    ALOGV("performSeek seekTimeUs=%" PRId64 " us (%.2f secs), needNotify(%d)",
           seekTimeUs,
           seekTimeUs / 1E6,
           needNotify);

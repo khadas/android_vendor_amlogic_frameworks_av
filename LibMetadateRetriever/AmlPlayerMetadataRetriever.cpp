@@ -88,7 +88,7 @@ status_t AmlPlayerMetadataRetriever::setDataSource(const char * url, const Keyed
 
 status_t AmlPlayerMetadataRetriever::setDataSource(int fd, int64_t offset, int64_t length)
 {
-    ALOGV("setDataSource(%d, %lld, %lld)", fd, offset, length);
+    ALOGV("setDataSource(%d, %" PRId64 ", %" PRId64 ")", fd, offset, length);
     mParsedMetaData = false;
     mMetaData.clear();
 
@@ -152,7 +152,7 @@ status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int6
 
 VideoFrame *AmlPlayerMetadataRetriever::getFrameAtTime(int64_t timeUs, int option)
 {
-    ALOGV("getFrameAtTime: %lld us option: %d", timeUs, option);
+    ALOGV("getFrameAtTime: %" PRId64 " us option: %d", timeUs, option);
 
     int err;
     int32_t width, height;
@@ -400,7 +400,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
     char tmp[32];
     int64_t durationUs;
     mClient->amthumbnail_get_duration(&durationUs);
-    sprintf(tmp, "%lld", (durationUs + 500) / 1000);
+    sprintf(tmp, "%" PRId64 "", (durationUs + 500) / 1000);
     mMetaData.add(METADATA_KEY_DURATION, String8(tmp));
 
 #if 0

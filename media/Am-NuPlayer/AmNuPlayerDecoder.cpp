@@ -444,7 +444,7 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer() {
     if (res != OK) {
         ALOGV("[%s] dequeued output: %d", mComponentName.c_str(), res);
     } else {
-        ALOGV("[%s] dequeued output: %d (time=%lld flags=%" PRIu32 ")",
+        ALOGV("[%s] dequeued output: %d (time=%" PRId64 " flags=%" PRIu32 ")",
                 mComponentName.c_str(), (int)bufferIx, timeUs, flags);
     }
 
@@ -525,7 +525,7 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer() {
 
     if (mSkipRenderingUntilMediaTimeUs >= 0) {
         if (timeUs < mSkipRenderingUntilMediaTimeUs) {
-            ALOGV("[%s] dropping buffer at time %lld as requested.",
+            ALOGV("[%s] dropping buffer at time %" PRId64 " as requested.",
                      mComponentName.c_str(), (long long)timeUs);
 
             reply->post();
@@ -683,7 +683,7 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
                 && !IsAVCReferenceFrame(accessUnit)) {
             dropAccessUnit = true;
             ++mNumFramesDropped;
-            ALOGI("decoder need to drop this AU, late : %lld us, dropped frames : %lld\n", mRenderer->getVideoLateByUs(), mNumFramesDropped);
+            ALOGI("decoder need to drop this AU, late : %" PRId64 " us, dropped frames : %" PRId64 "\n", mRenderer->getVideoLateByUs(), mNumFramesDropped);
         }
 #endif
     } while (dropAccessUnit);
@@ -693,7 +693,7 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
     if (mRememberThisTimeStamp) {
         int64_t mediaTimeUs;
         if (accessUnit->meta()->findInt64("timeUs", &mediaTimeUs)) {
-            ALOGI("Data corrupt ! set render %s timestamp : %lld us", mIsAudio ? "audio" : "video", mediaTimeUs);
+            ALOGI("Data corrupt ! set render %s timestamp : %" PRId64 " us", mIsAudio ? "audio" : "video", mediaTimeUs);
             mRememberThisTimeStamp = false;
         }
     }
@@ -794,7 +794,7 @@ bool AmNuPlayer::Decoder::onInputBufferFetched(const sp<AMessage> &msg) {
             int64_t resumeAtMediaTimeUs;
             if (extra->findInt64(
                         "resume-at-mediaTimeUs", &resumeAtMediaTimeUs)) {
-                ALOGI("[%s] suppressing rendering until %lld us",
+                ALOGI("[%s] suppressing rendering until %" PRId64 " us",
                         mComponentName.c_str(), (long long)resumeAtMediaTimeUs);
                 mSkipRenderingUntilMediaTimeUs = resumeAtMediaTimeUs;
             }

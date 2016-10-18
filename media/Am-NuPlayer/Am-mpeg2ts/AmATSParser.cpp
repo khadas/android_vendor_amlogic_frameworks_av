@@ -691,7 +691,7 @@ status_t AmATSParser::Stream::parse(
     mBuffer->setRange(0, mBuffer->size() + payloadSizeBits / 8);
 
     if (mLastPESLength && mBuffer->size() == (mLastPESLength + 6)) { // need to flush.
-        ALOGV("flush last pes packet, length(%d), buffer size(%d)", mLastPESLength, mBuffer->size());
+        ALOGV("flush last pes packet, length(%d), buffer size(%zd)", mLastPESLength, mBuffer->size());
         status_t err = flush();
         if (err != OK) {
             return err;
@@ -1007,7 +1007,7 @@ void AmATSParser::Stream::onPayloadData(
         unsigned PTS_DTS_flags, uint64_t PTS, uint64_t /* DTS */,
         const uint8_t *data, size_t size) {
 #if 0
-    ALOGI("payload streamType 0x%02x, PTS = 0x%016llx, dPTS = %lld",
+    ALOGI("payload streamType 0x%02x, PTS = 0x%016llx, dPTS = %" PRId64 "",
           mStreamType,
           PTS,
           (int64_t)PTS - mPrevPTS);

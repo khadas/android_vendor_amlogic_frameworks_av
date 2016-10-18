@@ -304,7 +304,7 @@ void AmNuPlayer::DecoderPassThrough::onInputBufferFetched(
         int64_t resumeAtMediaTimeUs;
         if (extra->findInt64(
                     "resume-at-mediatimeUs", &resumeAtMediaTimeUs)) {
-            ALOGI("[%s] suppressing rendering until %lld us",
+            ALOGI("[%s] suppressing rendering until %" PRId64 " us",
                     mComponentName.c_str(), (long long)resumeAtMediaTimeUs);
             mSkipRenderingUntilMediaTimeUs = resumeAtMediaTimeUs;
         }
@@ -318,7 +318,7 @@ void AmNuPlayer::DecoderPassThrough::onInputBufferFetched(
         CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
 
         if (timeUs < mSkipRenderingUntilMediaTimeUs) {
-            ALOGV("[%s] dropping buffer at time %lld as requested.",
+            ALOGV("[%s] dropping buffer at time %" PRId64 " as requested.",
                      mComponentName.c_str(), (long long)timeUs);
 
             onBufferConsumed(bufferSize);

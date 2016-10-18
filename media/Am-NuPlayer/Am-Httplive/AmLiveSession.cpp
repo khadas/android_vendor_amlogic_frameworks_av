@@ -323,7 +323,7 @@ status_t AmLiveSession::dequeueAccessUnit(
                     && extra->findInt64("timeUs", &timeUs)) {
                 // seeking only
                 mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(stream);
-                ALOGI("Got stream(%d) seeked timeUs (%lld)", stream, mLastSeekTimeUs);
+                ALOGI("Got stream(%d) seeked timeUs %" PRId64 "", stream, mLastSeekTimeUs);
                 if (stream == STREAMTYPE_AUDIO) {
                     mAudioDiscontinuityOffsetTimesUs.clear();
                     mAudioDiscontinuityAbsStartTimesUs.clear();
@@ -345,7 +345,7 @@ status_t AmLiveSession::dequeueAccessUnit(
             } else {
                 mFirstTimeUsValid = true;
                 mVideoFirstTimeUs = mFirstTimeUs;
-                ALOGI("[Video] Found first min timeUs : %lld us", mFirstTimeUs);
+                ALOGI("[Video] Found first min timeUs : %" PRId64 " us", mFirstTimeUs);
             }
         }
         // need to send HEVC CodecSpecificData, lost when seek instantly after start.
@@ -540,7 +540,7 @@ status_t AmLiveSession::dequeueAccessUnit(
             }
 
             if (mDebugHandle) {
-                fprintf(mDebugHandle, "%s : read buffer at time (%lld)us, origin time (%lld)us, first time (%lld)us, seek time (%lld)us, offset time (%lld)us\n", streamStr, timeUs, origin_timeUs, firstTimeUs, mLastSeekTimeUs, offset_timeUs);
+                fprintf(mDebugHandle, "%s : read buffer at time (%" PRId64 ")us, origin time (%" PRId64 ")us, first time (%" PRId64 ")us, seek time (%" PRId64 ")us, offset time (%" PRId64 ")us\n", streamStr, timeUs, origin_timeUs, firstTimeUs, mLastSeekTimeUs, offset_timeUs);
             }
             ALOGV("[%s] read buffer at time %" PRId64 " us", streamStr, timeUs);
 
@@ -1312,7 +1312,7 @@ ssize_t AmLiveSession::readFromSource(CFContext * cfc, uint8_t * data, size_t si
                 if ((int32_t)(ALooper::GetNowUs() / 1000000 - start_waittime_s) <= waitSec) {
                     if ((cfc->filesize <= 0 || retryCase(ret) == 2) && !read_seek_size) { // try to do read seek in chunked mode.
                         read_seek_size = cfc->cwd->size;
-                        ALOGI("need to do read seek : %lld", read_seek_size);
+                        ALOGI("need to do read seek : %" PRId64 "", read_seek_size);
                     }
                     if (read_seek_size) {
                         read_seek_left_size = read_seek_size;
@@ -1403,7 +1403,7 @@ ssize_t AmLiveSession::fetchFile(
             headers.append(AStringPrintf("%s: %s\r\n", mExtraHeaders.keyAt(j).string(), mExtraHeaders.valueAt(j).string()).c_str());
         }
         if (range_offset > 0 || range_length >= 0) {
-            headers.append(AStringPrintf("Range: bytes=%lld-%s\r\n", range_offset, range_length < 0 ? "" : AStringPrintf("%lld", range_offset + range_length - 1).c_str()).c_str());
+            headers.append(AStringPrintf("Range: bytes=%" PRId64 "-%s\r\n", range_offset, range_length < 0 ? "" : AStringPrintf("%" PRId64 "", range_offset + range_length - 1).c_str()).c_str());
         }
         ssize_t i = mExtraHeaders.indexOfKey(String8("User-Agent"));
         if (i < 0) {
@@ -1493,7 +1493,7 @@ ssize_t AmLiveSession::fetchFile(
         ssize_t n = readFromSource(*cfc, buffer->data() + buffer->size(), maxBytesToRead);
 
         if (n < 0) {
-            ALOGE("HTTP source read failed, err : %d !\n", n);
+            ALOGE("HTTP source read failed, err : %zd !\n", n);
             return n;
         }
 
@@ -1562,7 +1562,7 @@ sp<AmM3UParser> AmLiveSession::fetchPlaylist(
 
     if (err <= 0) {
         err_ret = err;
-        ALOGE("failed to fetch playlist, err : %d\n", err);
+        ALOGE("failed to fetch playlist, err : %zd\n", err);
         return NULL;
     }
 
@@ -1723,7 +1723,7 @@ size_t AmLiveSession::getBandwidthIndex() {
 #endif
 
     CHECK_GE(index, 0);
-    ALOGI("Got bandwidth index : %d, prev bandwidth index : %d\n", index, mCurBandwidthIndex);
+    ALOGI("Got bandwidth index : %zd, prev bandwidth index : %zd\n", index, mCurBandwidthIndex);
     return index;
 }
 

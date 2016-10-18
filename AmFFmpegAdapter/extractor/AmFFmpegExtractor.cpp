@@ -413,7 +413,7 @@ status_t AmFFmpegSource::read(
 	if(AV_NOPTS_VALUE == packet->pts) {
         packet->pts = mLastValidPts;
         packet->dts = mLastValidDts;
-        ALOGE("meet invalid pts, set last pts to current frame pts:%lld dts:%lld", mLastValidPts, mLastValidDts);
+        ALOGE("meet invalid pts, set last pts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
     } else {
         mLastValidPts = packet->pts;
         mLastValidDts = packet->dts;
@@ -655,7 +655,7 @@ void AmFFmpegExtractor::seekTo(
     Mutex::Autolock autoLock(mLock);
     if (av_seek_frame(mFFmpegContext, -1 /* default stream */,
             seekPosition, seekFlag) < 0) {
-        ALOGE("Failed to seek to %lld", seekPosition);
+        ALOGE("Failed to seek to %" PRId64 "", seekPosition);
         return;
     }
 
@@ -664,7 +664,7 @@ void AmFFmpegExtractor::seekTo(
             mSources[i].mSource->clearPendingPackets();
         }
     }
-    ALOGV("Seeking to %lld was successful.", seekPosition);
+    ALOGV("Seeking to %" PRId64 " was successful.", seekPosition);
 }
 
 int32_t AmFFmpegExtractor::getPrimaryStreamIndex(AVFormatContext *context) {

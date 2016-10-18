@@ -84,7 +84,7 @@ int AmThumbnailInt::vp_read(URLContext *h, unsigned char *buf, int size)
 {
     AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
     int ret;
-    //ALOGV("start%s,pos=%lld,size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
+    //ALOGV("start%s,pos=%" PRId64 ",size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
     if (af->fd >= 0) {
         ret = read(af->fd, buf, size);
     } else {
@@ -109,7 +109,7 @@ int64_t AmThumbnailInt::vp_seek(URLContext *h, int64_t pos, int whence)
 {
     AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
     int64_t ret;
-    //ALOGV("%sret=%lld,pos=%lld,whence=%d,tell=%lld\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
+    //ALOGV("%sret=%" PRId64 ",pos=%" PRId64 ",whence=%d,tell=%" PRId64 "\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
     if (whence == AVSEEK_SIZE) {
         return af->mLength;
 #if 0
@@ -278,7 +278,7 @@ void AmThumbnailInt::find_best_keyframe(AVFormatContext *pFormatCtx, int video_i
         if (r < 0) {
             break;
         }
-        ALOGV("[find_best_keyframe][%d]read frame packet.size=%d,pts=%lld\n", i, packet.size, packet.pts);
+        ALOGV("[find_best_keyframe][%d]read frame packet.size=%d,pts=%" PRId64 "\n", i, packet.size, packet.pts);
         havepts = (packet.pts > 0 || havepts);
         nopts = (i > 10) && !havepts;
         if (packet.size > maxFrameSize && (packet.pts >= 0 || nopts)) { //packet.pts >= 0 can used for seek.
@@ -296,7 +296,7 @@ void AmThumbnailInt::find_best_keyframe(AVFormatContext *pFormatCtx, int video_i
     } while (i++ < count);
 
     if (find_ok) {
-        ALOGV("[%s]return thumbTime=%lld thumbOffset=%llx\n", __FUNCTION__, thumbTime, thumbOffset);
+        ALOGV("[%s]return thumbTime=%" PRId64 " thumbOffset=%llx\n", __FUNCTION__, thumbTime, thumbOffset);
         if (i <= 5) {
             ALOGV("[%s:%d]not so much frames %d, set single thread decode\n", __FUNCTION__, __LINE__, i);
             av_opt_set_int(mStream.pCodecCtx, "threads", 1, 0);
@@ -505,7 +505,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
         timestamp = timestamp * AV_TIME_BASE + pFormatCtx->start_time;
     }
 
-    ALOGV("[%s:%d]time %lld, timestamp %lld, starttime %f, duration %d %lld\n",
+    ALOGV("[%s:%d]time %" PRId64 ", timestamp %" PRId64 ", starttime %f, duration %d %" PRId64 "\n",
         __FUNCTION__, __LINE__, time, timestamp, starttime, duration, pFormatCtx->duration);
 
     if (!strcmp(pFormatCtx->iformat->name, "mpegts") || !strcmp(pFormatCtx->iformat->name, "mpeg"))
@@ -522,7 +522,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
                 avio_seek(pFormatCtx->pb, file_offset, SEEK_SET);
             } else {
                 timestamp = av_rescale(timestamp, pStream->time_base.den, AV_TIME_BASE * (int64_t)pStream->time_base.num);
-                ALOGV("[thumbnail_extract_video_frame:%d]time=%lld time=%lld  offset=%lld timestamp=%lld!\n",
+                ALOGV("[thumbnail_extract_video_frame:%d]time=%" PRId64 " time=%" PRId64 "  offset=%" PRId64 " timestamp=%" PRId64 "!\n",
                       __LINE__, time, mThumbnailTime, mThumbnailOffset, timestamp);
 
                 if (av_seek_frame(pFormatCtx, stream->videoStream, timestamp, AVSEEK_FLAG_BACKWARD) < 0) {
@@ -532,7 +532,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
         }
     } else {
         timestamp = av_rescale(timestamp, pStream->time_base.den, AV_TIME_BASE * (int64_t)pStream->time_base.num);
-        ALOGV("[thumbnail_extract_video_frame:%d]time=%lld time=%lld  offset=%lld timestamp=%lld!\n",
+        ALOGV("[thumbnail_extract_video_frame:%d]time=%" PRId64 " time=%" PRId64 "  offset=%" PRId64 " timestamp=%" PRId64 "!\n",
               __LINE__, time, mThumbnailTime, mThumbnailOffset, timestamp);
 
         if (av_seek_frame(pFormatCtx, stream->videoStream, timestamp, AVSEEK_FLAG_BACKWARD) < 0) {
@@ -546,7 +546,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
     while (av_read_next_video_frame(pFormatCtx, &packet, stream->videoStream) >= 0) {
         AVFrame *pFrame = NULL;
         int temp_ret;
-        ALOGV("[%s] av_read_frame frame size=%d,pts=%lld\n", __FUNCTION__, packet.size, packet.pts);
+        ALOGV("[%s] av_read_frame frame size=%d,pts=%" PRId64 "\n", __FUNCTION__, packet.size, packet.pts);
         i++;
         if (!is_slow_media && packet.size < MAX(mMaxframesize / 10, packet.size) && i < READ_FRAME_MIN) {
             continue;/*skip small size packets,it maybe a black frame*/
@@ -647,7 +647,7 @@ float AmThumbnailInt::amthumbnail_get_aspect_ratio()
 void AmThumbnailInt::amthumbnail_get_duration(int64_t *duration)
 {
     *duration = mStream.pFormatCtx->duration;
-    ALOGV("amthumbnail_get_duration duration:%lld \n", *duration);
+    ALOGV("amthumbnail_get_duration duration:%" PRId64 " \n", *duration);
 }
 
 int AmThumbnailInt::amthumbnail_get_key_metadata(char* key, const char** value)

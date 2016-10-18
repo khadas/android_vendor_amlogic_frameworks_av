@@ -490,7 +490,7 @@ status_t AmElementaryStreamQueue::appendData(
 
                 if (startOffset > 0) {
                     ALOGI("found something resembling a DDP audio "
-                         "syncword at offset %d",
+                         "syncword at offset %zd",
                          startOffset);
                 }
 
@@ -518,7 +518,7 @@ status_t AmElementaryStreamQueue::appendData(
 
                 if (startOffset > 0) {
                     ALOGI("found something resembling a DTS audio "
-                         "syncword at offset %d",
+                         "syncword at offset %zd",
                          startOffset);
                 }
 

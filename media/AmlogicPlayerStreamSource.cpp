@@ -262,7 +262,7 @@ int AmlogicPlayerStreamSource::Source_write(unsigned char *buf, int size)
 }
 int64_t AmlogicPlayerStreamSource::Source_seek(int64_t tpos, int whence)
 {
-    LOGI("AmlogicPlayerStreamSource Source_seek=%lld,whence=%d\n", pos, whence);
+    LOGI("AmlogicPlayerStreamSource Source_seek=%" PRId64 ",whence=%d\n", pos, whence);
     if (whence == AVSEEK_SIZE) {
         return -1;
     }

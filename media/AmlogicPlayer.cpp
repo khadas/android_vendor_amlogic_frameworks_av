@@ -693,7 +693,7 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
 
 status_t AmlogicPlayer::setDataSource(int fd, int64_t offset, int64_t length)
 {
-    LOGV("setDataSource,fd=%d,offset=%lld,len=%lld,not finished\n", fd, offset, length);
+    LOGV("setDataSource,fd=%d,offset=%" PRId64 ",len=%" PRId64 ",not finished\n", fd, offset, length);
     if (PropIsEnable("media.amplayer.dsource4local")) {
         mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromFD(fd, offset, length);
         return setdatasource(mSouceProtocol->GetPathString(), -1, 0, 0x7ffffffffffffffLL, NULL);
@@ -756,7 +756,7 @@ int AmlogicPlayer::vp_read(URLContext *h, unsigned char *buf, int size)
     if (len <= 0) {
         return 0;    /*read end*/
     }
-    //LOGV("start%s,pos=%lld,size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
+    //LOGV("start%s,pos=%" PRId64 ",size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
     ret = read(af->fd, buf, len);
     //LOGV("end %s,size=%d,ret=%d\n",__FUNCTION__,size,ret);
     if (ret > 0) {
@@ -776,7 +776,7 @@ int64_t AmlogicPlayer::vp_seek(URLContext *h, int64_t pos, int whence)
     AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
     int64_t ret;
     int64_t newsetpos;
-    //LOGV("%sret=%lld,pos=%lld,whence=%d,tell=%lld\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
+    //LOGV("%sret=%" PRId64 ",pos=%" PRId64 ",whence=%d,tell=%" PRId64 "\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
     if (whence == AVSEEK_SIZE) {
         return af->mLength;
     }
@@ -1245,7 +1245,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         } else if (streaminfo_valied && mDuration > 0 && info->bufed_pos > 0 && mStreamInfo.stream_info.file_size > 0) {
 
             percent = (info->bufed_pos *100 / (mStreamInfo.stream_info.file_size));
-            LOGV("Playing percent on percent=%d,bufed pos=%lld,Duration=%lld\n", percent, info->bufed_pos, (mStreamInfo.stream_info.file_size));
+            LOGV("Playing percent on percent=%d,bufed pos=%" PRId64 ",Duration=%" PRId64 "\n", percent, info->bufed_pos, (mStreamInfo.stream_info.file_size));
         } else if (mDuration > 0 && streaminfo_valied && mStreamInfo.stream_info.file_size > 0) {
             percent += ((long long)4 * 1024 * 1024 * 100 * info->audio_bufferlevel / mStreamInfo.stream_info.file_size);
             percent += ((long long)6 * 1024 * 1024 * 100 * info->video_bufferlevel / mStreamInfo.stream_info.file_size);
@@ -2355,7 +2355,7 @@ int AmlogicPlayer::getStreamingSelectedTrack(const Parcel& request) const
 
 void transferFileSize(int64_t size, char *filesize)
 {
-    //LOGE("[transferFileSize] size:%lld\n", size);
+    //LOGE("[transferFileSize] size:%" PRId64 "\n", size);
     if(size <= 1024)
         strcpy(filesize, "1KB");
     else if(size <= 1024 * 1024) {
@@ -2433,7 +2433,7 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
     else
         reply->writeInt32(-1);
     reply->writeInt32(mStreamInfo.stream_info.type);
-    ALOGV("--filename:%s duration:%d filesize:%lld bitrate:%d \n", mStreamInfo.stream_info.filename, mStreamInfo.stream_info.duration,mStreamInfo.stream_info.file_size,mStreamInfo.stream_info.bitrate);
+    ALOGV("--filename:%s duration:%d filesize:%" PRId64 " bitrate:%d \n", mStreamInfo.stream_info.filename, mStreamInfo.stream_info.duration,mStreamInfo.stream_info.file_size,mStreamInfo.stream_info.bitrate);
     /*select info*/
     reply->writeInt32(mStreamInfo.stream_info.cur_video_index);
     reply->writeInt32(mStreamInfo.stream_info.cur_audio_index);
@@ -3225,7 +3225,7 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
                     realposition = mLastPosition + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
                     mLastPlaytime = mPlayTime;
                 }
-                LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
+                LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%" PRId64 "*1000,GetNowUs()=%" PRId64 "*1000,realposition=%" PRId64 "\n",
                      mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
                 //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
                 *position = realposition;
@@ -3239,7 +3239,7 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             }
             #endif
             realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
-            LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%lld*1000,GetNowUs()=%lld*1000,realposition=%lld\n",
+            LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%" PRId64 "*1000,GetNowUs()=%" PRId64 "*1000,realposition=%" PRId64 "\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
             *position = realposition;
 
@@ -3468,7 +3468,7 @@ status_t AmlogicPlayer::dump_streaminfo(int fd, media_info_t mInfo)const
     }
 
     if (mStreamInfo.stream_info.file_size > 0) {
-        snprintf(buffer, SIZE, " file_size:%lld bytes", mInfo.stream_info.file_size);
+        snprintf(buffer, SIZE, " file_size:%" PRId64 " bytes", mInfo.stream_info.file_size);
         result.append(buffer);
     }
     if (mStreamInfo.stream_info.bitrate > 0) {
@@ -3549,7 +3549,7 @@ status_t AmlogicPlayer::dump_subtitleinfo(int fd, media_info_t mStreamInfo)const
         result.append(buffer);
         snprintf(buffer, SIZE, " SubType[%d]", mStreamInfo.sub_info[i]->sub_type);
         result.append(buffer);
-        snprintf(buffer, SIZE, " SubtitleSize[%lld]", mStreamInfo.sub_info[i]->subtitle_size);
+        snprintf(buffer, SIZE, " SubtitleSize[%" PRId64 "]", mStreamInfo.sub_info[i]->subtitle_size);
         result.append(buffer);
         //if (mStreamInfo.sub_info[i]->sub_language != NULL) {
             snprintf(buffer, SIZE, " SubLanguage[%s]", mStreamInfo.sub_info[i]->sub_language);

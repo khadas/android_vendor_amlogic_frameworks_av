@@ -78,7 +78,7 @@ int AmlPlayerMetadataRetriever0::vp_read(URLContext *h, unsigned char *buf, int 
 {
     AmlogicPlayer_File0* af = (AmlogicPlayer_File0*)h->priv_data;
     int ret;
-    //ALOGV("start%s,pos=%lld,size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
+    //ALOGV("start%s,pos=%" PRId64 ",size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
     if(af->fd >= 0){
         ret = read(af->fd, buf, size);
     }else{
@@ -103,7 +103,7 @@ int64_t AmlPlayerMetadataRetriever0::vp_seek(URLContext *h, int64_t pos, int whe
 {
     AmlogicPlayer_File0* af = (AmlogicPlayer_File0*)h->priv_data;
     int64_t ret;
-    //ALOGV("%sret=%lld,pos=%lld,whence=%d,tell=%lld\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
+    //ALOGV("%sret=%" PRId64 ",pos=%" PRId64 ",whence=%d,tell=%" PRId64 "\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
     if (whence == AVSEEK_SIZE) {
         return af->mLength;
 #if 0
@@ -205,7 +205,7 @@ status_t AmlPlayerMetadataRetriever0::setDataSource(const char * url, const Keye
 
 status_t AmlPlayerMetadataRetriever0::setDataSource(int fd, int64_t offset, int64_t length)
 {
-    ALOGV("setDataSource(%d, %lld, %lld)", fd, offset, length);
+    ALOGV("setDataSource(%d, %" PRId64 ", %" PRId64 ")", fd, offset, length);
     mParsedMetaData = false;
     mMetaData.clear();
 
@@ -249,7 +249,7 @@ status_t AmlPlayerMetadataRetriever0::setdatasource(const char* url, int fd, int
 
 VideoFrame *AmlPlayerMetadataRetriever0::getFrameAtTime(int64_t timeUs, int option)
 {
-    ALOGV("getFrameAtTime: %lld us option: %d", timeUs, option);
+    ALOGV("getFrameAtTime: %" PRId64 " us option: %d", timeUs, option);
 
     int err;
     int32_t width, height;
@@ -402,7 +402,7 @@ void AmlPlayerMetadataRetriever0::parseMetaData()
     char tmp[32];
     int64_t durationUs;
     thumbnail_get_duration(mClient, &durationUs);
-    sprintf(tmp, "%lld", (durationUs + 500) / 1000);
+    sprintf(tmp, "%" PRId64 "", (durationUs + 500) / 1000);
     mMetaData.add(METADATA_KEY_DURATION, String8(tmp));
 
     thumbnail_find_stream_info_end(mClient);

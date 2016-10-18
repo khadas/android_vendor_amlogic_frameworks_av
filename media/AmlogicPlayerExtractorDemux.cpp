@@ -296,7 +296,7 @@ int AmlogicPlayerExtractorDemux::SetStreamInfo(AVStream *st, sp<MetaData> meta, 
     if (success) {
         st->duration = duration;
     }
-    LOGV("%s:%d : duration=%lld (us)\n", __FUNCTION__, __LINE__, duration);
+    LOGV("%s:%d : duration=%" PRId64 " (us)\n", __FUNCTION__, __LINE__, duration);
 
     int32_t bps = 0;
     success = meta->findInt32(kKeyBitRate, &bps);
@@ -411,7 +411,7 @@ int AmlogicPlayerExtractorDemux::ReadHeader(AVFormatContext *s, AVFormatParamete
         st = s->streams[i];
         SetStreamInfo(st, meta, mime);
         if (st->duration > 0 && (s->duration == AV_NOPTS_VALUE || st->duration > s->duration)) {
-            LOGV("s->duration=%lld st duration=%lld\n", s->duration, st->duration);
+            LOGV("s->duration=%" PRId64 " st duration=%" PRId64 "\n", s->duration, st->duration);
             s->duration = st->duration;
         }
         if (mVideoTrack==NULL&&!strncasecmp(mime.string(), "video/", 6) && mMediaExtractor->getTrack(i) != NULL&&st->codec->codec_id!=CODEC_ID_NONE) {
@@ -428,7 +428,7 @@ int AmlogicPlayerExtractorDemux::ReadHeader(AVFormatContext *s, AVFormatParamete
         }
         if (s->duration != AV_NOPTS_VALUE) {
             s->duration = s->duration ;
-            LOGV("[%s:%d]duration=%lld \n", __FUNCTION__, __LINE__, s->duration);
+            LOGV("[%s:%d]duration=%" PRId64 " \n", __FUNCTION__, __LINE__, s->duration);
         }
     }
     return 0;
@@ -449,7 +449,7 @@ int AmlogicPlayerExtractorDemux::ReadPacket(AVFormatContext *s, AVPacket *pkt)
     uint32_t audioreal_pktsize;
     MediaSource::ReadOptions options;
 retry:
-    DRM_DEBUG("[%s]mLastVideoTimeUs=%lld mLastAudioTimeUs=%lld\n", __FUNCTION__, mLastVideoTimeUs, mLastAudioTimeUs);
+    DRM_DEBUG("[%s]mLastVideoTimeUs=%" PRId64 " mLastAudioTimeUs=%" PRId64 "\n", __FUNCTION__, mLastVideoTimeUs, mLastAudioTimeUs);
     if ((hasVideo == true&&hasAudio == false)||(hasVideo == true&&hasAudio == true&&mLastVideoTimeUs <= mLastAudioTimeUs)) {
         if (hasVideo == true && mVideoTrack != NULL) {
             if (IsVideoAlreadyStarted == false) {
@@ -486,7 +486,7 @@ retry:
             if (err == OK) {
                 if (mBuffer->meta_data()->findInt64(kKeyTime, &TimeUs)
                     && TimeUs >= 0) {
-                    DRM_DEBUG("Key Video targetTimeUs = %lld us", TimeUs);
+                    DRM_DEBUG("Key Video targetTimeUs = %" PRId64 " us", TimeUs);
                     mLastVideoTimeUs = TimeUs;
                     if (mSeeking != NO_SEEK) {
                         mLastAudioTimeUs = TimeUs;
@@ -603,7 +603,7 @@ retry:
                 if (mWVMExtractor != NULL) {
                     status_t finalStatus;
                     int64_t cachedDurationUs = mWVMExtractor->getCachedDurationUs(&finalStatus);
-                    //LOGV("[%s]video packet finalStatus=%d cachedDurationUs=%lld\n", __FUNCTION__, finalStatus, cachedDurationUs);
+                    //LOGV("[%s]video packet finalStatus=%d cachedDurationUs=%" PRId64 "\n", __FUNCTION__, finalStatus, cachedDurationUs);
                 }
             } else {
                 pkt->size = 0;
@@ -633,7 +633,7 @@ retry:
             if (err == OK) {
                 if (err=mBuffer->meta_data()->findInt64(kKeyTime, &TimeUs)
                     && TimeUs >= 0) {
-                    DRM_DEBUG("Key Audio targetTimeUs = %lld us", TimeUs);
+                    DRM_DEBUG("Key Audio targetTimeUs = %" PRId64 " us", TimeUs);
                     mLastAudioTimeUs = TimeUs;	
                 }
             } else {
@@ -729,7 +729,7 @@ retry:
                     if (mWVMExtractor != NULL) {
                         status_t finalStatus;
                         int64_t cachedDurationUs = mWVMExtractor->getCachedDurationUs(&finalStatus);
-                        //LOGV("[%s]audio packet finalStatus=%d cachedDurationUs=%lld\n", __FUNCTION__, finalStatus, cachedDurationUs);
+                        //LOGV("[%s]audio packet finalStatus=%d cachedDurationUs=%" PRId64 "\n", __FUNCTION__, finalStatus, cachedDurationUs);
                 }
             } else {
                 pkt->size = 0;
@@ -785,7 +785,7 @@ int AmlogicPlayerExtractorDemux::Close(AVFormatContext *s)
 }
 int AmlogicPlayerExtractorDemux::ReadSeek(AVFormatContext *s, int stream_index, int64_t timestamp, int flags)
 {
-    LOGV("[%s:%d]--------------##stream_index=%d timestamp=%lld\n", __FUNCTION__, __LINE__, stream_index, timestamp);
+    LOGV("[%s:%d]--------------##stream_index=%d timestamp=%" PRId64 "\n", __FUNCTION__, __LINE__, stream_index, timestamp);
     mSeeking = SEEK;
     timestamp = timestamp * 100 / 9;
     mSeekTimestamp = timestamp;

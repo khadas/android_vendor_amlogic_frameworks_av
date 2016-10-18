@@ -965,11 +965,11 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
                 mAvgVideoFrameIntervalUs > 0 &&
                 llabs(nowUs - mLastVideoDrainRealTimeUs) < 300*1000) {/*not too long for pause or others..*/
                     realTimeUs = mLastNoJumpVideoFrameUs + mSmootOutNum * mAvgVideoFrameIntervalUs;
-                PTS_LOGD("mLastVideoDrainRealTimeUs1 =%lld,mAvgVideoFrameIntervalUs=%lld,nowUs=%lld\n",
+                PTS_LOGD("mLastVideoDrainRealTimeUs1 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
                     mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
             } else {
                 realTimeUs = nowUs;
-                PTS_LOGD("mLastVideoDrainRealTimeUs2 =%lld,mAvgVideoFrameIntervalUs=%lld,nowUs=%lld\n",
+                PTS_LOGD("mLastVideoDrainRealTimeUs2 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
                     mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
             }
             PTS_LOGD("smooth out video frame on jump3 V:%d A:%d delayUs:%d uS",
@@ -1044,12 +1044,12 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         }
 
         if (tooLate) {
-            ALOGV("video late by %lld us (%.2f secs)",
+            ALOGV("video late by %" PRId64 " us (%.2f secs)",
                  mVideoLateByUs, mVideoLateByUs / 1E6);
         }
         /* else {
             if (mDebug) {
-                ALOGI("[video] rendering at media time %lld us",
+                ALOGI("[video] rendering at media time %" PRId64 " us",
                         (mFlags & FLAG_REAL_TIME ? realTimeUs :
                        (realTimeUs + mAnchorTimeMediaUs - mAnchorTimeRealUs)));
             }
@@ -1134,7 +1134,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
     int64_t cur_time = ALooper::GetNowUs();
 
     CHECK(buffer->meta()->findInt64("timeUs", &mediaTimeUs));
-    PTS_LOGD("queue[%s]:%lld:VJ=%d:Aj=%d ", audio?"audio":"video",
+    PTS_LOGD("queue[%s]:%" PRId64 ":VJ=%d:Aj=%d ", audio?"audio":"video",
         mediaTimeUs, mVideoTimeJump, mAudioTimeJump);
 
     if ((cur_time - mLastInfoTime > 10000000ll) ||
@@ -1156,15 +1156,15 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             sync_info ="Video on Header";
         }
         PTS_LOG("AV sync info:%s\n",sync_info);
-        PTS_LOG("  SystemTimeStamp:%lld\n", SytemTimeStampUs);
-        PTS_LOG("  Last AudioTimeStamp:%lld\n", mAnchorTimeMediaUs);
-        PTS_LOG("  Last VideoTimeStamp:%lld\n", mLastVideoDrainTimeUs);
-        PTS_LOG("  AV diff:%lld ,Ajump:%d,Vjump:%d\n", diff, mAudioTimeJump, mVideoTimeJump);
+        PTS_LOG("  SystemTimeStamp:%" PRId64 "\n", SytemTimeStampUs);
+        PTS_LOG("  Last AudioTimeStamp:%" PRId64 "\n", mAnchorTimeMediaUs);
+        PTS_LOG("  Last VideoTimeStamp:%" PRId64 "\n", mLastVideoDrainTimeUs);
+        PTS_LOG("  AV diff:%" PRId64 " ,Ajump:%d,Vjump:%d\n", diff, mAudioTimeJump, mVideoTimeJump);
         PTS_LOG("  mAjumpedNum:%d, mAudioJumped till now=%d\n", mAjumpedNum, cur_time - mAudioJumpedTimeUs);
         PTS_LOG("  mVjumpedNum:%d, mVideoJumped till now=%d\n", mVjumpedNum, cur_time - mVideoJumpedTimeUs);
-        PTS_LOG("  mTotalAudioJumpedTimeUs:%lld\n",mTotalAudioJumpedTimeUs);
-        PTS_LOG("  mLastVideoUs:%lld\n", mLastVideoUs);
-        PTS_LOG("  mLastAudioUs:%lld\n", mLastAudioUs);
+        PTS_LOG("  mTotalAudioJumpedTimeUs:%" PRId64 "\n",mTotalAudioJumpedTimeUs);
+        PTS_LOG("  mLastVideoUs:%" PRId64 "\n", mLastVideoUs);
+        PTS_LOG("  mLastAudioUs:%" PRId64 "\n", mLastAudioUs);
         mLastInfoTime = cur_time;
     }
 
@@ -1196,7 +1196,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mContinuous = true;
         }
         if (diff_us > 3000000ll || diff_us < -500000ll) {
-            PTS_LOG("audio Discontinue %lld-->%lld us,jump =%lld us",
+            PTS_LOG("audio Discontinue %" PRId64 "-->%" PRId64 " us,jump =%" PRId64 " us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mAudioTimeJump = true;
             mAudioJumpedTimeUs = cur_time;
@@ -1217,7 +1217,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mContinuous = true;
         }
         if (diff_us > 3000000ll || diff_us < -500000ll) {
-            PTS_LOG("video Discontinue %lld-->%lld us,jump =%lld us",
+            PTS_LOG("video Discontinue %" PRId64 "-->%" PRId64 " us,jump =%" PRId64 " us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mVideoTimeJump = true;
             mVideoJumpedTimeUs = cur_time;
@@ -1640,22 +1640,22 @@ int64_t AmNuPlayer::Renderer::getPlayedOutAudioDurationUs(int64_t nowUs) {
             // become stale. Assuming that the MixerThread runs 20ms, with FastMixer at 5ms,
             // the max latency should be about 25ms with an average around 12ms (to be verified).
             // For safety we use 100ms.
-            ALOGV("getTimestamp: returned stale timestamp nowUs(%lld) numFramesPlayedAt(%lld)",
+            ALOGV("getTimestamp: returned stale timestamp nowUs(%" PRId64 ") numFramesPlayedAt(%" PRId64 ")",
                     (long long)nowUs, (long long)numFramesPlayedAt);
             numFramesPlayedAt = nowUs - kStaleTimestamp100ms;
         }
-        //ALOGD("getTimestamp: OK %d %lld", numFramesPlayed, (long long)numFramesPlayedAt);
+        //ALOGD("getTimestamp: OK %d %" PRId64 "", numFramesPlayed, (long long)numFramesPlayedAt);
     } else if (res == WOULD_BLOCK) { // case 2: transitory state on start of a new track
         numFramesPlayed = 0;
         numFramesPlayedAt = nowUs;
-        //ALOGD("getTimestamp: WOULD_BLOCK %d %lld",
+        //ALOGD("getTimestamp: WOULD_BLOCK %d %" PRId64 "",
         //        numFramesPlayed, (long long)numFramesPlayedAt);
     } else {                         // case 3: transitory at new track or audio fast tracks.
         res = mAudioSink->getPosition(&numFramesPlayed);
         CHECK_EQ(res, (status_t)OK);
         numFramesPlayedAt = nowUs;
         numFramesPlayedAt += 1000LL * mAudioSink->latency() / 2; /* XXX */
-        //ALOGD("getPosition: %d %lld", numFramesPlayed, numFramesPlayedAt);
+        //ALOGD("getPosition: %d %" PRId64 "", numFramesPlayed, numFramesPlayedAt);
     }
 
     // TODO: remove the (int32_t) casting below as it may overflow at 12.4 hours.
@@ -1670,10 +1670,10 @@ int64_t AmNuPlayer::Renderer::getPlayedOutAudioDurationUs(int64_t nowUs) {
         //     numFramesPlayedAt, by a time amount greater than numFramesPlayed.
         //
         // Both of these are transitory conditions.
-        //ALOGV("getPlayedOutAudioDurationUs: negative duration %lld set to zero", (long long)durationUs);
+        //ALOGV("getPlayedOutAudioDurationUs: negative duration %" PRId64 " set to zero", (long long)durationUs);
         durationUs = 0;
     }
-    //ALOGV("getPlayedOutAudioDurationUs(%lld) nowUs(%lld) frames(%u) framesAt(%lld)",
+    //ALOGV("getPlayedOutAudioDurationUs(%" PRId64 ") nowUs(%" PRId64 ") frames(%u) framesAt(%" PRId64 ")",
     //        (long long)durationUs, (long long)nowUs, numFramesPlayed, (long long)numFramesPlayedAt);
     return durationUs;
 }
