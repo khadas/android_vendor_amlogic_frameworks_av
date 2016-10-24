@@ -2859,13 +2859,14 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
     status_t err;
     sp<ANativeWindow> tmpWindow = NULL;
     if (bufferProducer != NULL) {
-        if (bufferProducer->getConsumerName().contains("_GLES")) {
+        if (bufferProducer->getConsumerName().contains("SurfaceTexture-") ||
+            bufferProducer->getConsumerName().contains("_GLES")) {
             enableOSDVideo = true;
         }
         tmpWindow = new Surface(bufferProducer);
     }
 
-    if (mPlayerRender.get() != NULL) 
+    if (mPlayerRender.get() != NULL)
     {
         mPlayerRender->Pause();
         mPlayerRender->SwitchNativeWindow(tmpWindow);
