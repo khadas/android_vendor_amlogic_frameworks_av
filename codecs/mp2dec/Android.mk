@@ -1,5 +1,5 @@
 LOCAL_PATH := $(call my-dir)
-ifeq ($(TARGET_ARCH),arm)
+#ifeq ($(TARGET_ARCH),arm)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
@@ -55,6 +55,7 @@ LOCAL_C_INCLUDES += \
          $(LOCAL_PATH)/src \
          $(LOCAL_PATH)/src/libmpg123
 
+LOCAL_MULTILIB := 32
 LOCAL_MODULE := libstagefright_mp2dec
 
 LOCAL_ARM_MODE := arm
@@ -83,9 +84,9 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_mp2dec
-
+LOCAL_MULTILIB := 32
 LOCAL_MODULE := libstagefright_soft_mp2dec
 LOCAL_MODULE_TAGS := optional
 
 include $(BUILD_SHARED_LIBRARY)
-endif
+#endif

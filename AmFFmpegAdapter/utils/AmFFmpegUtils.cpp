@@ -79,10 +79,8 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_VIDEO_WMV1, AV_CODEC_ID_WMV1 },
 
     { MEDIA_MIMETYPE_AUDIO_AAC, AV_CODEC_ID_AAC },
-#ifdef DOLBY_UDC
     { MEDIA_MIMETYPE_AUDIO_AC3, AV_CODEC_ID_AC3 },
     { MEDIA_MIMETYPE_AUDIO_EC3, AV_CODEC_ID_EAC3 },
-#endif
     // TODO: check if AMR works fine once decoder supports it.
     { MEDIA_MIMETYPE_AUDIO_AMR_NB, AV_CODEC_ID_AMR_NB },
     { MEDIA_MIMETYPE_AUDIO_AMR_WB, AV_CODEC_ID_AMR_WB },
@@ -291,9 +289,8 @@ static void initInputFormatToMimeTypeMap(
     //map.add(av_find_input_format("ogg"), MEDIA_MIMETYPE_CONTAINER_OGG);
     //map.add(av_find_input_format("mp3"), MEDIA_MIMETYPE_AUDIO_MPEG);
     map.add(av_find_input_format("matroska"), MEDIA_MIMETYPE_CONTAINER_MATROSKA);
-#ifdef DOLBY_UDC
     map.add(av_find_input_format("ac3"), MEDIA_MIMETYPE_AUDIO_AC3);
-#endif
+    map.add(av_find_input_format("eac3"), MEDIA_MIMETYPE_AUDIO_EAC3);
     map.add(av_find_input_format("dts"), MEDIA_MIMETYPE_AUDIO_DTS);
     map.add(av_find_input_format("hevc"), MEDIA_MIMETYPE_VIDEO_HEVC);
     map.add(av_find_input_format("ape"), MEDIA_MIMETYPE_AUDIO_APE);
@@ -301,6 +298,7 @@ static void initInputFormatToMimeTypeMap(
     map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM20);
     map.add(av_find_input_format("rm"), MEDIA_MIMETYPE_VIDEO_RM40);
     map.add(av_find_input_format("wmv1"), MEDIA_MIMETYPE_VIDEO_WMV1);
+    map.add(av_find_input_format("aiff"), MEDIA_MIMETYPE_CONTAINER_AIFF);
 }
 
 const char *convertInputFormatToMimeType(AVInputFormat *inputFormat) {

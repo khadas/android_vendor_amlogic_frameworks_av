@@ -210,11 +210,9 @@ OMX_ERRORTYPE SoftADIF::internalGetParameter(
         {
             OMX_AUDIO_PARAM_PCMMODETYPE *pcmParams =
                 (OMX_AUDIO_PARAM_PCMMODETYPE *)params;
-
             if (pcmParams->nPortIndex > 1) {
                 return OMX_ErrorUndefined;
             }
-
             pcmParams->eNumData = OMX_NumericalDataSigned;
             pcmParams->eEndian = OMX_EndianBig;
             pcmParams->bInterleaved = OMX_TRUE;
@@ -247,8 +245,7 @@ OMX_ERRORTYPE SoftADIF::internalSetParameter(
         {
             OMX_AUDIO_PARAM_PCMMODETYPE *pcmParams =
                 (OMX_AUDIO_PARAM_PCMMODETYPE *)params;
-
-            if (pcmParams->nPortIndex != 0) {
+            if (pcmParams->nPortIndex != 1) {
                 return OMX_ErrorUndefined;
             }
 
