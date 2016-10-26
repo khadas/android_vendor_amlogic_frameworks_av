@@ -9775,6 +9775,11 @@
         <CompoundRule Type="All">
           <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="UsbDevice"/>
         </CompoundRule>
+      <Configuration Name="DiaRemote">
+        <CompoundRule Type="All">
+          <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="DiaRemote"/>
+        </CompoundRule>
+      </Configuration>
       </Configuration>
       <Configuration Name="BuiltinMic">
         <CompoundRule Type="All">
@@ -9789,10 +9794,12 @@
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/wired_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device"/>
+      <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/bluetooth_sco_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/wired_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device"/>
+      <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic"/>
     </ConfigurableElements>
     <Settings>
@@ -9806,6 +9813,9 @@
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
         </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
         </ConfigurableElement>
@@ -9817,6 +9827,9 @@
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
@@ -9832,6 +9845,9 @@
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
         </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
         </ConfigurableElement>
@@ -9843,6 +9859,9 @@
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
@@ -9858,6 +9877,9 @@
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">1</BitParameter>
         </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
         </ConfigurableElement>
@@ -9869,6 +9891,41 @@
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">1</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
+          <BitParameter Name="builtin_mic">0</BitParameter>
+        </ConfigurableElement>
+      </Configuration>
+      <Configuration Name="DiaRemote">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
+          <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/wired_headset">
+          <BitParameter Name="wired_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
+          <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">1</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
+          <BitParameter Name="builtin_mic">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/bluetooth_sco_headset">
+          <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/wired_headset">
+          <BitParameter Name="wired_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
+          <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">1</BitParameter>
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
@@ -9884,6 +9941,9 @@
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
         </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">1</BitParameter>
         </ConfigurableElement>
@@ -9895,6 +9955,9 @@
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">1</BitParameter>
@@ -9910,6 +9973,9 @@
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
         </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
         </ConfigurableElement>
@@ -9921,6 +9987,9 @@
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
           <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
         </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
           <BitParameter Name="builtin_mic">0</BitParameter>
