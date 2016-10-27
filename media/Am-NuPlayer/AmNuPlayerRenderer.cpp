@@ -30,7 +30,7 @@
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/Utils.h>
 
-//#include <VideoFrameScheduler.h>
+#include <media/stagefright/VideoFrameScheduler.h>
 
 #include <inttypes.h>
 
@@ -141,7 +141,14 @@ AmNuPlayer::Renderer::Renderer(
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
         mEnableSlowSync = true;
     }
-
+    mVideoDelayPostUs = -1;
+    mUpdateDelayPost = false;
+    if (property_get("media.hls.delaypost.ms", value, NULL)) {
+        if ((sscanf(value, "%d", &ret)) > 0) {
+            mVideoDelayPostUs = ret * 1000;
+            mUpdateDelayPost =true;
+        }
+    }
 }
 
 AmNuPlayer::Renderer::~Renderer() {
@@ -973,20 +980,27 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
                     mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
             }
             PTS_LOGD("smooth out video frame on jump3 V:%d A:%d delayUs:%d uS",
-                mVideoTimeJump, mAudioTimeJump, (int)(realTimeUs - nowUs));
+              mVideoTimeJump, mAudioTimeJump, (int)(realTimeUs - nowUs));
         } else {
             mSmootOutNum = 0;
         }
     }
 
-    /*realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;*/
+    realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;
+    int64_t twoVsyncsUs = 2 * (mVideoScheduler->getVsyncPeriod() / 1000);
+
     delayUs = realTimeUs - nowUs;
     //ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
     entry.mBuffer->meta()->setInt64("RealTimeUs", realTimeUs);
-    // post 2 display refreshes before rendering is due
-    delayUs -= 2 * 1000000/30; /*send before 2 vsync,default 30hz*/
+    PTS_LOGV("realTimeUs=%" PRId64 ",system=%" PRId64 ",delay=%" PRId64 "us\n",
+             realTimeUs, ALooper::GetNowUs(), delayUs);
+    // post 4 display refreshes before rendering is due
+    if (mVideoDelayPostUs > 0)
+        delayUs -= mVideoDelayPostUs; /*send before 4 vsync,default 30hz*/
+    else
+        delayUs -= twoVsyncsUs;
     mDrainVideoQueuePending = true;
-	if (delayUs < 0) delayUs = 0;
+    if (delayUs < 0) delayUs = 0;
     msg->post(delayUs > 0 ? delayUs : 0);
 
 }
@@ -1026,7 +1040,8 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
             mLastVideoDrainTimeUs = mediaTimeUs;
         }
     }
-
+    PTS_LOGV("On Draw. realTimeUs =%" PRId64 ",system=%" PRId64 "\n",
+                    realTimeUs, ALooper::GetNowUs());
     bool tooLate = false;
     int render = 1;
     if (!mPaused) {
@@ -1235,7 +1250,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         if (!audio && ret == OK && /*check on video stream...*/
          llabs(mLastVideoDrainTimeUs - SytemTimeStampUs) < 100000ll && /*av diff < 500ms */
          ((mVideoTimeJump && (cur_time - mVideoJumpedTimeUs) > 500000ll) || /*video jumped > 500ms*/
-         (mAudioTimeJump && (cur_time - mAudioJumpedTimeUs) > 500000ll))){ /*audio jumped > 500ms*/
+         (mAudioTimeJump && (cur_time - mAudioJumpedTimeUs) > 500000ll))) { /*audio jumped > 500ms*/
             mAudioTimeJump = false;
             mVideoTimeJump = false;
             PTS_LOG("AV SYNCED,clear jumpinfo!!\n");
@@ -1248,6 +1263,17 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
     } else {
         mLastVideoUs = mediaTimeUs;
     }
+
+
+    if (mUpdateDelayPost) {
+        int ret;
+        char value[PROPERTY_VALUE_MAX];
+        if (property_get("media.hls.delaypost.ms", value, NULL)) {
+            if ((sscanf(value, "%d", &ret)) > 0) {
+                mVideoDelayPostUs = ret * 1000;
+            }
+        }
+    }
 }
 
 void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
@@ -1256,14 +1282,13 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
 
     setHasMedia(audio);
 
-#if 0
     if (mHasVideo) {
         if (mVideoScheduler == NULL) {
             mVideoScheduler = new VideoFrameScheduler();
             mVideoScheduler->init();
         }
     }
-#endif
+
 
     if (dropBufferWhileFlushing(audio, msg)) {
         return;
@@ -1449,11 +1474,10 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
         mDrainVideoQueuePending = false;
         ++mVideoQueueGeneration;
 
-#if 0
         if (mVideoScheduler != NULL) {
             mVideoScheduler->restart();
         }
-#endif
+
 
         prepareForMediaRenderingStart();
     }
@@ -1606,12 +1630,10 @@ void AmNuPlayer::Renderer::onResume() {
 
 void AmNuPlayer::Renderer::onSetVideoFrameRate(float fps) {
     fps = fps;
-#if 0
     if (mVideoScheduler == NULL) {
         mVideoScheduler = new VideoFrameScheduler();
     }
     mVideoScheduler->init(fps);
-#endif
 }
 
 // TODO: Remove unnecessary calls to getPlayedOutAudioDurationUs()

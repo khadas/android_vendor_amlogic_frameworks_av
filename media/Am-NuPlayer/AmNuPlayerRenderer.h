@@ -24,7 +24,7 @@ namespace android {
 
 struct ABuffer;
 class  AWakeLock;
-//struct VideoFrameScheduler;
+struct VideoFrameScheduler;
 
 struct AmNuPlayer::Renderer : public AHandler {
     enum Flags {
@@ -140,7 +140,7 @@ private:
     List<QueueEntry> mAudioQueue;
     List<QueueEntry> mVideoQueue;
     uint32_t mNumFramesWritten;
-    //sp<VideoFrameScheduler> mVideoScheduler;
+    sp<VideoFrameScheduler> mVideoScheduler;
 
 /*
     int64_t mLastAudioQueueTimeUs;
@@ -166,6 +166,8 @@ private:
     bool mDrainVideoQueuePending;
     int32_t mAudioQueueGeneration;
     int32_t mVideoQueueGeneration;
+    int32_t mVideoDelayPostUs;
+    bool mUpdateDelayPost;
     FILE * mDebugHandle;
 
     Mutex mTimeLock;
