@@ -1771,6 +1771,15 @@ status_t AmNuPlayer::instantiateDecoder(bool audio, sp<DecoderBase> *decoder) {
     }
 
     if (audio) {
+        {
+            char value[PROPERTY_VALUE_MAX];
+            if (property_get("media.amplayer.noaudio", value, NULL) &&
+            (!strcmp("1", value) || !strcasecmp("true", value))) {
+                ALOGE("Disabled audio for debug!\n");
+                return OK;
+            }
+        }
+
         sp<AMessage> notify = new AMessage(kWhatAudioNotify, this);
         ++mAudioDecoderGeneration;
         notify->setInt32("generation", mAudioDecoderGeneration);
@@ -1782,6 +1791,14 @@ status_t AmNuPlayer::instantiateDecoder(bool audio, sp<DecoderBase> *decoder) {
         }
         mRenderer->setHasMedia(true);
     } else {
+        {
+            char value[PROPERTY_VALUE_MAX];
+            if (property_get("media.amplayer.novideo", value, NULL) &&
+            (!strcmp("1", value) || !strcasecmp("true", value))) {
+                ALOGE("Disabled video for debug!\n");
+                return OK;
+            }
+        }
         sp<AMessage> notify = new AMessage(kWhatVideoNotify, this);
         ++mVideoDecoderGeneration;
         notify->setInt32("generation", mVideoDecoderGeneration);

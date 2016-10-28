@@ -85,6 +85,9 @@ public:
         read(fd, buf, sizeof(buf));
         lseek(fd, offset, SEEK_SET);
         long ident = *((long*)buf);
+        if (!AmlogicPlayer::PropIsEnable("media.amsuperplayer.enable", true)) {
+            return 0.0;
+        }
     /* Ogg vorbis?
          * ogm header syntax:
          * number_page_segments:1 byte -----> buf[28]
@@ -121,6 +124,9 @@ public:
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const sp<IStreamSource>& /*source*/,
                                float /*curScore*/) {
+        if (!AmlogicPlayer::PropIsEnable("media.amsuperplayer.enable", true)) {
+            return 0.0;
+        }
         return 1.0;
     }
 
@@ -134,7 +140,8 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
   public:
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const char* url,
-                               float curScore) {
+                               float curScore)
+   {
         static const float kOurScore = 1.0;
 
         char value[PROPERTY_VALUE_MAX];
@@ -167,10 +174,26 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
 
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const sp<IStreamSource>& /*source*/,
-                               float /*curScore*/) {
+                               float /*curScore*/)
+    {
+        if(AmlogicPlayer::PropIsEnable("media.hls.disable-nuplayer", false))
+        {
+            return 0.0;
+        }
         return 0.8;
     }
-
+    virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
+                               int fd,
+                               int64_t offset,
+                               int64_t length,
+                               float /*curScore*/)
+    {
+        if(AmlogicPlayer::PropIsEnable("media.hls.disable-nuplayer", false))
+        {
+            return 0.0;
+        }
+        return 0.5;
+	}
     virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
         ALOGV(" create AmNuPlayer");
         return new AmNuPlayerDriver();

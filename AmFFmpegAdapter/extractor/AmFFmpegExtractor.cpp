@@ -55,7 +55,7 @@ static const size_t kMaxFrameBufferSize = 8 * 1024 * 1024;
 
 struct AmFFmpegSource : public MediaSource {
     AmFFmpegSource(
-            AmFFmpegExtractor *extractor,
+            const sp<AmFFmpegExtractor> &extractor,
             AVStream *stream,
             AVInputFormat *inputFormat,
             sp<AmPTSPopulator> &ptsPopulator,
@@ -74,7 +74,7 @@ struct AmFFmpegSource : public MediaSource {
     status_t clearPendingPackets();
 
 private:
-    wp<AmFFmpegExtractor> mExtractor;
+    sp<AmFFmpegExtractor> mExtractor;
     sp<MetaData> mMeta;
     sp<StreamFormatter> mFormatter;
     sp<AmPTSPopulator> mPTSPopulator;
@@ -107,7 +107,7 @@ private:
     AVPacket *dequeuePacket();
     status_t init(
             AVStream *stream, AVInputFormat *inputFormat,
-            AmFFmpegExtractor *extractor);
+            const sp<AmFFmpegExtractor> &extractor);
     int64_t convertStreamTimeToUs(int64_t timeInStreamTime);
     void resetBufferGroup(size_t size);
 
@@ -115,7 +115,7 @@ private:
 };
 
 AmFFmpegSource::AmFFmpegSource(
-        AmFFmpegExtractor *extractor,
+        const sp<AmFFmpegExtractor> &extractor,
         AVStream *stream,
         AVInputFormat *inputFormat,
         sp<AmPTSPopulator> &ptsPopulator,
@@ -146,7 +146,7 @@ AmFFmpegSource::~AmFFmpegSource() {
 
 status_t AmFFmpegSource::init(
         AVStream *stream, AVInputFormat *inputFormat,
-        AmFFmpegExtractor *extractor) {
+        const sp<AmFFmpegExtractor> &extractor) {
     CHECK(stream);
     CHECK(inputFormat);
 
@@ -310,7 +310,7 @@ status_t AmFFmpegSource::read(
     ALOGV("%s %d", __FUNCTION__, __LINE__);
     *out = NULL;
 
-    sp<AmFFmpegExtractor> extractor = mExtractor.promote();
+    sp<AmFFmpegExtractor> extractor = mExtractor;
     if (NULL == extractor.get()) {
         // The client should hold AmFFmpegExtractor while it is using source.
         ALOGE("AmFFmpegExtractor has been released before stop using sources.");

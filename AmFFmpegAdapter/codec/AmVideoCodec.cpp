@@ -121,16 +121,16 @@ int32_t AmVideoCodec::video_decode_frame(VIDEO_FRAME_WRAPPER_T * data, int * got
     pkt.data = avpkt->data;
     pkt.size = avpkt->size;
     int32_t ret = avcodec_decode_video2(mctx, mFrame, got_frame, &pkt);
-    if(got_frame) {
+    if(*got_frame) {
         data->width = mFrame->width;
         data->height = mFrame->height;
         data->format = mFrame->format;
         data->data[0] = mFrame->data[0];
-	 data->data[1] = mFrame->data[1];
-	 data->data[2] = mFrame->data[2];
+        data->data[1] = mFrame->data[1];
+        data->data[2] = mFrame->data[2];
         data->linesize[0] = mFrame->linesize[0];
-	 data->linesize[1] = mFrame->linesize[1];
-	 data->linesize[2] = mFrame->linesize[2];
+        data->linesize[1] = mFrame->linesize[1];
+        data->linesize[2] = mFrame->linesize[2];
     }
     return ret;
 }
