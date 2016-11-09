@@ -67,6 +67,7 @@
             <BitParameter Name="loopback" Size="1" Pos="18"/>
             <BitParameter Name="ip" Size="1" Pos="19"/>
             <BitParameter Name="bus" Size="1" Pos="20"/>
+            <BitParameter Name="dia_remote" Size="1" Pos="21"/>
             <BitParameter Name="stub" Size="1" Pos="30"/>
         </BitParameterBlock>
     </ComponentType>
