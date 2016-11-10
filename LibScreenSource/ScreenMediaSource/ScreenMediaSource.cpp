@@ -329,7 +329,7 @@ status_t ScreenMediaSource::start(int32_t client_id)
 
         ALOGV("[%s %d] start AML_SCREEN_SOURCE", __FUNCTION__, __LINE__);
 
-        mScreenDev->ops.set_source_type(mScreenDev, WIFI_DISPLAY);
+        mScreenDev->ops.set_port_type(mScreenDev, 0x1100C000);
         mScreenDev->ops.set_frame_rate(mScreenDev, 30);
         mScreenDev->ops.set_format(mScreenDev, mWidth, mHeight, V4L2_PIX_FMT_NV21);
         mScreenDev->ops.setDataCallBack(mScreenDev, VdinDataCallBack, (void*)this);

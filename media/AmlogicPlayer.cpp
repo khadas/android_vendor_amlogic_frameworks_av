@@ -267,7 +267,7 @@ static int Vfm_Compare(const map_t *a, const map_t *b)
 static void Get_Vfm_Path(char * path, Vector<map_t> &list)
 {
     const char* vfm_map_list[] = {
-        "ppmgr", "deinterlace", "decoder", "amvideo", "amlvideo2", "amlvideo",
+        "ppmgr", "deinterlace", "decoder", "amvideo", "amlvideo2.0", "amlvideo",
         "ionvideo", "amvideo4osd", "osd", "vdin0", "vdin1", "vm", NULL
     };
     char *node_p = NULL;
