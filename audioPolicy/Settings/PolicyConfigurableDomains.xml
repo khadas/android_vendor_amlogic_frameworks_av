@@ -9775,11 +9775,11 @@
         <CompoundRule Type="All">
           <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="UsbDevice"/>
         </CompoundRule>
+      </Configuration>
       <Configuration Name="DiaRemote">
         <CompoundRule Type="All">
           <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="DiaRemote"/>
         </CompoundRule>
-      </Configuration>
       </Configuration>
       <Configuration Name="BuiltinMic">
         <CompoundRule Type="All">
