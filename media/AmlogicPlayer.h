@@ -231,6 +231,7 @@ private:
     Rect            curLayout;
     int                 mDelayUpdateTime;
     bool                mEnded;
+    bool                mShouldSendPlayComplete;
     bool                            mHttpWV;
     bool                isTryDRM;
     int                 mSessionID;

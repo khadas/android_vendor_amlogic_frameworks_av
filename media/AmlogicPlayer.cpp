@@ -164,6 +164,7 @@ AmlogicPlayer::AmlogicPlayer() :
     video_rotation_degree = 0;
     fastNotifyMode = 0;
     mEnded = false;
+    mShouldSendPlayComplete = false;
     mLowLevelBufMode = false;
     LatestPlayerState = PLAYER_INITING;
     mDelayUpdateTime = 0;
@@ -1183,7 +1184,8 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         LOGV("Player status:%s, playback complete", player_status2str(info->status));
         if (mHttpWV == false) {
             if ((!mEnded) && (info->status == PLAYER_PLAYEND)) {
-                sendEvent(MEDIA_PLAYBACK_COMPLETE);
+                //sendEvent(MEDIA_PLAYBACK_COMPLETE);
+                mShouldSendPlayComplete = true;
             }
         }
         if (info->current_ms >= 100) {
@@ -1199,6 +1201,12 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         if (mHttpWV == false) {
             if (!mLoop && (mState != STATE_ERROR) && (!mEnded)) { //no errors & no loop^M
                 //sendEvent(MEDIA_PLAYBACK_COMPLETE);
+            }
+
+            if (mShouldSendPlayComplete) {
+                LOGV("[UpdateProcess]MEDIA_PLAYBACK_COMPLETE usleep 1000 * 10\n");
+                usleep(1000 * 10);
+                sendEvent(MEDIA_PLAYBACK_COMPLETE);
             }
         }
         mPaused=true;
@@ -1622,6 +1630,7 @@ status_t AmlogicPlayer::start()
     mPaused = false;
     mRunning = true;
     mEnded = false;
+    mShouldSendPlayComplete = false;
     mLatestPauseState = false;
     mLastPlayTimeUpdateUS = ALooper::GetNowUs();
     mDelayUpdateTime = 1;
@@ -1673,6 +1682,7 @@ status_t AmlogicPlayer::stop()
     mLatestPauseState = true;
     player_stop(mPlayer_id);
     mEnded= true;
+    mShouldSendPlayComplete = false;
     ///sendEvent(MEDIA_PLAYBACK_COMPLETE);
 
     if (mAuto3DDetected) {
@@ -3419,6 +3429,7 @@ status_t AmlogicPlayer::reset()
 {
     //Mutex::Autolock autoLock(mMutex);
     mIgnoreMsg = true;
+    mShouldSendPlayComplete = false;
     LOGV("reset\n");
     if (mhasVideo || !mPaused) { //wxl del for music play
         player_exit(mPlayer_id);
