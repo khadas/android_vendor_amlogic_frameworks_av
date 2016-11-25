@@ -165,6 +165,8 @@ AmlogicPlayer::AmlogicPlayer() :
     fastNotifyMode = 0;
     mEnded = false;
     mShouldSendPlayComplete = false;
+    mOffsetBacFlag = false;
+    mOffsetBac = 0;
     mLowLevelBufMode = false;
     LatestPlayerState = PLAYER_INITING;
     mDelayUpdateTime = 0;
@@ -1631,6 +1633,8 @@ status_t AmlogicPlayer::start()
     mRunning = true;
     mEnded = false;
     mShouldSendPlayComplete = false;
+    mOffsetBacFlag = false;
+    mOffsetBac = 0;
     mLatestPauseState = false;
     mLastPlayTimeUpdateUS = ALooper::GetNowUs();
     mDelayUpdateTime = 1;
@@ -1683,6 +1687,8 @@ status_t AmlogicPlayer::stop()
     player_stop(mPlayer_id);
     mEnded= true;
     mShouldSendPlayComplete = false;
+    mOffsetBacFlag = false;
+    mOffsetBac = 0;
     ///sendEvent(MEDIA_PLAYBACK_COMPLETE);
 
     if (mAuto3DDetected) {
@@ -1861,6 +1867,7 @@ status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
     if (rate.mSpeed == 0.f) {
         if (true & mRunning) {
             err = pause();
+            mOffsetBacFlag = true;
         }
         if (err == OK) {
             // save settings (using old speed) in case player is resumed
@@ -1871,6 +1878,8 @@ status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
         TRACE();
         return err;
     }
+    mOffsetBacFlag = false;
+    mOffsetBac = 0;
     if (!(true & mRunning)) {
         prepare();
         start();
@@ -3252,6 +3261,10 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
         if (mStreamTime <= 0) { /*mStreamTime is have not set,just set a big value for netflix may pause bug.*/
             mStreamTime += mStreamTimeExtAddS * 1000;
         }
+        if (LatestPlayerState == PLAYER_PAUSE && mOffsetBacFlag) {
+            mOffsetBac = (ALooper::GetNowUs() - mLastStreamTimeUpdateUS) / 1000;
+            mOffsetBacFlag = false;
+        }
         *position = (int)(mStreamTime + (ALooper::GetNowUs() - mLastStreamTimeUpdateUS) / 1000); /*jast let uplevel know,we are playing,they don't care it.(netflix's bug/)*/
     /* for CTS, round the timestamp  */
         if (mPlaybackSettings.mSpeed != 1.0f) {
@@ -3312,6 +3325,15 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             *position = mDuration - mDuration % 1000;
         }
         mPlayTime = *position;
+    }
+
+    if (fastNotifyMode) {
+        if (LatestPlayerState == PLAYER_STOPED || LatestPlayerState == PLAYER_INITOK) {//wxl add for 7.0cts 20161125
+            *position = 0;
+        }
+        else if (LatestPlayerState == PLAYER_PAUSE) {
+            *position = (int)(mStreamTime + mOffsetBac);
+        }
     }
 
     if(mStrCurrentAudioCodec!=NULL &&!strncmp(mStrCurrentAudioCodec,"DTS",3)){
@@ -3430,6 +3452,8 @@ status_t AmlogicPlayer::reset()
     //Mutex::Autolock autoLock(mMutex);
     mIgnoreMsg = true;
     mShouldSendPlayComplete = false;
+    mOffsetBacFlag = false;
+    mOffsetBac = 0;
     LOGV("reset\n");
     if (mhasVideo || !mPaused) { //wxl del for music play
         player_exit(mPlayer_id);

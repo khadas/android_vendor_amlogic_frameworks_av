@@ -232,6 +232,8 @@ private:
     int                 mDelayUpdateTime;
     bool                mEnded;
     bool                mShouldSendPlayComplete;
+    bool                mOffsetBacFlag;
+    int                 mOffsetBac;
     bool                            mHttpWV;
     bool                isTryDRM;
     int                 mSessionID;
