@@ -97,6 +97,7 @@ AmSuperPlayer::AmSuperPlayer(pid_t pid) :
 	isStartedPrepared=false;
 	mRequestPrepared=false;
     mPrepareErr = false;
+    mNuPlayerForce = false;
     LOGV("AmSuperPlayer init now\n");
 	
 }
@@ -140,6 +141,7 @@ status_t    AmSuperPlayer::setDataSource(const sp<IMediaHTTPService> &httpServic
     }
 	url_valid=true;
 	mState = STATE_OPEN;
+	mNuPlayerForce = false;
 	return NO_ERROR;
 }
 static int fdcound=0;
@@ -175,6 +177,33 @@ status_t    AmSuperPlayer::setDataSource(int fd, int64_t offset, int64_t length)
 	close(dumpfd);
 	lseek(testfd, oldoffset, SEEK_SET);
 #endif
+
+    char formats[PROPERTY_VALUE_MAX];
+    int ret = property_get("media.nuplayer.enable-formats", formats, NULL);
+    if (ret > 0) {
+        TRACE();
+        mNuPlayerForce = false;
+        int tmpfd = mfd;
+        char tmpbuf[256];
+        lseek(tmpfd, 0, SEEK_CUR);
+        int tmplen = read(tmpfd, tmpbuf, 256);
+        if (tmplen > 0) {
+            bool isTs = false;
+            if (tmpbuf[0] == 0x47 && tmpbuf[188] == 0x47) {
+                isTs = true;
+            }
+
+            bool is3Gp = false;
+            if (tmpbuf[8] == 0x33 && tmpbuf[9] == 0x67) {
+                is3Gp = true;
+            }
+
+            if ((NULL != strstr(formats, "ts") && isTs) || (NULL != strstr(formats, "3gp") && is3Gp)) {
+                mNuPlayerForce = true;
+            }
+        }
+    }
+
 	// 0 origin mode --default,  player start when prepare request commign
 	// 1  new start mode ,player will start in setdatasource method
 	if(PropIsEnable("media.amplayer.startmode")==0) {
@@ -698,6 +727,11 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
             return NU_PLAYER;
         }
     }
+
+    if (mNuPlayerForce) {
+        return NU_PLAYER;
+    }
+
     if (amplayer_enabed && type != NULL)
     {
         bool audio_all,no_audiofile;
