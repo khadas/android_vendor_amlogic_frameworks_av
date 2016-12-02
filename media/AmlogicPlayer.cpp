@@ -1862,6 +1862,7 @@ status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
         return err;
     }
     if (!(true & mRunning)) {
+        prepare();
         start();
         pause();
         usleep(100000);
