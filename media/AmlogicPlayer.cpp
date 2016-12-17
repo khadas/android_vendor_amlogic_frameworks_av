@@ -2916,8 +2916,12 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
     status_t err;
     sp<ANativeWindow> tmpWindow = NULL;
     if (bufferProducer != NULL) {
+        const char specApkName[4] = {0x63, 0x74, 0x73, 0x0};
         if (bufferProducer->getConsumerName().contains("SurfaceTexture-") ||
-            bufferProducer->getConsumerName().contains("_GLES")) {
+            bufferProducer->getConsumerName().contains("_GLES")
+            || ((bufferProducer->getConsumerName().contains("CapturedActivity")
+                || bufferProducer->getConsumerName().contains("PixelCopyVideoSourceActivity"))
+                && bufferProducer->getConsumerName().contains(specApkName))) {
             enableOSDVideo = true;
         }
         tmpWindow = new Surface(bufferProducer);
@@ -2927,11 +2931,15 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
     {
         mPlayerRender->Pause();
         mPlayerRender->SwitchNativeWindow(tmpWindow);
-        int ret = mPlayerRender->Start();
-		if (ret != OK){
-	   		LOGE("setVideoSurfaceTexture__start__err");
-	   		return ERROR_OPEN_FAILED;
-	   	}
+        if (!isPlaying() && (tmpWindow == NULL)) {
+            stop();// for cts do net stop video
+        } else {
+            int ret = mPlayerRender->Start();
+            if (ret != OK) {
+                LOGE("setVideoSurfaceTexture__start__err");
+                return ERROR_OPEN_FAILED;
+            }
+        }
         if (false/*surfaceTexture.get() == NULL*/) 
         {
             mNativeWindow.clear();
