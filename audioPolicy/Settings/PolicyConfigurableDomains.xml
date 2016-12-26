@@ -9760,6 +9760,11 @@
   </ConfigurableDomain>
   <ConfigurableDomain Name="DeviceForInputSource.VoiceRecognitionAndHotword" SequenceAware="false">
     <Configurations>
+      <Configuration Name="RemoteSubmix">
+        <CompoundRule Type="All">
+          <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="RemoteSubmix"/>
+        </CompoundRule>
+      </Configuration>
       <Configuration Name="ScoHeadset">
         <CompoundRule Type="All">
           <SelectionCriterionRule SelectionCriterion="ForceUseForRecord" MatchesWhen="Is" Value="ForceBtSco"/>
@@ -9791,6 +9796,7 @@
       </Configuration>
     </Configurations>
     <ConfigurableElements>
+      <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/wired_headset"/>
       <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device"/>
@@ -9803,7 +9809,45 @@
       <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic"/>
     </ConfigurableElements>
     <Settings>
+      <Configuration Name="RemoteSubmix">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">1</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
+          <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/wired_headset">
+          <BitParameter Name="wired_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/usb_device">
+          <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/builtin_mic">
+          <BitParameter Name="builtin_mic">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/bluetooth_sco_headset">
+          <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/wired_headset">
+          <BitParameter Name="wired_headset">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/usb_device">
+          <BitParameter Name="usb_device">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/dia_remote">
+          <BitParameter Name="dia_remote">0</BitParameter>
+        </ConfigurableElement>
+        <ConfigurableElement Path="/Policy/policy/input_sources/hotword/applicable_input_device/mask/builtin_mic">
+          <BitParameter Name="builtin_mic">0</BitParameter>
+        </ConfigurableElement>
+      </Configuration>
       <Configuration Name="ScoHeadset">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">1</BitParameter>
         </ConfigurableElement>
@@ -9836,6 +9880,9 @@
         </ConfigurableElement>
       </Configuration>
       <Configuration Name="WiredHeadset">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
         </ConfigurableElement>
@@ -9868,6 +9915,9 @@
         </ConfigurableElement>
       </Configuration>
       <Configuration Name="UsbDevice">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
         </ConfigurableElement>
@@ -9900,6 +9950,9 @@
         </ConfigurableElement>
       </Configuration>
       <Configuration Name="DiaRemote">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
         </ConfigurableElement>
@@ -9932,6 +9985,9 @@
         </ConfigurableElement>
       </Configuration>
       <Configuration Name="BuiltinMic">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
         </ConfigurableElement>
@@ -9964,6 +10020,9 @@
         </ConfigurableElement>
       </Configuration>
       <Configuration Name="Default">
+        <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/remote_submix">
+          <BitParameter Name="remote_submix">0</BitParameter>
+        </ConfigurableElement>
         <ConfigurableElement Path="/Policy/policy/input_sources/voice_recognition/applicable_input_device/mask/bluetooth_sco_headset">
           <BitParameter Name="bluetooth_sco_headset">0</BitParameter>
         </ConfigurableElement>
