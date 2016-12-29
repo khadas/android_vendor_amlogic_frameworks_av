@@ -10013,7 +10013,7 @@
       </Configuration>
       <Configuration Name="UsbDevice">
         <CompoundRule Type="All">
-          <SelectionCriterionRule SelectionCriterion="ForceUseForCommunication" MatchesWhen="Is" Value="ForceNone"/>
+          <SelectionCriterionRule SelectionCriterion="ForceUseForCommunication" MatchesWhen="Is" Value="ForceSpeaker"/>
           <SelectionCriterionRule SelectionCriterion="AvailableInputDevices" MatchesWhen="Includes" Value="UsbDevice"/>
         </CompoundRule>
       </Configuration>
