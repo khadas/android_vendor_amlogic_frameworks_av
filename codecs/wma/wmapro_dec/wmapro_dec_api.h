@@ -66,7 +66,7 @@ typedef struct waveformat{
 	unsigned short nBlockAlign;
 	unsigned short wBitsPerSample;
 	unsigned short extradata_size;
-	unsigned char  *extradata;
+	char *extradata;
 }waveformat_t;
 
 typedef struct sysfuncb_s

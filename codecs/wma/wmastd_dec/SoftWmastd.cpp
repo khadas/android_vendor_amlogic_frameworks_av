@@ -63,8 +63,8 @@ void SoftWmastd::initPorts() {
 
     def.format.audio.pNativeRender = NULL;
     def.format.audio.bFlagErrorConcealment = OMX_FALSE;
-    def.format.audio.eEncoding = OMX_AUDIO_CodingAAC;
-
+    //def.format.audio.eEncoding = OMX_AUDIO_CodingAAC;
+    def.format.audio.eEncoding = OMX_AUDIO_CodingWMA;
     addPort(def);
 
     def.nPortIndex = 1;
@@ -98,17 +98,14 @@ void SoftWmastd::initDecoder()
 
 OMX_ERRORTYPE SoftWmastd::internalGetParameter(OMX_INDEXTYPE index,OMX_PTR params)
 {
-	
     switch (index) {
 
         case OMX_IndexParamAudioPcm:
         {
-			
             OMX_AUDIO_PARAM_PCMMODETYPE *pcmParams =
                 (OMX_AUDIO_PARAM_PCMMODETYPE *)params;
-
             if (pcmParams->nPortIndex != 1) {
-				ALOGE("Err:OMX_ErrorUndefined %s %d %s\n",__FUNCTION__,__LINE__);
+                ALOGE("Err:OMX_ErrorUndefined %s %d %s\n",__FUNCTION__,__LINE__);
                 return OMX_ErrorUndefined;
             }
 
@@ -127,6 +124,12 @@ OMX_ERRORTYPE SoftWmastd::internalGetParameter(OMX_INDEXTYPE index,OMX_PTR param
                 pcmParams->nChannels = (wfext.nChannels==1?2:wfext.nChannels);//mVi->channels;
                 pcmParams->nSamplingRate = wfext.nSamplesPerSec;
             }
+            return OMX_ErrorNone;
+        }
+        case OMX_IndexParamAudioWma:
+        {
+
+            ALOGI("OMX_IndexParamAudioWma");
             return OMX_ErrorNone;
         }
         default:
@@ -158,14 +161,12 @@ int switch_id_tag(int codec_id)
 
 OMX_ERRORTYPE SoftWmastd::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR params)
 {
-	
     switch (index) 
 	{
         case OMX_IndexParamStandardComponentRole:
         {
             const OMX_PARAM_COMPONENTROLETYPE *roleParams =
                 (const OMX_PARAM_COMPONENTROLETYPE *)params;
-
             if (strncmp((const char *)roleParams->cRole,
                         "audio_decoder.wma",
                         OMX_MAX_STRINGNAME_SIZE - 1)) {
@@ -174,9 +175,7 @@ OMX_ERRORTYPE SoftWmastd::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR
 
             return OMX_ErrorNone;
         }
-
-        /*
-        case OMX_IndexParamAudioAsf:
+        case OMX_IndexParamAudioWma:
         {
             const OMX_AUDIO_PARAM_ASFTYPE *AsfParams =
                 (const OMX_AUDIO_PARAM_ASFTYPE *)params;
@@ -185,26 +184,22 @@ OMX_ERRORTYPE SoftWmastd::internalSetParameter(OMX_INDEXTYPE index,const OMX_PTR
                 return OMX_ErrorUndefined;
             }
             wfext.nSamplesPerSec =AsfParams->nSamplesPerSec;
-			wfext.nChannels      =AsfParams->nChannels;
-	        wfext.nBlockAlign    =AsfParams->nBlockAlign;
-			wfext.wFormatTag     = switch_id_tag(AsfParams->wFormatTag);
-			wfext.nAvgBytesPerSec=AsfParams->nAvgBitratePerSec>>3;
-			wfext.extradata_size =AsfParams->extradata_size;
-			wfext.extradata      =(char*)AsfParams->extradata;
-
-			ALOGI("%s %d :samplerate =%d \n",__FUNCTION__,__LINE__,wfext.nSamplesPerSec);
-	        ALOGI("%s %d :channels   =%d \n",__FUNCTION__,__LINE__,wfext.nChannels);
-	        ALOGI("%s %d :bit_rate   =%d \n",__FUNCTION__,__LINE__,wfext.nAvgBytesPerSec);
-	        ALOGI("%s %d :codec_tag  =%d \n",__FUNCTION__,__LINE__,wfext.wFormatTag);
-	        ALOGI("%s %d :exdatsize  =%d \n",__FUNCTION__,__LINE__,wfext.extradata_size);
+            wfext.nChannels      =AsfParams->nChannels;
+            wfext.nBlockAlign    =AsfParams->nBlockAlign;
+            wfext.wFormatTag     = switch_id_tag(AsfParams->wFormatTag);
+            wfext.nAvgBytesPerSec=AsfParams->nAvgBitratePerSec>>3;
+            wfext.extradata_size =AsfParams->extradata_size;
+            wfext.extradata      =(char*)AsfParams->extradata;
+            ALOGI("%s %d :samplerate =%d \n",__FUNCTION__,__LINE__,wfext.nSamplesPerSec);
+            ALOGI("%s %d :channels   =%d \n",__FUNCTION__,__LINE__,wfext.nChannels);
+            ALOGI("%s %d :bit_rate   =%d \n",__FUNCTION__,__LINE__,wfext.nAvgBytesPerSec);
+            ALOGI("%s %d :codec_tag  =%d \n",__FUNCTION__,__LINE__,wfext.wFormatTag);
+            ALOGI("%s %d :exdatsize  =%d \n",__FUNCTION__,__LINE__,wfext.extradata_size);
             ALOGI("%s %d :block_align=%d \n",__FUNCTION__,__LINE__,wfext.nBlockAlign);
-	
-			wma_dec_set_property(wmactx,WMA_DEC_Set_Wavfmt,&wfext);
-			init_flag=1;
+            wma_dec_set_property(wmactx,WMA_DEC_Set_Wavfmt,&wfext);
+            init_flag=1;
             return OMX_ErrorNone;
         }
-        */
-
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);
     }
