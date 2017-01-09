@@ -1570,7 +1570,7 @@ status_t AmlogicPlayer::prepareAsync()
     mPlayer_id = player_start(&mPlay_ctl, (unsigned long)this);
     if (mPlayer_id >= 0) {
         LOGV("Start player,pid=%d\n", mPlayer_id);
-        if (fastNotifyMode) {
+        if (fastNotifyMode  && !mIgnoreMsg) {
             sendEvent(MEDIA_PREPARED);
         }
         return NO_ERROR;
@@ -1881,7 +1881,9 @@ status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
     mOffsetBacFlag = false;
     mOffsetBac = 0;
     if (!(true & mRunning)) {
+        mIgnoreMsg = true;
         prepare();
+        mIgnoreMsg = false;
         start();
         pause();
         usleep(100000);
