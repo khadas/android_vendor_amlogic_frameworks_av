@@ -79,6 +79,14 @@ int32_t AmVideoCodec::video_decode_init(const char * codecMime, VIDEO_INFO_T *vi
     }
 
     int32_t thread_num = GetCPUCoreCount();
+
+    if (video_info && video_info->width && video_info->height &&
+        video_info->width * video_info->height < 640 * 480 &&
+        id == AV_CODEC_ID_VP8) {
+        thread_num = 1;
+        ALOGI("resolution [%d:%d] reset thread_num 1\n",
+            video_info->width, video_info->height);
+    }
     ALOGI("decoder thread num : %d\n", thread_num);
     if (mCodec->capabilities & CODEC_CAP_FRAME_THREADS) {
         av_opt_set(mctx, "thread_type", "frame", 0);
