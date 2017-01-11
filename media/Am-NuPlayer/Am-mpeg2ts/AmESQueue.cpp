@@ -30,7 +30,7 @@
 #include <media/stagefright/Utils.h>
 
 #include "include/avc_utils.h"
-#include "include/HEVC_utils.h"
+#include "HEVC_utils.h"
 
 #include <netinet/in.h>
 #include <inttypes.h>

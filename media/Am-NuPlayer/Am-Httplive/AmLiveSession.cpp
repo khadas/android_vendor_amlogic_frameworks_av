@@ -22,7 +22,7 @@
 
 #include "AmM3UParser.h"
 #include "AmPlaylistFetcher.h"
-#include "include/HEVC_utils.h"
+#include "HEVC_utils.h"
 #include "StreamSniffer.h"
 
 #include "include/HTTPBase.h"
