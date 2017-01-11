@@ -133,7 +133,8 @@ private:
 	int isStartedPrepared;
 	int mRequestPrepared;
 	int mPrepareErr;
-    bool mNuPlayerForce;
+    bool mIsTs;
+    bool mIs3Gp;
 };
 	
 }; // namespace android

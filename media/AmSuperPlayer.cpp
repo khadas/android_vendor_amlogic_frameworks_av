@@ -97,7 +97,8 @@ AmSuperPlayer::AmSuperPlayer(pid_t pid) :
 	isStartedPrepared=false;
 	mRequestPrepared=false;
     mPrepareErr = false;
-    mNuPlayerForce = false;
+    mIsTs = false;
+    mIs3Gp = false;
     LOGV("AmSuperPlayer init now\n");
 	
 }
@@ -141,7 +142,8 @@ status_t    AmSuperPlayer::setDataSource(const sp<IMediaHTTPService> &httpServic
     }
 	url_valid=true;
 	mState = STATE_OPEN;
-	mNuPlayerForce = false;
+	mIsTs = false;
+	mIs3Gp = false;
 	return NO_ERROR;
 }
 static int fdcound=0;
@@ -178,31 +180,24 @@ status_t    AmSuperPlayer::setDataSource(int fd, int64_t offset, int64_t length)
 	lseek(testfd, oldoffset, SEEK_SET);
 #endif
 
-    char formats[PROPERTY_VALUE_MAX];
-    int ret = property_get("media.nuplayer.enable-formats", formats, NULL);
-    if (ret > 0) {
-        TRACE();
-        mNuPlayerForce = false;
-        int tmpfd = mfd;
-        char tmpbuf[256];
-        lseek(tmpfd, 0, SEEK_CUR);
-        int tmplen = read(tmpfd, tmpbuf, 256);
-        if (tmplen > 0) {
-            bool isTs = false;
-            if (tmpbuf[0] == 0x47 && tmpbuf[188] == 0x47) {
-                isTs = true;
-            }
+	//----add for file type check------------------------
+	TRACE();
+	mIsTs = false;
+	mIs3Gp = false;
+	int tmpfd = mfd;
+	char tmpbuf[256];
+	lseek(tmpfd, 0, SEEK_CUR);
+	int tmplen = read(tmpfd, tmpbuf, 256);
+	if (tmplen > 0) {
+		if (tmpbuf[0] == 0x47 && tmpbuf[188] == 0x47) {
+			mIsTs = true;
+		 }
 
-            bool is3Gp = false;
-            if (tmpbuf[8] == 0x33 && tmpbuf[9] == 0x67) {
-                is3Gp = true;
-            }
-
-            if ((NULL != strstr(formats, "ts") && isTs) || (NULL != strstr(formats, "3gp") && is3Gp)) {
-                mNuPlayerForce = true;
-            }
-        }
-    }
+		 if (tmpbuf[8] == 0x33 && tmpbuf[9] == 0x67) {
+			 mIs3Gp = true;
+		}
+	}
+	//----end add-------------------------------------
 
 	// 0 origin mode --default,  player start when prepare request commign
 	// 1  new start mode ,player will start in setdatasource method
@@ -728,9 +723,38 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
         }
     }
 
-    if (mNuPlayerForce) {
-        return NU_PLAYER;
+    //----add for file type check------------------------
+    char formats[PROPERTY_VALUE_MAX];
+    if (AmlogicPlayer::PropIsEnable("media.nuplayer.enable-consumer", true)) {
+        bool isInConsumer = false;
+        char consumerName[128] = "";
+        int len = 0;
+        if (msurfaceTexture != NULL) {
+            LOGV("msurfaceTexture->getConsumerName():%s\n", String8(msurfaceTexture->getConsumerName()).string());
+            len = strlen(String8(msurfaceTexture->getConsumerName()).string());
+            if (len < 128) {
+                strcpy(consumerName, String8(msurfaceTexture->getConsumerName()).string());
+                for (int i = 0; i < len; i++) {
+                    if (consumerName[i] == 0x63 &&
+                        consumerName[i + 1] == 0x74 &&
+                        consumerName[i + 2] == 0x73) {
+                        isInConsumer = true;
+                    }
+                }
+            }
+        }
+
+        if ((mIsTs || mIs3Gp) && isInConsumer) {
+            return NU_PLAYER;
+        }
     }
+
+    if (property_get("media.nuplayer.enable-formats", formats, NULL) > 0) {
+        if ((NULL != strstr(formats, "ts") && mIsTs) || (NULL != strstr(formats, "3gp") && mIs3Gp)) {
+            return NU_PLAYER;
+        }
+    }
+    //----end add-------------------------------------
 
     if (amplayer_enabed && type != NULL)
     {
