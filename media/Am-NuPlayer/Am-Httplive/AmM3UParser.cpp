@@ -250,7 +250,11 @@ AmM3UParser::AmM3UParser(
       mIsVariantPlaylist(false),
       mIsComplete(false),
       mIsEvent(false),
+      mFirstSeqNumber(-1),
+      mLastSeqNumber(-1),
+      mTargetDurationUs(-1ll),
       mDiscontinuitySeq(0),
+      mDiscontinuityCount(0),
       mSelectedIndex(-1) {
     mInitCheck = parse(data, size);
 }
@@ -280,6 +284,19 @@ bool AmM3UParser::isEvent() const {
 
 size_t AmM3UParser::getDiscontinuitySeq() const {
     return mDiscontinuitySeq;
+}
+
+int64_t AmM3UParser::getTargetDuration() const {
+    return mTargetDurationUs;
+}
+
+int32_t AmM3UParser::getFirstSeqNumber() const {
+    return mFirstSeqNumber;
+}
+
+void AmM3UParser::getSeqNumberRange(int32_t *firstSeq, int32_t *lastSeq) const {
+    *firstSeq = mFirstSeqNumber;
+    *lastSeq = mLastSeqNumber;
 }
 
 sp<AMessage> AmM3UParser::meta() {
@@ -394,7 +411,9 @@ ssize_t AmM3UParser::getSelectedTrack(media_track_type type) const {
 
 bool AmM3UParser::getTypeURI(size_t index, const char *key, AString *uri) const {
     if (!mIsVariantPlaylist) {
-        *uri = mBaseURI;
+        if (uri != NULL) {
+            *uri = mBaseURI;
+        }
 
         // Assume media without any more specific attribute contains
         // audio and video, but no subtitles.
@@ -407,7 +426,9 @@ bool AmM3UParser::getTypeURI(size_t index, const char *key, AString *uri) const 
 
     AString groupID;
     if (!meta->findString(key, &groupID)) {
-        *uri = mItems.itemAt(index).mURI;
+        if (uri != NULL) {
+            *uri = mItems.itemAt(index).mURI;
+        }
 
         AString codecs;
         if (!meta->findString("codecs", &codecs)) {
@@ -433,16 +454,24 @@ bool AmM3UParser::getTypeURI(size_t index, const char *key, AString *uri) const 
         }
     }
 
-    sp<MediaGroup> group = mMediaGroups.valueFor(groupID);
-    if (!group->getActiveURI(uri)) {
-        return false;
-    }
+    // if uri == NULL, we're only checking if the type is present,
+    // don't care about the active URI (or if there is an active one)
+    if (uri != NULL) {
+        sp<MediaGroup> group = mMediaGroups.valueFor(groupID);
+        if (!group->getActiveURI(uri)) {
+            return false;
+        }
 
-    if ((*uri).empty()) {
-        *uri = mItems.itemAt(index).mURI;
+        if ((*uri).empty()) {
+            *uri = mItems.itemAt(index).mURI;
+        }
     }
 
     return true;
+}
+
+bool AmM3UParser::hasType(size_t index, const char *key) const {
+    return getTypeURI(index, key, NULL /* uri */);
 }
 
 static bool MakeURL(const char *baseURL, const char *url, AString *out) {
@@ -574,6 +603,18 @@ status_t AmM3UParser::parse(const void *_data, size_t size) {
                     return ERROR_MALFORMED;
                 }
                 err = parseMetaDataDuration(line, &itemMeta, "durationUs");
+            } else if (line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE")) {
+                if (mIsVariantPlaylist) {
+                    return ERROR_MALFORMED;
+                }
+                size_t seq;
+                err = parseDiscontinuitySequence(line, &seq);
+                if (err == OK) {
+                    mDiscontinuitySeq = seq;
+                    ALOGI("mDiscontinuitySeq %zu", mDiscontinuitySeq);
+                } else {
+                    ALOGI("Failed to parseDiscontinuitySequence %d", err);
+                }
             } else if (line.startsWith("#EXT-X-DISCONTINUITY")) {
                 if (mIsVariantPlaylist) {
                     return ERROR_MALFORMED;
@@ -582,6 +623,7 @@ status_t AmM3UParser::parse(const void *_data, size_t size) {
                     itemMeta = new AMessage;
                 }
                 itemMeta->setInt32("discontinuity", true);
+                ++mDiscontinuityCount;
             } else if (line.startsWith("#EXT-X-STREAM-INF")) {
                 if (mMeta != NULL) {
                     return ERROR_MALFORMED;
@@ -608,12 +650,6 @@ status_t AmM3UParser::parse(const void *_data, size_t size) {
                 }
             } else if (line.startsWith("#EXT-X-MEDIA")) {
                 err = parseMedia(line);
-            } else if (line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE")) {
-                size_t seq;
-                err = parseDiscontinuitySequence(line, &seq);
-                if (err == OK) {
-                    mDiscontinuitySeq = seq;
-                }
             }
 
             if (err != OK) {
@@ -628,6 +664,8 @@ status_t AmM3UParser::parse(const void *_data, size_t size) {
                         || !itemMeta->findInt64("durationUs", &durationUs)) {
                     return ERROR_MALFORMED;
                 }
+                itemMeta->setInt32("discontinuity-sequence",
+                        mDiscontinuitySeq + mDiscontinuityCount);
             }
 
             mItems.push();
@@ -642,6 +680,41 @@ status_t AmM3UParser::parse(const void *_data, size_t size) {
 
         offset = offsetLF + 1;
         ++lineNo;
+    }
+
+    // error checking of all fields that's required to appear once
+    // (currently only checking "target-duration"), and
+    // initialization of playlist properties (eg. mTargetDurationUs)
+    if (!mIsVariantPlaylist) {
+        int32_t targetDurationSecs;
+        if (mMeta == NULL || !mMeta->findInt32(
+                "target-duration", &targetDurationSecs)) {
+            ALOGE("Media playlist missing #EXT-X-TARGETDURATION");
+            return ERROR_MALFORMED;
+        }
+        mTargetDurationUs = targetDurationSecs * 1000000ll;
+
+        mFirstSeqNumber = 0;
+        if (mMeta != NULL) {
+            mMeta->findInt32("media-sequence", &mFirstSeqNumber);
+        }
+        mLastSeqNumber = mFirstSeqNumber + mItems.size() - 1;
+    }
+
+    for (size_t i = 0; i < mItems.size(); ++i) {
+        sp<AMessage> meta = mItems.itemAt(i).mMeta;
+        const char *keys[] = {"audio", "video", "subtitles"};
+        for (size_t j = 0; j < sizeof(keys) / sizeof(const char *); ++j) {
+            AString groupID;
+            if (meta->findString(keys[j], &groupID)) {
+                ssize_t groupIndex = mMediaGroups.indexOfKey(groupID);
+                if (groupIndex < 0) {
+                    ALOGE("Undefined media group '%s' referenced in stream info.",
+                          groupID.c_str());
+                    return ERROR_MALFORMED;
+                }
+            }
+        }
     }
 
     return OK;
@@ -781,6 +854,29 @@ status_t AmM3UParser::parseStreamInf(
                 *meta = new AMessage;
             }
             (*meta)->setString(key.c_str(), codecs.c_str());
+        } else if (!strcasecmp("resolution", key.c_str())) {
+            const char *s = val.c_str();
+            char *end;
+            unsigned long width = strtoul(s, &end, 10);
+
+            if (end == s || *end != 'x') {
+                // malformed
+                continue;
+            }
+
+            s = end + 1;
+            unsigned long height = strtoul(s, &end, 10);
+
+            if (end == s || *end != '\0') {
+                // malformed
+                continue;
+            }
+
+            if (meta->get() == NULL) {
+                *meta = new AMessage;
+            }
+            (*meta)->setInt32("width", width);
+            (*meta)->setInt32("height", height);
         } else if (!strcasecmp("audio", key.c_str())
                 || !strcasecmp("video", key.c_str())
                 || !strcasecmp("subtitles", key.c_str())) {

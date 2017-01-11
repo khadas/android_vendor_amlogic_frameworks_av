@@ -47,7 +47,6 @@ AmNuPlayer::DecoderPassThrough::DecoderPassThrough(
       mSource(source),
       mRenderer(renderer),
       mSkipRenderingUntilMediaTimeUs(-1ll),
-      mPaused(false),
       mReachedEOS(true),
       mPendingAudioErr(OK),
       mPendingBuffersToDrain(0),
@@ -59,12 +58,6 @@ AmNuPlayer::DecoderPassThrough::DecoderPassThrough(
 AmNuPlayer::DecoderPassThrough::~DecoderPassThrough() {
 }
 
-void AmNuPlayer::DecoderPassThrough::getStats(
-        int64_t *numFramesTotal, int64_t *numFramesDropped) const {
-    *numFramesTotal = 0;
-    *numFramesDropped = 0;
-}
-
 void AmNuPlayer::DecoderPassThrough::onConfigure(const sp<AMessage> &format) {
     ALOGV("[%s] onConfigure", mComponentName.c_str());
     mCachedBytes = 0;
@@ -74,15 +67,22 @@ void AmNuPlayer::DecoderPassThrough::onConfigure(const sp<AMessage> &format) {
 
     onRequestInputBuffers();
 
+    int32_t hasVideo = 0;
+    format->findInt32("has-video", &hasVideo);
+
     // The audio sink is already opened before the PassThrough decoder is created.
     // Opening again might be relevant if decoder is instantiated after shutdown and
     // format is different.
     status_t err = mRenderer->openAudioSink(
-            format, true /* offloadOnly */, false /* hasVideo */,
+            format, true /* offloadOnly */, hasVideo,
             AUDIO_OUTPUT_FLAG_NONE /* flags */, NULL /* isOffloaded */);
     if (err != OK) {
         handleError(err);
     }
+}
+
+void AmNuPlayer::DecoderPassThrough::onSetParameters(const sp<AMessage> &/*params*/) {
+    ALOGW("onSetParameters() called unexpectedly");
 }
 
 void AmNuPlayer::DecoderPassThrough::onSetRenderer(
@@ -110,7 +110,10 @@ bool AmNuPlayer::DecoderPassThrough::isDoneFetching() const {
     return mCachedBytes >= kMaxCachedBytes || mReachedEOS || mPaused;
 }
 
-void AmNuPlayer::DecoderPassThrough::doRequestBuffers() {
+/*
+ * returns true if we should request more data
+ */
+bool AmNuPlayer::DecoderPassThrough::doRequestBuffers() {
     status_t err = OK;
     while (!isDoneFetching()) {
         sp<AMessage> msg = new AMessage();
@@ -123,10 +126,8 @@ void AmNuPlayer::DecoderPassThrough::doRequestBuffers() {
         onInputBufferFetched(msg);
     }
 
-    if (err == -EWOULDBLOCK
-            && mSource->feedMoreTSData() == OK) {
-        scheduleRequestBuffers();
-    }
+    return err == -EWOULDBLOCK
+            && mSource->feedMoreTSData() == OK;
 }
 
 status_t AmNuPlayer::DecoderPassThrough::dequeueAccessUnit(sp<ABuffer> *accessUnit) {
@@ -222,6 +223,11 @@ status_t AmNuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
         status_t err = dequeueAccessUnit(&accessUnit);
 
         if (err == -EWOULDBLOCK) {
+            // Flush out the aggregate buffer to try to avoid underrun.
+            accessUnit = aggregateBuffer(NULL /* accessUnit */);
+            if (accessUnit != NULL) {
+                break;
+            }
             return err;
         } else if (err != OK) {
             if (err == INFO_DISCONTINUITY) {
@@ -247,7 +253,7 @@ status_t AmNuPlayer::DecoderPassThrough::fetchInputData(sp<AMessage> &reply) {
                 }
 
                 if (timeChange) {
-                    onFlush(false /* notifyComplete */);
+                    doFlush(false /* notifyComplete */);
                     err = OK;
                 } else if (formatChange) {
                     // do seamless format change
@@ -304,7 +310,7 @@ void AmNuPlayer::DecoderPassThrough::onInputBufferFetched(
         int64_t resumeAtMediaTimeUs;
         if (extra->findInt64(
                     "resume-at-mediatimeUs", &resumeAtMediaTimeUs)) {
-            ALOGI("[%s] suppressing rendering until %" PRId64 " us",
+            ALOGI("[%s] suppressing rendering until %lld us",
                     mComponentName.c_str(), (long long)resumeAtMediaTimeUs);
             mSkipRenderingUntilMediaTimeUs = resumeAtMediaTimeUs;
         }
@@ -318,7 +324,7 @@ void AmNuPlayer::DecoderPassThrough::onInputBufferFetched(
         CHECK(buffer->meta()->findInt64("timeUs", &timeUs));
 
         if (timeUs < mSkipRenderingUntilMediaTimeUs) {
-            ALOGV("[%s] dropping buffer at time %" PRId64 " as requested.",
+            ALOGV("[%s] dropping buffer at time %lld as requested.",
                      mComponentName.c_str(), (long long)timeUs);
 
             onBufferConsumed(bufferSize);
@@ -364,7 +370,7 @@ void AmNuPlayer::DecoderPassThrough::onResume(bool notifyComplete) {
     }
 }
 
-void AmNuPlayer::DecoderPassThrough::onFlush(bool notifyComplete) {
+void AmNuPlayer::DecoderPassThrough::doFlush(bool notifyComplete) {
     ++mBufferGeneration;
     mSkipRenderingUntilMediaTimeUs = -1;
     mPendingAudioAccessUnit.clear();
@@ -376,16 +382,19 @@ void AmNuPlayer::DecoderPassThrough::onFlush(bool notifyComplete) {
         mRenderer->signalTimeDiscontinuity();
     }
 
-    if (notifyComplete) {
-        mPaused = true;
-        sp<AMessage> notify = mNotify->dup();
-        notify->setInt32("what", kWhatFlushCompleted);
-        notify->post();
-    }
-
     mPendingBuffersToDrain = 0;
     mCachedBytes = 0;
     mReachedEOS = false;
+}
+
+void AmNuPlayer::DecoderPassThrough::onFlush() {
+    doFlush(true /* notifyComplete */);
+
+    mPaused = true;
+    sp<AMessage> notify = mNotify->dup();
+    notify->setInt32("what", kWhatFlushCompleted);
+    notify->post();
+
 }
 
 void AmNuPlayer::DecoderPassThrough::onShutdown(bool notifyComplete) {

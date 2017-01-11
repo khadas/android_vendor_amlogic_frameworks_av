@@ -847,7 +847,7 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
             break;
         case AMNUPLAYER:
             LOGV(" create AmNuPlayer");
-            p = new AmNuPlayerDriver;
+            p = new AmNuPlayerDriver(pid);
             break;	
         case TEST_PLAYER:
             LOGV("Create Test Player stub");

@@ -193,10 +193,10 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
             return 0.0;
         }
         return 0.5;
-	}
-    virtual sp<MediaPlayerBase> createPlayer(pid_t /* pid */) {
+    }
+    virtual sp<MediaPlayerBase> createPlayer(pid_t  pid ) {
         ALOGV(" create AmNuPlayer");
-        return new AmNuPlayerDriver();
+        return new AmNuPlayerDriver(pid);
     }
 };
 

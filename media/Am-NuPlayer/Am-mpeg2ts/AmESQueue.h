@@ -36,14 +36,14 @@ struct AmElementaryStreamQueue {
         MPEG_VIDEO,
         MPEG4_VIDEO,
         PCM_AUDIO,
-        METADATA,
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         DDP_AC3_AUDIO,
         DDP_EC3_AUDIO,
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
         H265,
+        METADATA,
         DTS,
-        UNKNOWN_MODE            = 0xff,
+        UNKNOWN_MODE = 0xff,
     };
 
     enum Flags {
@@ -53,6 +53,7 @@ struct AmElementaryStreamQueue {
     AmElementaryStreamQueue(Mode mode, uint32_t flags = 0);
 
     status_t appendData(const void *data, size_t size, int64_t timeUs);
+    void signalEOS();
     void clear(bool clearFormat);
 
     sp<ABuffer> dequeueAccessUnit();
@@ -66,8 +67,7 @@ private:
         int64_t mTimestampUs;
         size_t mLength;
     };
-
-    // defined for DTS.
+    //define for DTS
     struct DCAParseContext {
         uint32_t lastmarker;
         uint32_t state;
@@ -81,6 +81,7 @@ private:
     uint32_t mFlags;
     int32_t mStreamType;
     DCAParseContext mDCAParseCtx;
+    bool mEOSReached;
 
     // hevc seek
     bool mHevcFindKey;
@@ -97,16 +98,15 @@ private:
     sp<ABuffer> dequeueAccessUnitMPEGVideo();
     sp<ABuffer> dequeueAccessUnitMPEG4Video();
     sp<ABuffer> dequeueAccessUnitPCMAudio();
+    sp<ABuffer> dequeueAccessUnitMetadata();
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
     sp<ABuffer> dequeueAccessUnitDDP();
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
     sp<ABuffer> dequeueAccessUnitDTS();
-    sp<ABuffer> dequeueAccessUnitMetadata();
 
     // consume a logical (compressed) access unit of size "size",
     // returns its timestamp in us (or -1 if no time information).
     int64_t fetchTimestamp(size_t size);
-    int64_t fetchTimestampAAC(size_t size);
 
     DISALLOW_EVIL_CONSTRUCTORS(AmElementaryStreamQueue);
 };

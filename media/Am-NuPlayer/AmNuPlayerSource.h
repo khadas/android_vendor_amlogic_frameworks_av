@@ -28,8 +28,7 @@
 namespace android {
 
 struct ABuffer;
-struct MetaData;
-struct MediaBuffer;
+class MediaBuffer;
 
 struct AmNuPlayer::Source : public AHandler {
     enum Flags {
@@ -47,8 +46,6 @@ struct AmNuPlayer::Source : public AHandler {
         kWhatFlagsChanged,
         kWhatVideoSizeChanged,
         kWhatBufferingUpdate,
-        kWhatBufferingStart,
-        kWhatBufferingEnd,
         kWhatPauseOnBufferingStart,
         kWhatResumeOnBufferingEnd,
         kWhatCacheStats,
@@ -59,7 +56,6 @@ struct AmNuPlayer::Source : public AHandler {
         kWhatDrmNoLicense,
         kWhatInstantiateSecureDecoders,
         kWhatSourceReady,
-        kWhatFrameRate,
     };
 
     // The provides message is used to notify the player about various
@@ -77,9 +73,6 @@ struct AmNuPlayer::Source : public AHandler {
 
     // Explicitly disconnect the underling data source
     virtual void disconnect() {}
-
-    // for http disconnect
-    virtual void release() {}
 
     // Returns OK iff more data was available,
     // an error or ERROR_END_OF_STREAM if not.
@@ -123,6 +116,12 @@ struct AmNuPlayer::Source : public AHandler {
     virtual bool isRealTime() const {
         return false;
     }
+
+    virtual bool isStreaming() const {
+        return true;
+    }
+
+    virtual void setOffloadAudio(bool /* offload */) {}
 
     virtual void setParentThreadId(android_thread_id_t) {
     }

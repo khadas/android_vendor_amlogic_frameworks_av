@@ -12,15 +12,15 @@ LOCAL_C_INCLUDES:= \
 	$(TOP)/frameworks/native/include/media/openmax\
 	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/hevc_utils \
 
-LOCAL_CFLAGS += -Werror
+LOCAL_CFLAGS += -Werror -Wall
+LOCAL_CLANG := true
+LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow
 
 LOCAL_MODULE:= libammpeg2ts
-
-LOCAL_CFLAGS += -DDOLBY_UDC
-LOCAL_CFLAGS += -DDOLBY_UDC_STREAMING_HLS
 
 ifeq ($(TARGET_ARCH),arm)
     LOCAL_CFLAGS += -Wno-psabi
 endif
+LOCAL_CFLAGS += -DDOLBY_UDC -DDOLBY_UDC_STREAMING_HLS
 
 include $(BUILD_STATIC_LIBRARY)

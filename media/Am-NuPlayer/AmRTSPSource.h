@@ -25,6 +25,7 @@
 namespace android {
 
 struct ALooper;
+struct AReplyToken;
 struct AmAnotherPacketSource;
 struct MyHandler;
 struct SDPLoader;
@@ -42,8 +43,6 @@ struct AmNuPlayer::RTSPSource : public AmNuPlayer::Source {
     virtual void prepareAsync();
     virtual void start();
     virtual void stop();
-    virtual void pause();
-    virtual void resume();
 
     virtual status_t feedMoreTSData();
 
@@ -64,6 +63,7 @@ private:
         kWhatNotify          = 'noti',
         kWhatDisconnect      = 'disc',
         kWhatPerformSeek     = 'seek',
+        kWhatPollBuffering   = 'poll',
     };
 
     enum State {
@@ -77,6 +77,12 @@ private:
         // Don't log any URLs.
         kFlagIncognito = 1,
     };
+
+    // Buffer Prepare/Underflow/Overflow/Resume Marks
+    static const int64_t kPrepareMarkUs;
+    static const int64_t kUnderflowMarkUs;
+    static const int64_t kOverflowMarkUs;
+    static const int64_t kStartServerMarkUs;
 
     struct TrackInfo {
         sp<AmAnotherPacketSource> mSource;
@@ -96,9 +102,10 @@ private:
     bool mIsSDP;
     State mState;
     status_t mFinalResult;
-    uint32_t mDisconnectReplyID;
+    sp<AReplyToken> mDisconnectReplyID;
     Mutex mBufferingLock;
     bool mBuffering;
+    bool mInPreparationPhase;
 
     sp<ALooper> mLooper;
     sp<MyHandler> mHandler;
@@ -115,6 +122,8 @@ private:
     int64_t mEOSTimeoutAudio;
     int64_t mEOSTimeoutVideo;
 
+    sp<AReplyToken> mSeekReplyID;
+
     sp<AmAnotherPacketSource> getSource(bool audio);
 
     void onConnected();
@@ -123,6 +132,9 @@ private:
     void finishDisconnectIfPossible();
 
     void performSeek(int64_t seekTimeUs);
+    void schedulePollBuffering();
+    void checkBuffering(bool *prepared, bool *underflow, bool *overflow, bool *startServer);
+    void onPollBuffering();
 
     bool haveSufficientDataOnAllTracks();
 
@@ -130,6 +142,7 @@ private:
     void setError(status_t err);
     void startBufferingIfNecessary();
     bool stopBufferingIfNecessary();
+    void finishSeek(status_t err);
 
     DISALLOW_EVIL_CONSTRUCTORS(RTSPSource);
 };

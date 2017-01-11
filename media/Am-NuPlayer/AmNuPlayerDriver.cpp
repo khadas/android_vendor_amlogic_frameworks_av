@@ -18,6 +18,8 @@
 #define LOG_TAG "NU-AmNuPlayerDriver"
 #include <inttypes.h>
 #include <utils/Log.h>
+#include <cutils/properties.h>
+
 #include "AmNuPlayerDriver.h"
 
 #include "AmNuPlayer.h"
@@ -31,7 +33,7 @@
 
 namespace android {
 
-AmNuPlayerDriver::AmNuPlayerDriver()
+AmNuPlayerDriver::AmNuPlayerDriver(pid_t pid)
     : mState(STATE_IDLE),
       mIsAsyncPrepare(false),
       mAsyncResult(UNKNOWN_ERROR),
@@ -44,8 +46,7 @@ AmNuPlayerDriver::AmNuPlayerDriver()
       mAtEOS(false),
       mLooping(false),
       mAutoLoop(false),
-      mStartupSeekTimeUs(-1),
-      mSourceReady(-1) {
+      mSourceReady(-1){
     ALOGV("AmNuPlayerDriver(%p)", this);
     mLooper->setName("AmNuPlayerDriver Looper");
 
@@ -54,7 +55,7 @@ AmNuPlayerDriver::AmNuPlayerDriver()
             true,  /* canCallJava */
             PRIORITY_AUDIO);
 
-    mPlayer = new AmNuPlayer();
+    mPlayer = new AmNuPlayer(pid);
     mLooper->registerHandler(mPlayer);
 
     mPlayer->setDriver(this);
@@ -118,6 +119,25 @@ status_t AmNuPlayerDriver::setDataSource(int fd, int64_t offset, int64_t length)
 
 status_t AmNuPlayerDriver::setDataSource(const sp<IStreamSource> &source) {
     ALOGV("setDataSource(%p) stream source", this);
+    Mutex::Autolock autoLock(mLock);
+
+    if (mState != STATE_IDLE) {
+        return INVALID_OPERATION;
+    }
+
+    mState = STATE_SET_DATASOURCE_PENDING;
+
+    mPlayer->setDataSourceAsync(source);
+
+    while (mState == STATE_SET_DATASOURCE_PENDING) {
+        mCondition.wait(mLock);
+    }
+
+    return mAsyncResult;
+}
+
+status_t AmNuPlayerDriver::setDataSource(const sp<DataSource> &source) {
+    ALOGV("setDataSource(%p) callback source", this);
     Mutex::Autolock autoLock(mLock);
 
     if (mState != STATE_IDLE) {
@@ -222,9 +242,12 @@ status_t AmNuPlayerDriver::prepareAsync() {
 }
 
 status_t AmNuPlayerDriver::start() {
-    ALOGD("start(%p)", this);
+    ALOGD("start(%p), state is %d, eos is %d", this, mState, mAtEOS);
     Mutex::Autolock autoLock(mLock);
+    return start_l();
+}
 
+status_t AmNuPlayerDriver::start_l() {
     switch (mState) {
         case STATE_UNPREPARED:
         {
@@ -241,25 +264,11 @@ status_t AmNuPlayerDriver::start() {
 
         case STATE_PAUSED:
         case STATE_STOPPED_AND_PREPARED:
-        {
-            if (mAtEOS && mStartupSeekTimeUs < 0) {
-                mStartupSeekTimeUs = 0;
-                mPositionUs = -1;
-            }
-
-            // fall through
-        }
-
         case STATE_PREPARED:
         {
-            mAtEOS = false;
             mPlayer->start();
 
-            if (mStartupSeekTimeUs >= 0) {
-                mPlayer->seekToAsync(mStartupSeekTimeUs);
-                mStartupSeekTimeUs = -1;
-            }
-            break;
+            // fall through
         }
 
         case STATE_RUNNING:
@@ -310,12 +319,13 @@ status_t AmNuPlayerDriver::stop() {
 }
 
 status_t AmNuPlayerDriver::pause() {
+    ALOGD("pause(%p)", this);
     // The NuPlayerRenderer may get flushed if pause for long enough, e.g. the pause timeout tear
     // down for audio offload mode. If that happens, the NuPlayerRenderer will no longer know the
     // current position. So similar to seekTo, update |mPositionUs| to the pause position by calling
     // getCurrentPosition here.
-    int msec;
-    getCurrentPosition(&msec);
+    int unused;
+    getCurrentPosition(&unused);
 
     Mutex::Autolock autoLock(mLock);
 
@@ -341,38 +351,49 @@ bool AmNuPlayerDriver::isPlaying() {
     return mState == STATE_RUNNING && !mAtEOS;
 }
 
+status_t AmNuPlayerDriver::setPlaybackSettings(const AudioPlaybackRate &rate) {
+    status_t err = mPlayer->setPlaybackSettings(rate);
+    if (err == OK) {
+        // try to update position
+        int unused;
+        getCurrentPosition(&unused);
+        Mutex::Autolock autoLock(mLock);
+        if (rate.mSpeed == 0.f && mState == STATE_RUNNING) {
+            mState = STATE_PAUSED;
+            notifyListener_l(MEDIA_PAUSED);
+        } else if (rate.mSpeed != 0.f
+                && (mState == STATE_PAUSED
+                    || mState == STATE_STOPPED_AND_PREPARED
+                    || mState == STATE_PREPARED)) {
+            err = start_l();
+        }
+    }
+    return err;
+}
+
+status_t AmNuPlayerDriver::getPlaybackSettings(AudioPlaybackRate *rate) {
+    return mPlayer->getPlaybackSettings(rate);
+}
+
+status_t AmNuPlayerDriver::setSyncSettings(const AVSyncSettings &sync, float videoFpsHint) {
+    return mPlayer->setSyncSettings(sync, videoFpsHint);
+}
+
+status_t AmNuPlayerDriver::getSyncSettings(AVSyncSettings *sync, float *videoFps) {
+    return mPlayer->getSyncSettings(sync, videoFps);
+}
+
 status_t AmNuPlayerDriver::seekTo(int msec) {
-    ALOGD("seekTo(%p) %d ms", this, msec);
+    ALOGD("seekTo(%p) %d ms at state %d", this, msec, mState);
     Mutex::Autolock autoLock(mLock);
 
     int64_t seekTimeUs = msec * 1000ll;
 
-    // 0.5 sec to end, need to quit play.
-    if (mDurationUs > 0 && mDurationUs - seekTimeUs <= 500000) {
-        notifySeekComplete_l();
-        notifyListener_l(MEDIA_PLAYBACK_COMPLETE);
-        return OK;
-    }
-
-    // set to begin if <= 1 sec.
-    if (seekTimeUs <= 1000000) {
-        seekTimeUs = 0;
-    }
-
     switch (mState) {
         case STATE_PREPARED:
         case STATE_STOPPED_AND_PREPARED:
-        {
-            mStartupSeekTimeUs = seekTimeUs;
-            // pretend that the seek completed. It will actually happen when starting playback.
-            // TODO: actually perform the seek here, so the player is ready to go at the new
-            // location
-            notifySeekComplete_l();
-            break;
-        }
-
-        case STATE_RUNNING:
         case STATE_PAUSED:
+        case STATE_RUNNING:
         {
             mAtEOS = false;
             mSeekInProgress = true;
@@ -394,7 +415,7 @@ status_t AmNuPlayerDriver::getCurrentPosition(int *msec) {
     int64_t tempUs = 0;
     {
         Mutex::Autolock autoLock(mLock);
-        if (mSeekInProgress || mState == STATE_PAUSED) {
+        if (mSeekInProgress || (mState == STATE_PAUSED && !mAtEOS)) {
             tempUs = (mPositionUs <= 0) ? 0 : mPositionUs;
             *msec = (int)divRound(tempUs, (int64_t)(1000));
             return OK;
@@ -414,7 +435,6 @@ status_t AmNuPlayerDriver::getCurrentPosition(int *msec) {
     }
     *msec = (int)divRound(tempUs, (int64_t)(1000));
     ALOGI("[%s] position : %d msec", __FUNCTION__, *msec);
-
     return OK;
 }
 
@@ -431,7 +451,7 @@ status_t AmNuPlayerDriver::getDuration(int *msec) {
 }
 
 status_t AmNuPlayerDriver::reset() {
-    ALOGD("reset(%p)", this);
+    ALOGD("reset(%p) at state %d", this, mState);
     Mutex::Autolock autoLock(mLock);
 
     switch (mState) {
@@ -458,6 +478,13 @@ status_t AmNuPlayerDriver::reset() {
         notifyListener_l(MEDIA_STOPPED);
     }
 
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("persist.debug.sf.stats", value, NULL) &&
+            (!strcmp("1", value) || !strcasecmp("true", value))) {
+        Vector<String16> args;
+        dump(-1, args);
+    }
+
     mState = STATE_RESET_IN_PROGRESS;
     mPlayer->resetAsync();
 
@@ -467,7 +494,6 @@ status_t AmNuPlayerDriver::reset() {
 
     mDurationUs = -1;
     mPositionUs = -1;
-    mStartupSeekTimeUs = -1;
     mLooping = false;
 
     return OK;
@@ -494,8 +520,6 @@ status_t AmNuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
         ALOGE("Failed to retrieve the requested method to invoke");
         return ret;
     }
-
-    ALOGI("invoke methodId(%d)", methodId);
 
     switch (methodId) {
         case INVOKE_ID_SET_VIDEO_SCALING_MODE:
@@ -541,8 +565,6 @@ void AmNuPlayerDriver::setAudioSink(const sp<AudioSink> &audioSink) {
     mPlayer->setAudioSink(audioSink);
     mAudioSink = audioSink;
 }
-
-
 
 status_t AmNuPlayerDriver::setParameter(
         int key , const Parcel &  request ) {
@@ -634,22 +656,59 @@ void AmNuPlayerDriver::notifySeekComplete_l() {
 
 status_t AmNuPlayerDriver::dump(
         int fd, const Vector<String16> & /* args */) const {
-    int64_t numFramesTotal;
-    int64_t numFramesDropped;
-    mPlayer->getStats(&numFramesTotal, &numFramesDropped);
 
-    FILE *out = fdopen(dup(fd), "w");
+    Vector<sp<AMessage> > trackStats;
+    mPlayer->getStats(&trackStats);
 
-    fprintf(out, " AmNuPlayer\n");
-    fprintf(out, "  numFramesTotal(%" PRId64 "), numFramesDropped(%" PRId64 "), "
-                 "percentageDropped(%.2f)\n",
-                 numFramesTotal,
-                 numFramesDropped,
-                 numFramesTotal == 0
-                    ? 0.0 : (double)numFramesDropped / numFramesTotal);
+    AString logString(" NuPlayer\n");
+    char buf[256] = {0};
 
-    fclose(out);
-    out = NULL;
+    for (size_t i = 0; i < trackStats.size(); ++i) {
+        const sp<AMessage> &stats = trackStats.itemAt(i);
+
+        AString mime;
+        if (stats->findString("mime", &mime)) {
+            snprintf(buf, sizeof(buf), "  mime(%s)\n", mime.c_str());
+            logString.append(buf);
+        }
+
+        AString name;
+        if (stats->findString("component-name", &name)) {
+            snprintf(buf, sizeof(buf), "    decoder(%s)\n", name.c_str());
+            logString.append(buf);
+        }
+
+        if (mime.startsWith("video/")) {
+            int32_t width, height;
+            if (stats->findInt32("width", &width)
+                    && stats->findInt32("height", &height)) {
+                snprintf(buf, sizeof(buf), "    resolution(%d x %d)\n", width, height);
+                logString.append(buf);
+            }
+
+            int64_t numFramesTotal = 0;
+            int64_t numFramesDropped = 0;
+
+            stats->findInt64("frames-total", &numFramesTotal);
+            stats->findInt64("frames-dropped-output", &numFramesDropped);
+            snprintf(buf, sizeof(buf), "    numFramesTotal(%lld), numFramesDropped(%lld), "
+                     "percentageDropped(%.2f%%)\n",
+                     (long long)numFramesTotal,
+                     (long long)numFramesDropped,
+                     numFramesTotal == 0
+                            ? 0.0 : (double)(numFramesDropped * 100) / numFramesTotal);
+            logString.append(buf);
+        }
+    }
+
+    ALOGI("%s", logString.c_str());
+
+    if (fd >= 0) {
+        FILE *out = fdopen(dup(fd), "w");
+        fprintf(out, "%s", logString.c_str());
+        fclose(out);
+        out = NULL;
+    }
 
     return OK;
 }
@@ -662,6 +721,8 @@ void AmNuPlayerDriver::notifyListener(
 
 void AmNuPlayerDriver::notifyListener_l(
         int msg, int ext1, int ext2, const Parcel *in) {
+    ALOGV("notifyListener_l(%p), (%d, %d, %d), loop setting(%d, %d)",
+            this, msg, ext1, ext2, mAutoLoop, mLooping);
 
     // if need to create new player,
     // ignore the remaining info.
@@ -683,15 +744,15 @@ void AmNuPlayerDriver::notifyListener_l(
                         mAutoLoop = false;
                     }
                 }
-                if (mLooping || (mAutoLoop
-                        && (mAudioSink == NULL /*|| mAudioSink->realtime()*/))) {
+                if (mLooping || mAutoLoop) {
                     mPlayer->seekToAsync(0);
                     if (mAudioSink != NULL) {
                         // The renderer has stopped the sink at the end in order to play out
                         // the last little bit of audio. If we're looping, we need to restart it.
                         mAudioSink->start();
                     }
-                    break;
+                    // don't send completion event when looping
+                    return;
                 }
 
                 mPlayer->pause();
@@ -700,15 +761,15 @@ void AmNuPlayerDriver::notifyListener_l(
             // fall through
         }
 
-        case MEDIA_ERROR:
-        {
-            mAtEOS = true;
-            break;
-        }
-
         case 0xffff:
         {
             mSourceReady = ext1;
+            break;
+        }
+
+        case MEDIA_ERROR:
+        {
+            mAtEOS = true;
             break;
         }
 

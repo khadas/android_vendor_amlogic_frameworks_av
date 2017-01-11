@@ -19,26 +19,61 @@
 #include <utils/Log.h>
 
 #include "AmNuPlayerRenderer.h"
-
+#include <algorithm>
 #include <cutils/properties.h>
 #include <media/stagefright/foundation/ABuffer.h>
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/foundation/AUtils.h>
 #include <media/stagefright/foundation/AWakeLock.h>
+#include <media/stagefright/MediaClock.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/Utils.h>
-
 #include <media/stagefright/VideoFrameScheduler.h>
 
 #include <inttypes.h>
 
 namespace android {
 
+/*
+ * Example of common configuration settings in shell script form
+
+   #Turn offload audio off (use PCM for Play Music) -- AudioPolicyManager
+   adb shell setprop audio.offload.disable 1
+
+   #Allow offload audio with video (requires offloading to be enabled) -- AudioPolicyManager
+   adb shell setprop audio.offload.video 1
+
+   #Use audio callbacks for PCM data
+   adb shell setprop media.stagefright.audio.cbk 1
+
+   #Use deep buffer for PCM data with video (it is generally enabled for audio-only)
+   adb shell setprop media.stagefright.audio.deep 1
+
+   #Set size of buffers for pcm audio sink in msec (example: 1000 msec)
+   adb shell setprop media.stagefright.audio.sink 1000
+
+ * These configurations take effect for the next track played (not the current track).
+ */
+
+static inline bool getUseAudioCallbackSetting() {
+    return property_get_bool("media.stagefright.audio.cbk", false /* default_value */);
+}
+
+static inline int32_t getAudioSinkPcmMsSetting() {
+    return property_get_int32(
+            "media.stagefright.audio.sink", 500 /* default_value */);
+}
+
 // Maximum time in paused state when offloading audio decompression. When elapsed, the AudioSink
 // is closed to allow the audio DSP to power down.
 static const int64_t kOffloadPauseMaxUs = 10000000ll;
+
+// Maximum allowed delay from AudioSink, 1.5 seconds.
+static const int64_t kMaxAllowedAudioSinkDelayUs = 1500000ll;
+
+static const int64_t kMinimumAudioClockUpdatePeriodUs = 20 /* msec */ * 1000;
 
 // static
 const AmNuPlayer::Renderer::PcmInfo AmNuPlayer::Renderer::AUDIO_PCMINFO_INITIALIZER = {
@@ -51,8 +86,6 @@ const AmNuPlayer::Renderer::PcmInfo AmNuPlayer::Renderer::AUDIO_PCMINFO_INITIALI
 
 // static
 const int64_t AmNuPlayer::Renderer::kMinPositionUpdateDelayUs = 100000ll;
-const int64_t AmNuPlayer::Renderer::kSlowSyncStepUs = 200000ll;
-const int64_t AmNuPlayer::Renderer::kFrameJitterThresholdUs = 15000ll;
 
 #define PTS_LOG_LEVEL(level,formats...)\
     do {\
@@ -64,54 +97,57 @@ const int64_t AmNuPlayer::Renderer::kFrameJitterThresholdUs = 15000ll;
 #define PTS_LOG(fmt...) PTS_LOG_LEVEL(0,##fmt)
 #define PTS_LOGV(fmt...) PTS_LOG_LEVEL(2,##fmt)
 #define PTS_LOGD(fmt...) PTS_LOG_LEVEL(4,##fmt)
+#define PTS_LOGDD(fmt...) PTS_LOG_LEVEL(8,##fmt)
 
 AmNuPlayer::Renderer::Renderer(
         const sp<MediaPlayerBase::AudioSink> &sink,
         const sp<AMessage> &notify,
         uint32_t flags)
     : mAudioSink(sink),
+      mUseVirtualAudioSink(false),
       mNotify(notify),
       mFlags(flags),
       mNumFramesWritten(0),
-      mChannel(0),
-      mSampleRate(0),
-      mEnableSlowSync(false),
-      mInSlowSync(false),
-      mQueueInitial(true),
-      mRenderStarted(false),
-      mAudioEOS(false),
       mDrainAudioQueuePending(false),
       mDrainVideoQueuePending(false),
       mAudioQueueGeneration(0),
       mVideoQueueGeneration(0),
-      mDebugHandle(NULL),
+      mAudioDrainGeneration(0),
+      mVideoDrainGeneration(0),
+      mAudioEOSGeneration(0),
+      mPlaybackSettings(AUDIO_PLAYBACK_RATE_DEFAULT),
       mAudioFirstAnchorTimeMediaUs(-1),
       mAnchorTimeMediaUs(-1),
-      mAnchorTimeRealUs(-1),
       mAnchorNumFramesWritten(-1),
-      mAnchorMaxMediaUs(-1),
       mVideoLateByUs(0ll),
       mHasAudio(false),
       mHasVideo(false),
-      mPauseStartedTimeRealUs(-1),
-      mFlushingAudio(false),
-      mFlushingVideo(false),
       mNotifyCompleteAudio(false),
       mNotifyCompleteVideo(false),
       mSyncQueues(false),
+      mQueueInitial(true),
+      mRenderStarted(false),
       mPaused(false),
-      mPausePositionMediaTimeUs(-1),
+      mPauseDrainAudioAllowedUs(0),
       mVideoSampleReceived(false),
       mVideoRenderingStarted(false),
       mVideoRenderingStartGeneration(0),
       mAudioRenderingStartGeneration(0),
+      mRenderingDataDelivered(false),
+      mNextAudioClockUpdateTimeUs(-1),
+      mLastAudioMediaTimeUs(-1),
       mAudioOffloadPauseTimeoutGeneration(0),
-      mAudioOffloadTornDown(false),
+      mAudioTornDown(false),
       mCurrentOffloadInfo(AUDIO_INFO_INITIALIZER),
       mCurrentPcmInfo(AUDIO_PCMINFO_INITIALIZER),
       mTotalBuffersQueued(0),
       mLastAudioBufferDrained(0),
+      mUseAudioCallback(false),
       mWakeLock(new AWakeLock()) {
+    mMediaClock = new MediaClock;
+    mPlaybackRate = mPlaybackSettings.mSpeed;
+    mMediaClock->setPlaybackRate(mPlaybackRate);
+/////////////
     char value[PROPERTY_VALUE_MAX];
     mLastVideoUs = -1;
     mLastestVideoFrameIntervalUs = 0;
@@ -137,24 +173,10 @@ AmNuPlayer::Renderer::Renderer(
             mDebugLevel = ret;
         }
     }
-    if (property_get("media.hls.slowsync", value, NULL)
-        && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
-        mEnableSlowSync = true;
-    }
-    mVideoDelayPostUs = -1;
-    mUpdateDelayPost = false;
-    if (property_get("media.hls.delaypost.ms", value, NULL)) {
-        if ((sscanf(value, "%d", &ret)) > 0) {
-            mVideoDelayPostUs = ret * 1000;
-            mUpdateDelayPost =true;
-        }
-    }
+/////////////
 }
 
 AmNuPlayer::Renderer::~Renderer() {
-    if (mDebugHandle) {
-        fclose(mDebugHandle);
-    }
     if (offloadingAudio()) {
         mAudioSink->stop();
         mAudioSink->flush();
@@ -167,6 +189,7 @@ void AmNuPlayer::Renderer::queueBuffer(
         const sp<ABuffer> &buffer,
         const sp<AMessage> &notifyConsumed) {
     sp<AMessage> msg = new AMessage(kWhatQueueBuffer, this);
+    msg->setInt32("queueGeneration", getQueueGeneration(audio));
     msg->setInt32("audio", static_cast<int32_t>(audio));
     msg->setBuffer("buffer", buffer);
     msg->setMessage("notifyConsumed", notifyConsumed);
@@ -177,27 +200,136 @@ void AmNuPlayer::Renderer::queueEOS(bool audio, status_t finalResult) {
     CHECK_NE(finalResult, (status_t)OK);
 
     sp<AMessage> msg = new AMessage(kWhatQueueEOS, this);
+    msg->setInt32("queueGeneration", getQueueGeneration(audio));
     msg->setInt32("audio", static_cast<int32_t>(audio));
     msg->setInt32("finalResult", finalResult);
     msg->post();
 }
 
+status_t AmNuPlayer::Renderer::setPlaybackSettings(const AudioPlaybackRate &rate) {
+    sp<AMessage> msg = new AMessage(kWhatConfigPlayback, this);
+    writeToAMessage(msg, rate);
+    sp<AMessage> response;
+    status_t err = msg->postAndAwaitResponse(&response);
+    if (err == OK && response != NULL) {
+        CHECK(response->findInt32("err", &err));
+    }
+    return err;
+}
+
+status_t AmNuPlayer::Renderer::onConfigPlayback(const AudioPlaybackRate &rate /* sanitized */) {
+    if (rate.mSpeed == 0.f) {
+        onPause();
+        // don't call audiosink's setPlaybackRate if pausing, as pitch does not
+        // have to correspond to the any non-0 speed (e.g old speed). Keep
+        // settings nonetheless, using the old speed, in case audiosink changes.
+        AudioPlaybackRate newRate = rate;
+        newRate.mSpeed = mPlaybackSettings.mSpeed;
+        mPlaybackSettings = newRate;
+        return OK;
+    }
+
+    if (mAudioSink != NULL && mAudioSink->ready()) {
+        status_t err = mAudioSink->setPlaybackRate(rate);
+        if (err != OK) {
+            return err;
+        }
+    }
+    mPlaybackSettings = rate;
+    mPlaybackRate = rate.mSpeed;
+    mMediaClock->setPlaybackRate(mPlaybackRate);
+    return OK;
+}
+
+status_t AmNuPlayer::Renderer::getPlaybackSettings(AudioPlaybackRate *rate /* nonnull */) {
+    sp<AMessage> msg = new AMessage(kWhatGetPlaybackSettings, this);
+    sp<AMessage> response;
+    status_t err = msg->postAndAwaitResponse(&response);
+    if (err == OK && response != NULL) {
+        CHECK(response->findInt32("err", &err));
+        if (err == OK) {
+            readFromAMessage(response, rate);
+        }
+    }
+    return err;
+}
+
+status_t AmNuPlayer::Renderer::onGetPlaybackSettings(AudioPlaybackRate *rate /* nonnull */) {
+    if (mAudioSink != NULL && mAudioSink->ready()) {
+        status_t err = mAudioSink->getPlaybackRate(rate);
+        if (err == OK) {
+            if (!isAudioPlaybackRateEqual(*rate, mPlaybackSettings)) {
+                ALOGW("correcting mismatch in internal/external playback rate");
+            }
+            // get playback settings used by audiosink, as it may be
+            // slightly off due to audiosink not taking small changes.
+            mPlaybackSettings = *rate;
+            if (mPaused) {
+                rate->mSpeed = 0.f;
+            }
+        }
+        return err;
+    }
+    *rate = mPlaybackSettings;
+    return OK;
+}
+
+status_t AmNuPlayer::Renderer::setSyncSettings(const AVSyncSettings &sync, float videoFpsHint) {
+    sp<AMessage> msg = new AMessage(kWhatConfigSync, this);
+    writeToAMessage(msg, sync, videoFpsHint);
+    sp<AMessage> response;
+    status_t err = msg->postAndAwaitResponse(&response);
+    if (err == OK && response != NULL) {
+        CHECK(response->findInt32("err", &err));
+    }
+    return err;
+}
+
+status_t AmNuPlayer::Renderer::onConfigSync(const AVSyncSettings &sync, float videoFpsHint __unused) {
+    if (sync.mSource != AVSYNC_SOURCE_DEFAULT) {
+        return BAD_VALUE;
+    }
+    // TODO: support sync sources
+    return INVALID_OPERATION;
+}
+
+status_t AmNuPlayer::Renderer::getSyncSettings(AVSyncSettings *sync, float *videoFps) {
+    sp<AMessage> msg = new AMessage(kWhatGetSyncSettings, this);
+    sp<AMessage> response;
+    status_t err = msg->postAndAwaitResponse(&response);
+    if (err == OK && response != NULL) {
+        CHECK(response->findInt32("err", &err));
+        if (err == OK) {
+            readFromAMessage(response, sync, videoFps);
+        }
+    }
+    return err;
+}
+
+status_t AmNuPlayer::Renderer::onGetSyncSettings(
+        AVSyncSettings *sync /* nonnull */, float *videoFps /* nonnull */) {
+    *sync = mSyncSettings;
+    *videoFps = -1.f;
+    return OK;
+}
+
 void AmNuPlayer::Renderer::flush(bool audio, bool notifyComplete) {
     {
-        Mutex::Autolock autoLock(mFlushLock);
+        Mutex::Autolock autoLock(mLock);
         if (audio) {
             mNotifyCompleteAudio |= notifyComplete;
-            if (mFlushingAudio) {
-                return;
-            }
-            mFlushingAudio = true;
+            clearAudioFirstAnchorTime_l();
+            ++mAudioQueueGeneration;
+            ++mAudioDrainGeneration;
         } else {
             mNotifyCompleteVideo |= notifyComplete;
-            if (mFlushingVideo) {
-                return;
-            }
-            mFlushingVideo = true;
+            ++mVideoQueueGeneration;
+            ++mVideoDrainGeneration;
         }
+
+        clearAnchorTime_l();
+        mVideoLateByUs = 0;
+        mSyncQueues = false;
     }
 
     sp<AMessage> msg = new AMessage(kWhatFlush, this);
@@ -206,28 +338,6 @@ void AmNuPlayer::Renderer::flush(bool audio, bool notifyComplete) {
 }
 
 void AmNuPlayer::Renderer::signalTimeDiscontinuity() {
-    Mutex::Autolock autoLock(mLock);
-    // CHECK(mAudioQueue.empty());
-    // CHECK(mVideoQueue.empty());
-    setAudioFirstAnchorTime(-1);
-    setAnchorTime(-1, -1);
-    setVideoLateByUs(0);
-
-/*AVsync by Zz*/
-    mAvgVideoFrameIntervalUs = -1;
-    mLastVideoUs = -1;
-    mLastAudioUs = -1;
-    mVideoJumpedTimeUs = 0;
-    mVideoJumpedTimeUs = 0;
-    mAudioTimeJump = false;
-    mVideoTimeJump = false;
-    mTotalAudioJumpedTimeUs = 0;
-/*AVsync by Zz end*/
-    mSyncQueues = false;
-}
-
-void AmNuPlayer::Renderer::signalAudioSinkChanged() {
-    (new AMessage(kWhatAudioSinkChanged, this))->post();
 }
 
 void AmNuPlayer::Renderer::signalDisableOffloadAudio() {
@@ -252,138 +362,85 @@ void AmNuPlayer::Renderer::setVideoFrameRate(float fps) {
     msg->post();
 }
 
-void AmNuPlayer::Renderer::setAudioParameter(sp<AMessage> para) {
-    Mutex::Autolock autoLock(mLock);
-    CHECK(para->findInt32("channel-count", &mChannel));
-    CHECK(para->findInt32("sample-rate", &mSampleRate));
-    ALOGI("[%s:%d] audio channel : %d, sample-rate : %d", __FUNCTION__, __LINE__, mChannel, mSampleRate);
-}
-
-// Called on any threads, except renderer's thread.
+// Called on any threads without mLock acquired.
 status_t AmNuPlayer::Renderer::getCurrentPosition(int64_t *mediaUs) {
-    int64_t C_AudioUs;
-    status_t status;
-    {
-        Mutex::Autolock autoLock(mLock);
-        int64_t currentPositionUs;
-        if (getCurrentPositionIfPaused_l(&currentPositionUs)) {
-            *mediaUs = currentPositionUs - mTotalAudioJumpedTimeUs;
-            return OK;
-        }
-    }
-    if (getCurrentPositionFromAnchor(&C_AudioUs, ALooper::GetNowUs()) == OK) {
+    int64_t C_AudioUs = 0;
+    status_t result = mMediaClock->getMediaTime(ALooper::GetNowUs(), &C_AudioUs);
+    if (result == OK) {
         *mediaUs = C_AudioUs - mTotalAudioJumpedTimeUs;
-        return OK;
+        return result;
     }
     return NO_INIT;
-}
-
-// Called on only renderer's thread.
-status_t AmNuPlayer::Renderer::getCurrentPositionOnLooper(int64_t *mediaUs) {
-    return getCurrentPositionOnLooper(mediaUs, ALooper::GetNowUs());
-}
-
-// Called on only renderer's thread.
-// Since mPaused and mPausePositionMediaTimeUs are changed only on renderer's
-// thread, no need to acquire mLock.
-status_t AmNuPlayer::Renderer::getCurrentPositionOnLooper(
-        int64_t *mediaUs, int64_t nowUs, bool allowPastQueuedVideo) {
-    int64_t currentPositionUs;
-    if (getCurrentPositionIfPaused_l(&currentPositionUs)) {
-        *mediaUs = currentPositionUs;
-        return OK;
-    }
-    return getCurrentPositionFromAnchor(mediaUs, nowUs, allowPastQueuedVideo);
-}
-
-// Called either with mLock acquired or on renderer's thread.
-bool AmNuPlayer::Renderer::getCurrentPositionIfPaused_l(int64_t *mediaUs) {
-    if (!mPaused || mPausePositionMediaTimeUs < 0ll) {
-        return false;
-    }
-    *mediaUs = mPausePositionMediaTimeUs;
-    return true;
-}
-
-// Called on any threads.
-status_t AmNuPlayer::Renderer::getCurrentPositionFromAnchor(
-        int64_t *mediaUs, int64_t nowUs, bool allowPastQueuedVideo) {
-    Mutex::Autolock autoLock(mTimeLock);
-    if (!mHasAudio && !mHasVideo) {
-        return NO_INIT;
-    }
-
-    if (mAnchorTimeMediaUs < 0) {
-        return NO_INIT;
-    }
-
-    int64_t positionUs = (nowUs - mAnchorTimeRealUs) + mAnchorTimeMediaUs;
-
-    if (mPauseStartedTimeRealUs != -1) {
-        positionUs -= (nowUs - mPauseStartedTimeRealUs);
-    }
-
-    // limit position to the last queued media time (for video only stream
-    // position will be discrete as we don't know how long each frame lasts)
-    if (mAnchorMaxMediaUs >= 0 && !allowPastQueuedVideo) {
-        if (positionUs > mAnchorMaxMediaUs) {
-            positionUs = mAnchorMaxMediaUs;
+    // MediaClock has not started yet. Try to start onDrainAudioQueue: rendering audio at media timeit if possible.
+    {
+        Mutex::Autolock autoLock(mLock);
+        if (mAudioFirstAnchorTimeMediaUs == -1) {
+            return result;
         }
-    }
 
-    if (positionUs < mAudioFirstAnchorTimeMediaUs) {
-        positionUs = mAudioFirstAnchorTimeMediaUs;
-    }
+        AudioTimestamp ts;
+        status_t res = mAudioSink->getTimestamp(ts);
+        if (res != OK) {
+            return result;
+        }
 
-    *mediaUs = (positionUs <= 0) ? 0 : positionUs;
-    return OK;
+        // AudioSink has rendered some frames.
+        int64_t nowUs = ALooper::GetNowUs();
+        int64_t nowMediaUs = mAudioSink->getPlayedOutDurationUs(nowUs)
+                + mAudioFirstAnchorTimeMediaUs;
+        ALOGI("getCurrentPosition:nowMediaUs %lld ,nowUs %lld",nowMediaUs,nowUs);
+        mMediaClock->updateAnchor(nowMediaUs, nowUs, -1);
+    }
+    return mMediaClock->getMediaTime(ALooper::GetNowUs(), mediaUs);;
+}
+
+void AmNuPlayer::Renderer::clearAudioFirstAnchorTime_l() {
+    mAudioFirstAnchorTimeMediaUs = -1;
+    mMediaClock->setStartingTimeMedia(-1);
+}
+
+void AmNuPlayer::Renderer::setAudioFirstAnchorTimeIfNeeded_l(int64_t mediaUs) {
+    if (mAudioFirstAnchorTimeMediaUs == -1) {
+        mAudioFirstAnchorTimeMediaUs = mediaUs;
+        mMediaClock->setStartingTimeMedia(mediaUs);
+    }
+}
+
+void AmNuPlayer::Renderer::clearAnchorTime_l() {
+    mMediaClock->clearAnchor();
+    mAnchorTimeMediaUs = -1;
+    mAnchorNumFramesWritten = -1;
+    ALOGI("clearAnchorTime_l");
+/*AVsync by Zz*/
+    mAvgVideoFrameIntervalUs = -1;
+    mLastVideoUs = -1;
+    mLastAudioUs = -1;
+    mVideoJumpedTimeUs = 0;
+    mVideoJumpedTimeUs = 0;
+    mAudioTimeJump = false;
+    mVideoTimeJump = false;
+    mTotalAudioJumpedTimeUs = 0;
+    mTotalAudioJumpedTimeUs = 0;
+
+/*AVsync by Zz end*/
+}
+
+void AmNuPlayer::Renderer::setVideoLateByUs(int64_t lateUs) {
+    Mutex::Autolock autoLock(mLock);
+    mVideoLateByUs = lateUs;
+}
+
+int64_t AmNuPlayer::Renderer::getVideoLateByUs() {
+    Mutex::Autolock autoLock(mLock);
+    return mVideoLateByUs;
 }
 
 void AmNuPlayer::Renderer::setHasMedia(bool audio) {
-    Mutex::Autolock autoLock(mTimeLock);
     if (audio) {
         mHasAudio = true;
     } else {
         mHasVideo = true;
     }
-}
-
-void AmNuPlayer::Renderer::setAudioFirstAnchorTime(int64_t mediaUs) {
-    Mutex::Autolock autoLock(mTimeLock);
-    mAudioFirstAnchorTimeMediaUs = mediaUs;
-}
-
-void AmNuPlayer::Renderer::setAudioFirstAnchorTimeIfNeeded(int64_t mediaUs) {
-    Mutex::Autolock autoLock(mTimeLock);
-    if (mAudioFirstAnchorTimeMediaUs == -1) {
-        mAudioFirstAnchorTimeMediaUs = mediaUs;
-    }
-}
-
-void AmNuPlayer::Renderer::setAnchorTime(
-        int64_t mediaUs, int64_t realUs, int64_t numFramesWritten, bool resume) {
-    Mutex::Autolock autoLock(mTimeLock);
-    mAnchorTimeMediaUs = mediaUs;
-    mAnchorTimeRealUs = realUs;
-    mAnchorNumFramesWritten = numFramesWritten;
-    if (resume) {
-        mPauseStartedTimeRealUs = -1;
-    }
-}
-
-void AmNuPlayer::Renderer::setVideoLateByUs(int64_t lateUs) {
-    Mutex::Autolock autoLock(mTimeLock);
-    mVideoLateByUs = lateUs;
-}
-
-int64_t AmNuPlayer::Renderer::getVideoLateByUs() {
-    Mutex::Autolock autoLock(mTimeLock);
-    return mVideoLateByUs;
-}
-
-void AmNuPlayer::Renderer::setPauseStartedTimeRealUs(int64_t realUs) {
-    Mutex::Autolock autoLock(mTimeLock);
-    mPauseStartedTimeRealUs = realUs;
 }
 
 status_t AmNuPlayer::Renderer::openAudioSink(
@@ -468,13 +525,13 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
 
         case kWhatDrainAudioQueue:
         {
+            mDrainAudioQueuePending = false;
+
             int32_t generation;
-            CHECK(msg->findInt32("generation", &generation));
-            if (generation != mAudioQueueGeneration) {
+            CHECK(msg->findInt32("drainGeneration", &generation));
+            if (generation != getDrainGeneration(true /* audio */)) {
                 break;
             }
-
-            mDrainAudioQueuePending = false;
 
             if (onDrainAudioQueue()) {
                 uint32_t numFramesPlayed;
@@ -489,13 +546,20 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
                 int64_t delayUs =
                     mAudioSink->msecsPerFrame()
                         * numFramesPendingPlayout * 1000ll;
+                if (mPlaybackRate > 1.0f) {
+                    delayUs /= mPlaybackRate;
+                }
 
                 // Let's give it more data after about half that time
                 // has elapsed.
-                // kWhatDrainAudioQueue is used for non-offloading mode,
-                // and mLock is used only for offloading mode. Therefore,
-                // no need to acquire mLock here.
-                postDrainAudioQueue_l(delayUs / 2);
+                delayUs /= 2;
+                // check the buffer size to estimate maximum delay permitted.
+                const int64_t maxDrainDelayUs = std::max(
+                        mAudioSink->getBufferDurationInUs(), (int64_t)500000 /* half second */);
+                ALOGD_IF(delayUs > maxDrainDelayUs, "postDrainAudioQueue long delay: %lld > %lld",
+                        (long long)delayUs, (long long)maxDrainDelayUs);
+                Mutex::Autolock autoLock(mLock);
+                postDrainAudioQueue_l(delayUs);
             }
             break;
         }
@@ -503,8 +567,8 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
         case kWhatDrainVideoQueue:
         {
             int32_t generation;
-            CHECK(msg->findInt32("generation", &generation));
-            if (generation != mVideoQueueGeneration) {
+            CHECK(msg->findInt32("drainGeneration", &generation));
+            if (generation != getDrainGeneration(false /* audio */)) {
                 break;
             }
 
@@ -512,22 +576,20 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
 
             onDrainVideoQueue();
 
-            Mutex::Autolock autoLock(mLock);
-            postDrainVideoQueue_l();
+            postDrainVideoQueue();
             break;
         }
 
         case kWhatPostDrainVideoQueue:
         {
             int32_t generation;
-            CHECK(msg->findInt32("generation", &generation));
-            if (generation != mVideoQueueGeneration) {
+            CHECK(msg->findInt32("drainGeneration", &generation));
+            if (generation != getDrainGeneration(false /* audio */)) {
                 break;
             }
 
             mDrainVideoQueuePending = false;
-            Mutex::Autolock autoLock(mLock);
-            postDrainVideoQueue_l();
+            postDrainVideoQueue();
             break;
         }
 
@@ -543,15 +605,82 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
             break;
         }
 
-        case kWhatFlush:
+        case kWhatEOS:
         {
-            onFlush(msg);
+            int32_t generation;
+            CHECK(msg->findInt32("audioEOSGeneration", &generation));
+            if (generation != mAudioEOSGeneration) {
+                break;
+            }
+            status_t finalResult;
+            CHECK(msg->findInt32("finalResult", &finalResult));
+            notifyEOS(true /* audio */, finalResult);
             break;
         }
 
-        case kWhatAudioSinkChanged:
+        case kWhatConfigPlayback:
         {
-            onAudioSinkChanged();
+            sp<AReplyToken> replyID;
+            CHECK(msg->senderAwaitsResponse(&replyID));
+            AudioPlaybackRate rate;
+            readFromAMessage(msg, &rate);
+            status_t err = onConfigPlayback(rate);
+            sp<AMessage> response = new AMessage;
+            response->setInt32("err", err);
+            response->postReply(replyID);
+            break;
+        }
+
+        case kWhatGetPlaybackSettings:
+        {
+            sp<AReplyToken> replyID;
+            CHECK(msg->senderAwaitsResponse(&replyID));
+            AudioPlaybackRate rate = AUDIO_PLAYBACK_RATE_DEFAULT;
+            status_t err = onGetPlaybackSettings(&rate);
+            sp<AMessage> response = new AMessage;
+            if (err == OK) {
+                writeToAMessage(response, rate);
+            }
+            response->setInt32("err", err);
+            response->postReply(replyID);
+            break;
+        }
+
+        case kWhatConfigSync:
+        {
+            sp<AReplyToken> replyID;
+            CHECK(msg->senderAwaitsResponse(&replyID));
+            AVSyncSettings sync;
+            float videoFpsHint;
+            readFromAMessage(msg, &sync, &videoFpsHint);
+            status_t err = onConfigSync(sync, videoFpsHint);
+            sp<AMessage> response = new AMessage;
+            response->setInt32("err", err);
+            response->postReply(replyID);
+            break;
+        }
+
+        case kWhatGetSyncSettings:
+        {
+            sp<AReplyToken> replyID;
+            CHECK(msg->senderAwaitsResponse(&replyID));
+
+            ALOGV("kWhatGetSyncSettings");
+            AVSyncSettings sync;
+            float videoFps = -1.f;
+            status_t err = onGetSyncSettings(&sync, &videoFps);
+            sp<AMessage> response = new AMessage;
+            if (err == OK) {
+                writeToAMessage(response, sync, videoFps);
+            }
+            response->setInt32("err", err);
+            response->postReply(replyID);
+            break;
+        }
+
+        case kWhatFlush:
+        {
+            onFlush(msg);
             break;
         }
 
@@ -587,21 +716,24 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
             break;
         }
 
-        case kWhatAudioOffloadTearDown:
+        case kWhatAudioTearDown:
         {
-            onAudioOffloadTearDown(kDueToError);
+            int32_t reason;
+            CHECK(msg->findInt32("reason", &reason));
+
+            onAudioTearDown((AudioTearDownReason)reason);
             break;
         }
 
         case kWhatAudioOffloadPauseTimeout:
         {
             int32_t generation;
-            CHECK(msg->findInt32("generation", &generation));
+            CHECK(msg->findInt32("drainGeneration", &generation));
             if (generation != mAudioOffloadPauseTimeoutGeneration) {
                 break;
             }
             ALOGV("Audio Offload tear down due to pause timeout.");
-            onAudioOffloadTearDown(kDueToTimeout);
+            onAudioTearDown(kDueToTimeout);
             mWakeLock->release();
             break;
         }
@@ -613,8 +745,7 @@ void AmNuPlayer::Renderer::onMessageReceived(const sp<AMessage> &msg) {
 }
 
 void AmNuPlayer::Renderer::postDrainAudioQueue_l(int64_t delayUs) {
-    if (mDrainAudioQueuePending || mSyncQueues || mPaused
-            || offloadingAudio()) {
+    if (mDrainAudioQueuePending || mSyncQueues || mUseAudioCallback) {
         return;
     }
 
@@ -622,20 +753,33 @@ void AmNuPlayer::Renderer::postDrainAudioQueue_l(int64_t delayUs) {
         return;
     }
 
+    // FIXME: if paused, wait until AudioTrack stop() is complete before delivering data.
+    if (mPaused) {
+        const int64_t diffUs = mPauseDrainAudioAllowedUs - ALooper::GetNowUs();
+        if (diffUs > delayUs) {
+            delayUs = diffUs;
+        }
+    }
+
     mDrainAudioQueuePending = true;
     sp<AMessage> msg = new AMessage(kWhatDrainAudioQueue, this);
-    msg->setInt32("generation", mAudioQueueGeneration);
+    msg->setInt32("drainGeneration", mAudioDrainGeneration);
     msg->post(delayUs);
 }
 
-void AmNuPlayer::Renderer::prepareForMediaRenderingStart() {
-    mAudioRenderingStartGeneration = mAudioQueueGeneration;
-    mVideoRenderingStartGeneration = mVideoQueueGeneration;
+void AmNuPlayer::Renderer::prepareForMediaRenderingStart_l() {
+    mAudioRenderingStartGeneration = mAudioDrainGeneration;
+    mVideoRenderingStartGeneration = mVideoDrainGeneration;
+    mRenderingDataDelivered = false;
 }
 
-void AmNuPlayer::Renderer::notifyIfMediaRenderingStarted() {
-    if (mVideoRenderingStartGeneration == mVideoQueueGeneration &&
-        mAudioRenderingStartGeneration == mAudioQueueGeneration) {
+void AmNuPlayer::Renderer::notifyIfMediaRenderingStarted_l() {
+    if (mVideoRenderingStartGeneration == mVideoDrainGeneration &&
+        mAudioRenderingStartGeneration == mAudioDrainGeneration) {
+        mRenderingDataDelivered = true;
+        if (mPaused) {
+            return;
+        }
         mVideoRenderingStartGeneration = -1;
         mAudioRenderingStartGeneration = -1;
 
@@ -663,13 +807,15 @@ size_t AmNuPlayer::Renderer::AudioSinkCallback(
 
         case MediaPlayerBase::AudioSink::CB_EVENT_STREAM_END:
         {
+            ALOGV("AudioSink::CB_EVENT_STREAM_END");
             me->notifyEOS(true /* audio */, ERROR_END_OF_STREAM);
             break;
         }
 
         case MediaPlayerBase::AudioSink::CB_EVENT_TEAR_DOWN:
         {
-            me->notifyAudioOffloadTearDown();
+            ALOGV("AudioSink::CB_EVENT_TEAR_DOWN");
+            me->notifyAudioTearDown(kDueToError);
             break;
         }
     }
@@ -680,7 +826,7 @@ size_t AmNuPlayer::Renderer::AudioSinkCallback(
 size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     Mutex::Autolock autoLock(mLock);
 
-    if (!offloadingAudio() || mPaused) {
+    if (!mUseAudioCallback) {
         return 0;
     }
 
@@ -688,13 +834,13 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
     size_t sizeCopied = 0;
     bool firstEntry = true;
+    QueueEntry *entry;  // will be valid after while loop if hasEOS is set.
     while (sizeCopied < size && !mAudioQueue.empty()) {
-        QueueEntry *entry = &*mAudioQueue.begin();
+        entry = &*mAudioQueue.begin();
 
         if (entry->mBuffer == NULL) { // EOS
             hasEOS = true;
             mAudioQueue.erase(mAudioQueue.begin());
-            entry = NULL;
             break;
         }
 
@@ -702,8 +848,8 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             firstEntry = false;
             int64_t mediaTimeUs;
             CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-            //ALOGV("[%s]rendering audio at media time %.2f secs", __FUNCTION__, mediaTimeUs / 1E6);
-            setAudioFirstAnchorTimeIfNeeded(mediaTimeUs);
+            ALOGV("fillAudioBuffer: rendering audio at media time %.2f secs", mediaTimeUs / 1E6);
+            setAudioFirstAnchorTimeIfNeeded_l(mediaTimeUs);
         }
 
         size_t copy = entry->mBuffer->size() - entry->mOffset;
@@ -723,34 +869,101 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             entry = NULL;
         }
         sizeCopied += copy;
-        notifyIfMediaRenderingStarted();
+
+        notifyIfMediaRenderingStarted_l();
     }
 
     if (mAudioFirstAnchorTimeMediaUs >= 0) {
         int64_t nowUs = ALooper::GetNowUs();
-        setAnchorTime(mAudioFirstAnchorTimeMediaUs, nowUs - getPlayedOutAudioDurationUs(nowUs));
+        int64_t nowMediaUs =
+            mAudioFirstAnchorTimeMediaUs + mAudioSink->getPlayedOutDurationUs(nowUs);
+        // we don't know how much data we are queueing for offloaded tracks.
+        mMediaClock->updateAnchor(nowMediaUs, nowUs, INT64_MAX);
     }
 
-    // we don't know how much data we are queueing for offloaded tracks
-    mAnchorMaxMediaUs = -1;
+    // for non-offloaded audio, we need to compute the frames written because
+    // there is no EVENT_STREAM_END notification. The frames written gives
+    // an estimate on the pending played out duration.
+    if (!offloadingAudio()) {
+        mNumFramesWritten += sizeCopied / mAudioSink->frameSize();
+    }
 
     if (hasEOS) {
         (new AMessage(kWhatStopAudioSink, this))->post();
+        // As there is currently no EVENT_STREAM_END callback notification for
+        // non-offloaded audio tracks, we need to post the EOS ourselves.
+        if (!offloadingAudio()) {
+            int64_t postEOSDelayUs = 0;
+            if (mAudioSink->needsTrailingPadding()) {
+                postEOSDelayUs = getPendingAudioPlayoutDurationUs(ALooper::GetNowUs());
+            }
+            ALOGV("fillAudioBuffer: notifyEOS "
+                    "mNumFramesWritten:%u  finalResult:%d  postEOSDelay:%lld",
+                    mNumFramesWritten, entry->mFinalResult, (long long)postEOSDelayUs);
+            notifyEOS(true /* audio */, entry->mFinalResult, postEOSDelayUs);
+        }
     }
-
     return sizeCopied;
 }
 
+void AmNuPlayer::Renderer::drainAudioQueueUntilLastEOS() {
+    List<QueueEntry>::iterator it = mAudioQueue.begin(), itEOS = it;
+    bool foundEOS = false;
+    while (it != mAudioQueue.end()) {
+        int32_t eos;
+        QueueEntry *entry = &*it++;
+        if (entry->mBuffer == NULL
+                || (entry->mNotifyConsumed->findInt32("eos", &eos) && eos != 0)) {
+            itEOS = it;
+            foundEOS = true;
+        }
+    }
+
+    if (foundEOS) {
+        // post all replies before EOS and drop the samples
+        for (it = mAudioQueue.begin(); it != itEOS; it++) {
+            if (it->mBuffer == NULL) {
+                // delay doesn't matter as we don't even have an AudioTrack
+                notifyEOS(true /* audio */, it->mFinalResult);
+            } else {
+                it->mNotifyConsumed->post();
+            }
+        }
+        mAudioQueue.erase(mAudioQueue.begin(), itEOS);
+    }
+}
+
 bool AmNuPlayer::Renderer::onDrainAudioQueue() {
+    // do not drain audio during teardown as queued buffers may be invalid.
+    if (mAudioTornDown) {
+        return false;
+    }
+    // TODO: This call to getPosition checks if AudioTrack has been created
+    // in AudioSink before draining audio. If AudioTrack doesn't exist, then
+    // CHECKs on getPosition will fail.
+    // We still need to figure out why AudioTrack is not created when
+    // this function is called. One possible reason could be leftover
+    // audio. Another possible place is to check whether decoder
+    // has received INFO_FORMAT_CHANGED as the first buffer since
+    // AudioSink is opened there, and possible interactions with flush
+    // immediately after start. Investigate error message
+    // "vorbis_dsp_synthesis returned -135", along with RTSP.
     uint32_t numFramesPlayed;
     if (mAudioSink->getPosition(&numFramesPlayed) != OK) {
+        // When getPosition fails, renderer will not reschedule the draining
+        // unless new samples are queued.
+        // If we have pending EOS (or "eos" marker for discontinuities), we need
+        // to post these now as NuPlayerDecoder might be waiting for it.
+        drainAudioQueueUntilLastEOS();
+
+        ALOGW("onDrainAudioQueue(): audio sink is not ready");
         return false;
     }
 
+#if 0
     ssize_t numFramesAvailableToWrite =
         mAudioSink->frameCount() - (mNumFramesWritten - numFramesPlayed);
 
-#if 0
     if (numFramesAvailableToWrite == mAudioSink->frameCount()) {
         ALOGI("audio sink underrun");
     } else {
@@ -759,10 +972,8 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
     }
 #endif
 
-    size_t numBytesAvailableToWrite =
-        numFramesAvailableToWrite * mAudioSink->frameSize();
-
-    while (numBytesAvailableToWrite > 0 && !mAudioQueue.empty()) {
+    uint32_t prevFramesWritten = mNumFramesWritten;
+    while (!mAudioQueue.empty()) {
         QueueEntry *entry = &*mAudioQueue.begin();
 
         mLastAudioBufferDrained = entry->mBufferOrdinal;
@@ -774,6 +985,7 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
                 postEOSDelayUs = getPendingAudioPlayoutDurationUs(ALooper::GetNowUs());
             }
             notifyEOS(true /* audio */, entry->mFinalResult, postEOSDelayUs);
+            mLastAudioMediaTimeUs = getDurationUsIfPlayedAtSampleRate(mNumFramesWritten);
 
             mAudioQueue.erase(mAudioQueue.begin());
             entry = NULL;
@@ -784,69 +996,98 @@ bool AmNuPlayer::Renderer::onDrainAudioQueue() {
                 mAudioSink->stop();
                 mNumFramesWritten = 0;
             }
-            mAudioEOS = true;
             return false;
         }
 
-        if (entry->mOffset == 0) {
+        // ignore 0-sized buffer which could be EOS marker with no data
+        if (entry->mOffset == 0 && entry->mBuffer->size() > 0) {
             int64_t mediaTimeUs;
             CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
+            //ALOGV("onDrainAudioQueue: rendering audio at media time %.2f secs",
+            //        mediaTimeUs / 1E6);
             onNewAudioMediaTime(mediaTimeUs);
         }
 
         size_t copy = entry->mBuffer->size() - entry->mOffset;
-        if (copy > numBytesAvailableToWrite) {
-            copy = numBytesAvailableToWrite;
-        }
 
-        ssize_t written = mAudioSink->write(entry->mBuffer->data() + entry->mOffset, copy);
+        ssize_t written = mAudioSink->write(entry->mBuffer->data() + entry->mOffset,
+                                            copy, false /* blocking */);
         if (written < 0) {
             // An error in AudioSink write. Perhaps the AudioSink was not properly opened.
-            ALOGE("AudioSink write error(%zd) when writing %zu bytes", written, copy);
+            if (written == WOULD_BLOCK) {
+                //ALOGV("AudioSink write would block when writing %zu bytes", copy);
+            } else {
+                ALOGE("AudioSink write error(%zd) when writing %zu bytes", written, copy);
+                // This can only happen when AudioSink was opened with doNotReconnect flag set to
+                // true, in which case the AmNuPlayer will handle the reconnect.
+                notifyAudioTearDown(kDueToError);
+            }
             break;
         }
 
         entry->mOffset += written;
-        if (entry->mOffset == entry->mBuffer->size()) {
+        size_t remainder = entry->mBuffer->size() - entry->mOffset;
+        if ((ssize_t)remainder < mAudioSink->frameSize()) {
+            if (remainder > 0) {
+                ALOGW("Corrupted audio buffer has fractional frames, discarding %zu bytes.",
+                        remainder);
+                entry->mOffset += remainder;
+                copy -= remainder;
+            }
+
             entry->mNotifyConsumed->post();
             mAudioQueue.erase(mAudioQueue.begin());
 
             entry = NULL;
         }
 
-        numBytesAvailableToWrite -= written;
         size_t copiedFrames = written / mAudioSink->frameSize();
         mNumFramesWritten += copiedFrames;
 
-        notifyIfMediaRenderingStarted();
+        {
+            Mutex::Autolock autoLock(mLock);
+            int64_t maxTimeMedia;
+            maxTimeMedia =
+                mAnchorTimeMediaUs +
+                        (int64_t)(max((long long)mNumFramesWritten - mAnchorNumFramesWritten, 0LL)
+                                * 1000LL * mAudioSink->msecsPerFrame());
+            mMediaClock->updateMaxTimeMedia(maxTimeMedia);
+
+            notifyIfMediaRenderingStarted_l();
+        }
 
         if (written != (ssize_t)copy) {
             // A short count was received from AudioSink::write()
             //
-            // AudioSink write should block until exactly the number of bytes are delivered.
-            // But it may return with a short count (without an error) when:
+            // AudioSink write is called in non-blocking mode.
+            // It may return with a short count when:
             //
-            // 1) Size to be copied is not a multiple of the frame size. We consider this fatal.
-            // 2) AudioSink is an AudioCache for data retrieval, and the AudioCache is exceeded.
+            // 1) Size to be copied is not a multiple of the frame size. Fractional frames are
+            //    discarded.
+            // 2) The data to be copied exceeds the available buffer in AudioSink.
+            // 3) An error occurs and data has been partially copied to the buffer in AudioSink.
+            // 4) AudioSink is an AudioCache for data retrieval, and the AudioCache is exceeded.
 
             // (Case 1)
             // Must be a multiple of the frame size.  If it is not a multiple of a frame size, it
             // needs to fail, as we should not carry over fractional frames between calls.
             CHECK_EQ(copy % mAudioSink->frameSize(), 0);
 
-            // (Case 2)
+            // (Case 2, 3, 4)
             // Return early to the caller.
             // Beware of calling immediately again as this may busy-loop if you are not careful.
-            ALOGW("AudioSink write short frame count %zd < %zu", written, copy);
+            //ALOGV("AudioSink write short frame count %zd < %zu", written, copy);
             break;
         }
     }
-    mAnchorMaxMediaUs =
-        mAnchorTimeMediaUs +
-                (int64_t)(max((long long)mNumFramesWritten - mAnchorNumFramesWritten, 0LL)
-                        * 1000LL * mAudioSink->msecsPerFrame());
 
-    return !mAudioQueue.empty();
+    // calculate whether we need to reschedule another write.
+    bool reschedule = !mAudioQueue.empty()
+            && (!mPaused
+                || prevFramesWritten != mNumFramesWritten); // permit pause to fill buffers
+    //ALOGD("reschedule:%d  empty:%d  mPaused:%d  prevFramesWritten:%u  mNumFramesWritten:%u",
+    //        reschedule, mAudioQueue.empty(), mPaused, prevFramesWritten, mNumFramesWritten);
+    return reschedule;
 }
 
 int64_t AmNuPlayer::Renderer::getDurationUsIfPlayedAtSampleRate(uint32_t numFrames) {
@@ -862,36 +1103,86 @@ int64_t AmNuPlayer::Renderer::getDurationUsIfPlayedAtSampleRate(uint32_t numFram
 
 // Calculate duration of pending samples if played at normal rate (i.e., 1.0).
 int64_t AmNuPlayer::Renderer::getPendingAudioPlayoutDurationUs(int64_t nowUs) {
+#if 0 //12.4 hours.
     int64_t writtenAudioDurationUs = getDurationUsIfPlayedAtSampleRate(mNumFramesWritten);
-    return writtenAudioDurationUs - getPlayedOutAudioDurationUs(nowUs);
+    if (mUseVirtualAudioSink) {
+        int64_t nowUs = ALooper::GetNowUs();
+        int64_t mediaUs;
+        if (mMediaClock->getMediaTime(nowUs, &mediaUs) != OK) {
+            return 0ll;
+        } else {
+            return writtenAudioDurationUs - (mediaUs - mAudioFirstAnchorTimeMediaUs);
+        }
+    }
+    return writtenAudioDurationUs - mAudioSink->getPlayedOutDurationUs(nowUs);
+#endif
+    uint32_t numFramesPlayed;
+    mAudioSink->getPosition(&numFramesPlayed);
+    uint32_t numFramesPendingPlayout = mNumFramesWritten - numFramesPlayed;
+    int64_t realTimeOffsetUs = (mAudioSink->latency() / 2 +
+            numFramesPendingPlayout * mAudioSink->msecsPerFrame()) * 1000ll;
+    return realTimeOffsetUs;
 }
 
 int64_t AmNuPlayer::Renderer::getRealTimeUs(int64_t mediaTimeUs, int64_t nowUs) {
-    int64_t currentPositionUs;
-    if (mPaused || getCurrentPositionOnLooper(
-            &currentPositionUs, nowUs, true /* allowPastQueuedVideo */) != OK) {
-        // If failed to get current position, e.g. due to audio clock is not ready, then just
-        // play out video immediately without delay.
+    int64_t realUs;
+    if (mMediaClock->getRealTimeFor(mediaTimeUs, &realUs) != OK) {
+        // If failed to get current position, e.g. due to audio clock is
+        // not ready, then just play out video immediately without delay.
         return nowUs;
     }
-    return (mediaTimeUs - currentPositionUs) + nowUs;
+    return realUs;
 }
 
 void AmNuPlayer::Renderer::onNewAudioMediaTime(int64_t mediaTimeUs) {
+    Mutex::Autolock autoLock(mLock);
     // TRICKY: vorbis decoder generates multiple frames with the same
     // timestamp, so only update on the first frame with a given timestamp
     if (mediaTimeUs == mAnchorTimeMediaUs) {
         return;
     }
-    setAudioFirstAnchorTimeIfNeeded(mediaTimeUs);
+    setAudioFirstAnchorTimeIfNeeded_l(mediaTimeUs);
+
+    // mNextAudioClockUpdateTimeUs is -1 if we're waiting for audio sink to start
+    if (mNextAudioClockUpdateTimeUs == -1) {
+        AudioTimestamp ts;
+        if (mAudioSink->getTimestamp(ts) == OK && ts.mPosition > 0) {
+            mNextAudioClockUpdateTimeUs = 0; // start our clock updates
+        }
+    }
     int64_t nowUs = ALooper::GetNowUs();
-    setAnchorTime(
-            mediaTimeUs, nowUs + getPendingAudioPlayoutDurationUs(nowUs), mNumFramesWritten);
+    if (mNextAudioClockUpdateTimeUs >= 0) {
+        if (nowUs >= mNextAudioClockUpdateTimeUs) {
+            int64_t nowMediaUs = mediaTimeUs - getPendingAudioPlayoutDurationUs(nowUs);
+            mMediaClock->updateAnchor(nowMediaUs, nowUs, mediaTimeUs);
+            mUseVirtualAudioSink = false;
+            mNextAudioClockUpdateTimeUs = nowUs + kMinimumAudioClockUpdatePeriodUs;
+        }
+    } else {
+        int64_t unused;
+        if ((mMediaClock->getMediaTime(nowUs, &unused) != OK)
+                && (getDurationUsIfPlayedAtSampleRate(mNumFramesWritten)
+                        > kMaxAllowedAudioSinkDelayUs)) {
+            // Enough data has been sent to AudioSink, but AudioSink has not rendered
+            // any data yet. Something is wrong with AudioSink, e.g., the device is not
+            // connected to audio out.
+            // Switch to system clock. This essentially creates a virtual AudioSink with
+            // initial latenty of getDurationUsIfPlayedAtSampleRate(mNumFramesWritten).
+            // This virtual AudioSink renders audio data starting from the very first sample
+            // and it's paced by system clock.
+            ALOGW("AudioSink stuck. ARE YOU CONNECTED TO AUDIO OUT? Switching to system clock.");
+            mMediaClock->updateAnchor(mAudioFirstAnchorTimeMediaUs, nowUs, mediaTimeUs);
+            mUseVirtualAudioSink = true;
+        }
+    }
+    mAnchorNumFramesWritten = mNumFramesWritten;
+    mAnchorTimeMediaUs = mediaTimeUs;
 }
 
-void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
+// Called without mLock acquired.
+void AmNuPlayer::Renderer::postDrainVideoQueue() {
     if (mDrainVideoQueuePending
-            || mSyncQueues
+            || getSyncQueues()
             || (mPaused && mVideoSampleReceived)) {
         return;
     }
@@ -900,21 +1191,19 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
         return;
     }
 
-    if (mHasAudio && !mAudioEOS && mAudioQueue.empty()) {
-        return;
-    }
-
     QueueEntry &entry = *mVideoQueue.begin();
 
     sp<AMessage> msg = new AMessage(kWhatDrainVideoQueue, this);
-    msg->setInt32("generation", mVideoQueueGeneration);
+    msg->setInt32("drainGeneration", getDrainGeneration(false /* audio */));
+
     if (entry.mBuffer == NULL) {
         // EOS doesn't carry a timestamp.
-        mDrainVideoQueuePending = true;
         msg->post();
+        mDrainVideoQueuePending = true;
         return;
     }
 
+    bool needRepostDrainVideoQueue = false;
     int64_t delayUs;
     int64_t nowUs = ALooper::GetNowUs();
     int64_t realTimeUs;
@@ -922,22 +1211,32 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
     if (mFlags & FLAG_REAL_TIME) {
         CHECK(entry.mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
         realTimeUs = mediaTimeUs;
-        delayUs = mediaTimeUs - ALooper::GetNowUs();
     } else {
         CHECK(entry.mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-        if (mAnchorTimeMediaUs < 0) {
-            if (!mHasAudio) {
-                setAnchorTime(mediaTimeUs, nowUs);
-            }
-            mPausePositionMediaTimeUs = mediaTimeUs;
-            mAnchorMaxMediaUs = mediaTimeUs;
-            realTimeUs = nowUs;
-        } else {
-            realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
-        }
 
+        {
+            Mutex::Autolock autoLock(mLock);
+            if (mAnchorTimeMediaUs < 0) {
+                if (!mHasAudio)
+                    mMediaClock->updateAnchor(mediaTimeUs, nowUs, mediaTimeUs);
+                mAnchorTimeMediaUs = mediaTimeUs;
+                realTimeUs = nowUs;
+            } else if (!mVideoSampleReceived) {
+                // Always render the first video frame.
+                realTimeUs = nowUs;
+            } else if (mAudioFirstAnchorTimeMediaUs < 0
+                || mMediaClock->getRealTimeFor(mediaTimeUs, &realTimeUs) == OK) {
+                realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
+            } else if (mediaTimeUs - mAudioFirstAnchorTimeMediaUs >= 0) {
+                needRepostDrainVideoQueue = true;
+                realTimeUs = nowUs;
+            } else {
+                realTimeUs = nowUs;
+            }
+        }
         if (!mHasAudio) {
-            mAnchorMaxMediaUs = mediaTimeUs + 100000; // smooth out videos >= 10fps
+            // smooth out videos >= 10fps
+            mMediaClock->updateMaxTimeMedia(mediaTimeUs + 100000);
         }
 
         // Heuristics to handle situation when media time changed without a
@@ -945,64 +1244,64 @@ void AmNuPlayer::Renderer::postDrainVideoQueue_l() {
         // received after this buffer, repost in 10 msec. Otherwise repost
         // in 500 msec.
         delayUs = realTimeUs - nowUs;
-        if (mInSlowSync) {
-            if (delayUs > kSlowSyncStepUs) {
-                realTimeUs = nowUs + kSlowSyncStepUs;
-            }
-        } else if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
-            int64_t postDelayUs = 500000;
+        int64_t postDelayUs = -1;
+        if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
+            postDelayUs = 500000;
             if (mHasAudio && (mLastAudioBufferDrained - entry.mBufferOrdinal) <= 0) {
                 postDelayUs = 10000;
             }
+        } else if (needRepostDrainVideoQueue && !mVideoTimeJump && !mAudioTimeJump) {
+            // CHECK(mPlaybackRate > 0);
+            // CHECK(mAudioFirstAnchorTimeMediaUs >= 0);
+            // CHECK(mediaTimeUs - mAudioFirstAnchorTimeMediaUs >= 0);
+            postDelayUs = mediaTimeUs - mAudioFirstAnchorTimeMediaUs;
+            postDelayUs /= mPlaybackRate;
+        }
+
+        if (postDelayUs >= 0) {
             msg->setWhat(kWhatPostDrainVideoQueue);
-            mDrainVideoQueuePending = true;
-            mSmootOutNum = 0;
             msg->post(postDelayUs);
-            //mVideoScheduler->restart();
-            PTS_LOG("possible video time jump of %dms, retrying in %dms",
-               (int)(delayUs / 1000), (int)(postDelayUs / 1000));
+            mVideoScheduler->restart();
+            ALOGI("possible video time jump of %dms or uninitialized media clock, retrying in %dms",
+                    (int)(delayUs / 1000), (int)(postDelayUs / 1000));
+            mDrainVideoQueuePending = true;
             return;
         }
-        if (mVideoTimeJump || mAudioTimeJump ) {
-            if (mSmootOutNum == 0)
-                mLastNoJumpVideoFrameUs = mLastVideoDrainRealTimeUs;
-            mSmootOutNum++;
-            /*smooth out video frame...*/
-            if (mLastNoJumpVideoFrameUs > 0 &&
-                mAvgVideoFrameIntervalUs > 0 &&
-                llabs(nowUs - mLastVideoDrainRealTimeUs) < 300*1000) {/*not too long for pause or others..*/
-                    realTimeUs = mLastNoJumpVideoFrameUs + mSmootOutNum * mAvgVideoFrameIntervalUs;
-                PTS_LOGD("mLastVideoDrainRealTimeUs1 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
-                    mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
-            } else {
-                realTimeUs = nowUs;
-                PTS_LOGD("mLastVideoDrainRealTimeUs2 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
-                    mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
-            }
-            PTS_LOGD("smooth out video frame on jump3 V:%d A:%d delayUs:%d uS",
-              mVideoTimeJump, mAudioTimeJump, (int)(realTimeUs - nowUs));
+    }
+    if (mVideoTimeJump || mAudioTimeJump ) {
+        if (mSmootOutNum == 0)
+            mLastNoJumpVideoFrameUs = mLastVideoDrainRealTimeUs;
+        mSmootOutNum++;
+        /*smooth out video frame...*/
+        if (mLastNoJumpVideoFrameUs > 0 &&
+            mAvgVideoFrameIntervalUs > 0 &&
+            llabs(nowUs - mLastVideoDrainRealTimeUs) < 300*1000) {/*not too long for pause or others..*/
+                realTimeUs = mLastNoJumpVideoFrameUs + mSmootOutNum * mAvgVideoFrameIntervalUs;
+            PTS_LOGD("mLastVideoDrainRealTimeUs1 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
+                mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
         } else {
-            mSmootOutNum = 0;
+            realTimeUs = nowUs;
+            PTS_LOGD("mLastVideoDrainRealTimeUs2 =%" PRId64 ",mAvgVideoFrameIntervalUs=%" PRId64 ",nowUs=%" PRId64 "\n",
+                mLastVideoDrainRealTimeUs, mAvgVideoFrameIntervalUs, nowUs);
         }
+        PTS_LOGD("smooth out video frame on jump3 V:%d A:%d delayUs:%d uS",
+          mVideoTimeJump, mAudioTimeJump, (int)(realTimeUs - nowUs));
+    } else {
+        mSmootOutNum = 0;
     }
 
     realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;
     int64_t twoVsyncsUs = 2 * (mVideoScheduler->getVsyncPeriod() / 1000);
 
     delayUs = realTimeUs - nowUs;
-    //ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
+    PTS_LOGDD("realTimeUs=%" PRId64 ",system=%" PRId64 ",delay=%" PRId64 "\n",
+        realTimeUs, nowUs, delayUs);
     entry.mBuffer->meta()->setInt64("RealTimeUs", realTimeUs);
-    PTS_LOGV("realTimeUs=%" PRId64 ",system=%" PRId64 ",delay=%" PRId64 "us\n",
-             realTimeUs, ALooper::GetNowUs(), delayUs);
-    // post 4 display refreshes before rendering is due
-    if (mVideoDelayPostUs > 0)
-        delayUs -= mVideoDelayPostUs; /*send before 4 vsync,default 30hz*/
-    else
-        delayUs -= twoVsyncsUs;
-    mDrainVideoQueuePending = true;
-    if (delayUs < 0) delayUs = 0;
-    msg->post(delayUs > 0 ? delayUs : 0);
+    ALOGW_IF(delayUs > 500000, "unusually high delayUs: %" PRId64, delayUs);
+    // post 2 display refreshes before rendering is due
+    msg->post(delayUs > twoVsyncsUs ? delayUs - twoVsyncsUs : 0);
 
+    mDrainVideoQueuePending = true;
 }
 
 void AmNuPlayer::Renderer::onDrainVideoQueue() {
@@ -1024,68 +1323,43 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         return;
     }
 
-    int64_t nowUs = -1;
+    int64_t nowUs = ALooper::GetNowUs();
     int64_t realTimeUs;
+    int64_t mediaTimeUs = -1;
     if (mFlags & FLAG_REAL_TIME) {
         CHECK(entry->mBuffer->meta()->findInt64("timeUs", &realTimeUs));
     } else {
-        int64_t mediaTimeUs;
+        CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
         if (!entry->mBuffer->meta()->findInt64("RealTimeUs", &realTimeUs)) {
-            CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
-            mLastVideoDrainTimeUs = mediaTimeUs;
             nowUs = ALooper::GetNowUs();
             realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
-        } else {
-            entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs);
-            mLastVideoDrainTimeUs = mediaTimeUs;
         }
+        mLastVideoDrainTimeUs = mediaTimeUs;
     }
-    PTS_LOGV("On Draw. realTimeUs =%" PRId64 ",system=%" PRId64 "\n",
-                    realTimeUs, ALooper::GetNowUs());
-    bool tooLate = false;
-    int render = 1;
-    if (!mPaused) {
-        if (nowUs == -1) {
-            nowUs = ALooper::GetNowUs();
-        }
 
+    bool tooLate = false;
+
+    if (!mPaused) {
         mLastVideoDrainRealTimeUs = nowUs;
         setVideoLateByUs(nowUs - realTimeUs);
         tooLate = (mVideoLateByUs > 40000);
 
-        if (mInSlowSync && llabs(mVideoLateByUs) <= 40000) {
-            mInSlowSync = false;
-            ALOGI("AV synced, stop slowsync!");
-        }
-
         if (tooLate) {
-            ALOGV("video late by %" PRId64 " us (%.2f secs)",
-                 mVideoLateByUs, mVideoLateByUs / 1E6);
-        }
-        /* else {
-            if (mDebug) {
-                ALOGI("[video] rendering at media time %" PRId64 " us",
-                        (mFlags & FLAG_REAL_TIME ? realTimeUs :
-                       (realTimeUs + mAnchorTimeMediaUs - mAnchorTimeRealUs)));
-            }
-        }*/
-        if (mVideoLateByUs > 10000) {/*always < 0  for smooth rend*/
-            if (mVideoLateByUs < 50000) {
-                render = (mVideoFrameOutNum % 7) != 1; /*drop 1/7*/
-            } else if (mVideoLateByUs < 100000) {
-                render = (mVideoFrameOutNum % 6) != 1; /*drop 1/6*/
-            } else if (mVideoLateByUs < 200000) {
-                render = (mVideoFrameOutNum % 5) != 1; /*drop 1/5*/
-            } else if (mVideoLateByUs < 300000) {
-                render = (mVideoFrameOutNum % 4) != 1; /*drop 1/4*/
-            }  else if (mVideoLateByUs < 600000) {
-                render = (mVideoFrameOutNum % 3) != 1; /*drop 1/3*/
-            } else if (mVideoLateByUs < 100000) {
-                render = (mVideoFrameOutNum % 2) != 1; /*drop 1/2*/
-            } else if (mVideoLateByUs < 2000000) {
-                render = (mVideoFrameOutNum % 3) == 1; /*drop 2/3*/
-            } else {
-                render = (mVideoFrameOutNum % 5) == 1; /*drop 4/5*/
+            ALOGV("video late by %lld us (%.2f secs)",
+                 (long long)mVideoLateByUs, mVideoLateByUs / 1E6);
+        } else {
+            int64_t mediaUs = 0;
+            mMediaClock->getMediaTime(realTimeUs, &mediaUs);
+            //ALOGV("rendering video at media time %.2f secs",
+            //        (mFlags & FLAG_REAL_TIME ? realTimeUs :
+            //        mediaUs) / 1E6);
+
+            if (!(mFlags & FLAG_REAL_TIME)
+                    && mLastAudioMediaTimeUs != -1
+                    && mediaTimeUs > mLastAudioMediaTimeUs) {
+                // If audio ends before video, video continues to drive media clock.
+                // Also smooth out videos >= 10fps.
+                mMediaClock->updateMaxTimeMedia(mediaTimeUs + 100000);
             }
         }
     } else {
@@ -1093,22 +1367,19 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         if (!mVideoSampleReceived && !mHasAudio) {
             // This will ensure that the first frame after a flush won't be used as anchor
             // when renderer is in paused state, because resume can happen any time after seek.
-            setAnchorTime(-1, -1);
-            mAnchorTimeMediaUs = -1;
-            mAnchorNumFramesWritten = -1;
-            mAvgVideoFrameIntervalUs = -1;
-            mLastVideoUs = -1;
-            mLastAudioUs = -1;
-            mVideoJumpedTimeUs = 0;
-            mVideoJumpedTimeUs = 0;
-            mAudioTimeJump = false;
-            mVideoTimeJump = false;
-            mTotalAudioJumpedTimeUs = 0;
+            Mutex::Autolock autoLock(mLock);
+            clearAnchorTime_l();
         }
     }
-    mVideoFrameOutNum++;
+
+    // Always render the first video frame while keeping stats on A/V sync.
+    if (!mVideoSampleReceived) {
+        realTimeUs = nowUs;
+        tooLate = false;
+    }
+
     entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
-    entry->mNotifyConsumed->setInt32("render", render);
+    entry->mNotifyConsumed->setInt32("render", !tooLate);
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
     entry = NULL;
@@ -1120,7 +1391,8 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
             mVideoRenderingStarted = true;
             notifyVideoRenderingStart();
         }
-        notifyIfMediaRenderingStarted();
+        Mutex::Autolock autoLock(mLock);
+        notifyIfMediaRenderingStarted_l();
     }
 }
 
@@ -1131,6 +1403,13 @@ void AmNuPlayer::Renderer::notifyVideoRenderingStart() {
 }
 
 void AmNuPlayer::Renderer::notifyEOS(bool audio, status_t finalResult, int64_t delayUs) {
+    if (audio && delayUs > 0) {
+        sp<AMessage> msg = new AMessage(kWhatEOS, this);
+        msg->setInt32("audioEOSGeneration", mAudioEOSGeneration);
+        msg->setInt32("finalResult", finalResult);
+        msg->post(delayUs);
+        return;
+    }
     sp<AMessage> notify = mNotify->dup();
     notify->setInt32("what", kWhatEOS);
     notify->setInt32("audio", static_cast<int32_t>(audio));
@@ -1138,8 +1417,10 @@ void AmNuPlayer::Renderer::notifyEOS(bool audio, status_t finalResult, int64_t d
     notify->post(delayUs);
 }
 
-void AmNuPlayer::Renderer::notifyAudioOffloadTearDown() {
-    (new AMessage(kWhatAudioOffloadTearDown, this))->post();
+void AmNuPlayer::Renderer::notifyAudioTearDown(AudioTearDownReason reason) {
+    sp<AMessage> msg = new AMessage(kWhatAudioTearDown, this);
+    msg->setInt32("reason", reason);
+    msg->post();
 }
 
 void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, bool audio)
@@ -1147,16 +1428,17 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
     int64_t mediaTimeUs;
     bool mContinuous = false;
     int64_t cur_time = ALooper::GetNowUs();
-
+    int64_t postions;
+    getCurrentPosition(&postions);
     CHECK(buffer->meta()->findInt64("timeUs", &mediaTimeUs));
-    PTS_LOGD("queue[%s]:%" PRId64 ":VJ=%d:Aj=%d ", audio?"audio":"video",
-        mediaTimeUs, mVideoTimeJump, mAudioTimeJump);
+    PTS_LOGD("queue[%s]:%lld:VJ=%d:Aj=%d ,postions %lld", audio?"audio":"video",
+        mediaTimeUs, mVideoTimeJump, mAudioTimeJump,postions);
 
     if ((cur_time - mLastInfoTime > 10000000ll) ||
         (mDebugLevel >= 2 && cur_time - mLastInfoTime > 2000000ll)) {
         int64_t SytemTimeStampUs;
-        status_t ret = getCurrentPositionFromAnchor(
-            &SytemTimeStampUs, cur_time);
+        status_t ret = mMediaClock->getMediaTime(cur_time, &SytemTimeStampUs);
+        ///getCurrentPositionFromAnchor(&SytemTimeStampUs, cur_time);   //////////
         if (ret != OK)
             SytemTimeStampUs = mAnchorTimeMediaUs;
         int64_t diff=(SytemTimeStampUs - mLastVideoDrainTimeUs);
@@ -1170,16 +1452,16 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         } else if (diff < 0) {/*V> 200ms,*/
             sync_info ="Video on Header";
         }
-        PTS_LOG("AV sync info:%s\n",sync_info);
-        PTS_LOG("  SystemTimeStamp:%" PRId64 "\n", SytemTimeStampUs);
-        PTS_LOG("  Last AudioTimeStamp:%" PRId64 "\n", mAnchorTimeMediaUs);
-        PTS_LOG("  Last VideoTimeStamp:%" PRId64 "\n", mLastVideoDrainTimeUs);
-        PTS_LOG("  AV diff:%" PRId64 " ,Ajump:%d,Vjump:%d\n", diff, mAudioTimeJump, mVideoTimeJump);
-        PTS_LOG("  mAjumpedNum:%d, mAudioJumped till now=%d\n", mAjumpedNum, cur_time - mAudioJumpedTimeUs);
-        PTS_LOG("  mVjumpedNum:%d, mVideoJumped till now=%d\n", mVjumpedNum, cur_time - mVideoJumpedTimeUs);
-        PTS_LOG("  mTotalAudioJumpedTimeUs:%" PRId64 "\n",mTotalAudioJumpedTimeUs);
-        PTS_LOG("  mLastVideoUs:%" PRId64 "\n", mLastVideoUs);
-        PTS_LOG("  mLastAudioUs:%" PRId64 "\n", mLastAudioUs);
+        PTS_LOG("AV sync info:%s \n",sync_info);
+        PTS_LOG("  SystemTimeStamp:%lld\n", SytemTimeStampUs);
+        PTS_LOG("  Last AudioTimeStamp:%lld\n", mAnchorTimeMediaUs);
+        PTS_LOG("  Last VideoTimeStamp:%lld\n", mLastVideoDrainTimeUs);
+        PTS_LOG("  AV diff:%lld ,Ajump:%d,Vjump:%d\n", diff, mAudioTimeJump, mVideoTimeJump);
+        PTS_LOG("  mAjumpedNum:%d, mAudioJumped till now=%lld\n", mAjumpedNum, cur_time - mAudioJumpedTimeUs);
+        PTS_LOG("  mVjumpedNum:%d, mVideoJumped till now=%lld\n", mVjumpedNum, cur_time - mVideoJumpedTimeUs);
+        PTS_LOG("  mTotalAudioJumpedTimeUs:%lld\n",mTotalAudioJumpedTimeUs);
+        PTS_LOG("  mLastVideoUs:%lld\n", mLastVideoUs);
+        PTS_LOG("  mLastAudioUs:%lld\n", mLastAudioUs);
         mLastInfoTime = cur_time;
     }
 
@@ -1211,7 +1493,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mContinuous = true;
         }
         if (diff_us > 3000000ll || diff_us < -500000ll) {
-            PTS_LOG("audio Discontinue %" PRId64 "-->%" PRId64 " us,jump =%" PRId64 " us",
+            PTS_LOG("audio Discontinue %lld-->%lld us,jump =%lld us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mAudioTimeJump = true;
             mAudioJumpedTimeUs = cur_time;
@@ -1232,7 +1514,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mContinuous = true;
         }
         if (diff_us > 3000000ll || diff_us < -500000ll) {
-            PTS_LOG("video Discontinue %" PRId64 "-->%" PRId64 " us,jump =%" PRId64 " us",
+            PTS_LOG("video Discontinue %lld-->%lld us,jump =%lld us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mVideoTimeJump = true;
             mVideoJumpedTimeUs = cur_time;
@@ -1245,12 +1527,13 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
     }
     if (mContinuous && (mVideoTimeJump || mAudioTimeJump)) {
         int64_t SytemTimeStampUs;
-        status_t ret = getCurrentPositionFromAnchor(
-            &SytemTimeStampUs, cur_time);
+        status_t ret = mMediaClock->getMediaTime(cur_time, &SytemTimeStampUs);
+        PTS_LOG("mLastVideoDrainTimeUs %lld SytemTimeStampUs %lld diff %lld",
+            mLastVideoDrainTimeUs,SytemTimeStampUs,mLastVideoDrainTimeUs -SytemTimeStampUs);
         if (!audio && ret == OK && /*check on video stream...*/
          llabs(mLastVideoDrainTimeUs - SytemTimeStampUs) < 100000ll && /*av diff < 500ms */
          ((mVideoTimeJump && (cur_time - mVideoJumpedTimeUs) > 500000ll) || /*video jumped > 500ms*/
-         (mAudioTimeJump && (cur_time - mAudioJumpedTimeUs) > 500000ll))) { /*audio jumped > 500ms*/
+         (mAudioTimeJump && (cur_time - mAudioJumpedTimeUs) > 500000ll))){ /*audio jumped > 500ms*/
             mAudioTimeJump = false;
             mVideoTimeJump = false;
             PTS_LOG("AV SYNCED,clear jumpinfo!!\n");
@@ -1264,34 +1547,28 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         mLastVideoUs = mediaTimeUs;
     }
 
-
-    if (mUpdateDelayPost) {
-        int ret;
-        char value[PROPERTY_VALUE_MAX];
-        if (property_get("media.hls.delaypost.ms", value, NULL)) {
-            if ((sscanf(value, "%d", &ret)) > 0) {
-                mVideoDelayPostUs = ret * 1000;
-            }
-        }
-    }
 }
 
 void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
     int32_t audio;
     CHECK(msg->findInt32("audio", &audio));
 
-    setHasMedia(audio);
+    if (dropBufferIfStale(audio, msg)) {
+        return;
+    }
+#if 0
+    if (audio) {
+        mHasAudio = true;
+    } else {
+        mHasVideo = true;
+    }
+#endif
 
     if (mHasVideo) {
         if (mVideoScheduler == NULL) {
             mVideoScheduler = new VideoFrameScheduler();
             mVideoScheduler->init();
         }
-    }
-
-
-    if (dropBufferWhileFlushing(audio, msg)) {
-        return;
     }
 
     sp<ABuffer> buffer;
@@ -1307,15 +1584,15 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
     entry.mFinalResult = OK;
     entry.mBufferOrdinal = ++mTotalBuffersQueued;
 
-    Mutex::Autolock autoLock(mLock);
     if (audio) {
+        Mutex::Autolock autoLock(mLock);
         mAudioQueue.push_back(entry);
+        //postDrainAudioQueue_l();
     } else {
         mVideoQueue.push_back(entry);
+        //postDrainVideoQueue();
     }
 
-    // render audio & video synchronously,
-    // OMX fillbuffer has been delayed sometime.
     if (mHasAudio && mHasVideo && !mRenderStarted) {
         if (mAudioQueue.empty() || mVideoQueue.empty()) {
             return;
@@ -1324,6 +1601,10 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
     }
 
     if (mQueueInitial) {
+        Mutex::Autolock autoLock(mLock);
+        //if (!mSyncQueues || mAudioQueue.empty() || mVideoQueue.empty()) {
+        //    return;
+        //}
         if (mHasAudio && mHasVideo) {
             if (mAudioQueue.empty() || mVideoQueue.empty()) {
                 // EOS signalled on either queue.
@@ -1334,7 +1615,6 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
             mQueueInitial = false;
             goto PASS;
         }
-
         sp<ABuffer> firstAudioBuffer = (*mAudioQueue.begin()).mBuffer;
         sp<ABuffer> firstVideoBuffer = (*mVideoQueue.begin()).mBuffer;
 
@@ -1347,27 +1627,26 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
 
         int64_t diff = firstVideoTimeUs - firstAudioTimeUs;
 
+        ALOGI("queueDiff = %.2f secs", diff / 1E6);
+
         if (diff > 100000ll) {
-            if (mEnableSlowSync) {
-                mInSlowSync = true;
-                mQueueInitial = false;
-                ALOGI("video precedes audio %.2f secs, start slowsync!", diff / 1E6);
-            } else {
-                // Audio data starts More than 0.1 secs before video.
-                // Drop some audio.
-                ALOGV("video precedes audio %.2f secs, need to drop some audio", diff / 1E6);
-                (*mAudioQueue.begin()).mNotifyConsumed->post();
-                mAudioQueue.erase(mAudioQueue.begin());
-                return;
-            }
+            // Audio data starts More than 0.1 secs before video.
+            // Drop some audio.
+
+            (*mAudioQueue.begin()).mNotifyConsumed->post();
+            mAudioQueue.erase(mAudioQueue.begin());
+            return;
+        } else if (diff < -100000ll) {
+            (*mVideoQueue.begin()).mNotifyConsumed->post();
+            mVideoQueue.erase(mVideoQueue.begin());
+            return;
         } else {
             mQueueInitial = false;
         }
     }
-
 PASS:
     postDrainAudioQueue_l();
-    postDrainVideoQueue_l();
+    postDrainVideoQueue();
 }
 
 void AmNuPlayer::Renderer::syncQueuesDone_l() {
@@ -1382,7 +1661,9 @@ void AmNuPlayer::Renderer::syncQueuesDone_l() {
     }
 
     if (!mVideoQueue.empty()) {
-        postDrainVideoQueue_l();
+        mLock.unlock();
+        postDrainVideoQueue();
+        mLock.lock();
     }
 }
 
@@ -1390,7 +1671,7 @@ void AmNuPlayer::Renderer::onQueueEOS(const sp<AMessage> &msg) {
     int32_t audio;
     CHECK(msg->findInt32("audio", &audio));
 
-    if (dropBufferWhileFlushing(audio, msg)) {
+    if (dropBufferIfStale(audio, msg)) {
         return;
     }
 
@@ -1401,19 +1682,20 @@ void AmNuPlayer::Renderer::onQueueEOS(const sp<AMessage> &msg) {
     entry.mOffset = 0;
     entry.mFinalResult = finalResult;
 
-    Mutex::Autolock autoLock(mLock);
     if (audio) {
+        Mutex::Autolock autoLock(mLock);
         if (mAudioQueue.empty() && mSyncQueues) {
             syncQueuesDone_l();
         }
         mAudioQueue.push_back(entry);
         postDrainAudioQueue_l();
     } else {
-        if (mVideoQueue.empty() && mSyncQueues) {
+        if (mVideoQueue.empty() && getSyncQueues()) {
+            Mutex::Autolock autoLock(mLock);
             syncQueuesDone_l();
         }
         mVideoQueue.push_back(entry);
-        postDrainVideoQueue_l();
+        postDrainVideoQueue();
     }
 }
 
@@ -1422,43 +1704,40 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
     CHECK(msg->findInt32("audio", &audio));
 
     {
-        Mutex::Autolock autoLock(mFlushLock);
+        Mutex::Autolock autoLock(mLock);
         if (audio) {
-            mFlushingAudio = false;
             notifyComplete = mNotifyCompleteAudio;
             mNotifyCompleteAudio = false;
+            mLastAudioMediaTimeUs = -1;
         } else {
-            mFlushingVideo = false;
             notifyComplete = mNotifyCompleteVideo;
             mNotifyCompleteVideo = false;
         }
-    }
 
-    // If we're currently syncing the queues, i.e. dropping audio while
-    // aligning the first audio/video buffer times and only one of the
-    // two queues has data, we may starve that queue by not requesting
-    // more buffers from the decoder. If the other source then encounters
-    // a discontinuity that leads to flushing, we'll never find the
-    // corresponding discontinuity on the other queue.
-    // Therefore we'll stop syncing the queues if at least one of them
-    // is flushed.
-    {
-         Mutex::Autolock autoLock(mLock);
-         syncQueuesDone_l();
-         setPauseStartedTimeRealUs(-1);
-         setAnchorTime(-1, -1);
+        // If we're currently syncing the queues, i.e. dropping audio while
+        // aligning the first audio/video buffer times and only one of the
+        // two queues has data, we may starve that queue by not requesting
+        // more buffers from the decoder. If the other source then encounters
+        // a discontinuity that leads to flushing, we'll never find the
+        // corresponding discontinuity on the other queue.
+        // Therefore we'll stop syncing the queues if at least one of them
+        // is flushed.
+        syncQueuesDone_l();
+        clearAnchorTime_l();
     }
-
-    ALOGV("flushing %s", audio ? "audio" : "video");
+    mQueueInitial = true;
+    ALOGI("flushing %s", audio ? "audio" : "video");
     if (audio) {
         {
             Mutex::Autolock autoLock(mLock);
             flushQueue(&mAudioQueue);
 
-            ++mAudioQueueGeneration;
-            prepareForMediaRenderingStart();
+            ++mAudioDrainGeneration;
+            ++mAudioEOSGeneration;
+            prepareForMediaRenderingStart_l();
 
-            setAudioFirstAnchorTime(-1);
+            // the frame count will be reset after flush.
+            clearAudioFirstAnchorTime_l();
         }
 
         mDrainAudioQueuePending = false;
@@ -1466,25 +1745,44 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
         if (offloadingAudio()) {
             mAudioSink->pause();
             mAudioSink->flush();
-            mAudioSink->start();
+            if (!mPaused) {
+                mAudioSink->start();
+            }
+        } else {
+            mAudioSink->pause();
+            mAudioSink->flush();
+            // Call stop() to signal to the AudioSink to completely fill the
+            // internal buffer before resuming playback.
+            // FIXME: this is ignored after flush().
+            mAudioSink->stop();
+            if (mPaused) {
+                // Race condition: if renderer is paused and audio sink is stopped,
+                // we need to make sure that the audio track buffer fully drains
+                // before delivering data.
+                // FIXME: remove this if we can detect if stop() is complete.
+                const int delayUs = 2 * 50 * 1000; // (2 full mixer thread cycles at 50ms)
+                mPauseDrainAudioAllowedUs = ALooper::GetNowUs() + delayUs;
+            } else {
+                mAudioSink->start();
+            }
+            mNumFramesWritten = 0;
         }
+        mNextAudioClockUpdateTimeUs = -1;
     } else {
         flushQueue(&mVideoQueue);
 
         mDrainVideoQueuePending = false;
-        ++mVideoQueueGeneration;
 
         if (mVideoScheduler != NULL) {
             mVideoScheduler->restart();
         }
 
-
-        prepareForMediaRenderingStart();
+        Mutex::Autolock autoLock(mLock);
+        ++mVideoDrainGeneration;
+        prepareForMediaRenderingStart_l();
     }
 
     mVideoSampleReceived = false;
-    mQueueInitial = true;
-    mInSlowSync = false;
 
     if (notifyComplete) {
         notifyFlushComplete(audio);
@@ -1511,20 +1809,12 @@ void AmNuPlayer::Renderer::notifyFlushComplete(bool audio) {
     notify->post();
 }
 
-bool AmNuPlayer::Renderer::dropBufferWhileFlushing(
+bool AmNuPlayer::Renderer::dropBufferIfStale(
         bool audio, const sp<AMessage> &msg) {
-    bool flushing = false;
+    int32_t queueGeneration;
+    CHECK(msg->findInt32("queueGeneration", &queueGeneration));
 
-    {
-        Mutex::Autolock autoLock(mFlushLock);
-        if (audio) {
-            flushing = mFlushingAudio;
-        } else {
-            flushing = mFlushingVideo;
-        }
-    }
-
-    if (!flushing) {
+    if (queueGeneration == getQueueGeneration(audio)) {
         return false;
     }
 
@@ -1542,7 +1832,10 @@ void AmNuPlayer::Renderer::onAudioSinkChanged() {
     }
     CHECK(!mDrainAudioQueuePending);
     mNumFramesWritten = 0;
-    mAnchorNumFramesWritten = -1;
+    {
+        Mutex::Autolock autoLock(mLock);
+        mAnchorNumFramesWritten = -1;
+    }
     uint32_t written;
     if (mAudioSink->getFramesWritten(&written) == OK) {
         mNumFramesWritten = written;
@@ -1552,51 +1845,43 @@ void AmNuPlayer::Renderer::onAudioSinkChanged() {
 void AmNuPlayer::Renderer::onDisableOffloadAudio() {
     Mutex::Autolock autoLock(mLock);
     mFlags &= ~FLAG_OFFLOAD_AUDIO;
-    ++mAudioQueueGeneration;
+    ++mAudioDrainGeneration;
+    if (mAudioRenderingStartGeneration != -1) {
+        prepareForMediaRenderingStart_l();
+    }
 }
 
 void AmNuPlayer::Renderer::onEnableOffloadAudio() {
     Mutex::Autolock autoLock(mLock);
     mFlags |= FLAG_OFFLOAD_AUDIO;
-    ++mAudioQueueGeneration;
+    ++mAudioDrainGeneration;
+    if (mAudioRenderingStartGeneration != -1) {
+        prepareForMediaRenderingStart_l();
+    }
 }
 
 void AmNuPlayer::Renderer::onPause() {
     if (mPaused) {
-        ALOGW("Renderer::onPause() called while already paused!");
         return;
     }
-    int64_t currentPositionUs;
-    int64_t pausePositionMediaTimeUs;
-    if (getCurrentPositionFromAnchor(
-            &currentPositionUs, ALooper::GetNowUs()) == OK) {
-        pausePositionMediaTimeUs = currentPositionUs;
-    } else {
-        // Set paused position to -1 (unavailabe) if we don't have anchor time
-        // This could happen if client does a seekTo() immediately followed by
-        // pause(). Renderer will be flushed with anchor time cleared. We don't
-        // want to leave stale value in mPausePositionMediaTimeUs.
-        pausePositionMediaTimeUs = -1;
-    }
+
     {
         Mutex::Autolock autoLock(mLock);
-        mPausePositionMediaTimeUs = pausePositionMediaTimeUs;
-        ++mAudioQueueGeneration;
-        ++mVideoQueueGeneration;
-        prepareForMediaRenderingStart();
+        // we do not increment audio drain generation so that we fill audio buffer during pause.
+        ++mVideoDrainGeneration;
+        prepareForMediaRenderingStart_l();
         mPaused = true;
-        setPauseStartedTimeRealUs(ALooper::GetNowUs());
+        mMediaClock->setPlaybackRate(0.0);
     }
 
     mDrainAudioQueuePending = false;
     mDrainVideoQueuePending = false;
 
-    if (mHasAudio) {
-        mAudioSink->pause();
-        startAudioOffloadPauseTimeout();
-    }
+    // Note: audio data may not have been decoded, and the AudioSink may not be opened.
+    mAudioSink->pause();
+    startAudioOffloadPauseTimeout();
 
-    ALOGV("now paused audio queue has %d entries, video has %d entries",
+    ALOGI("now paused audio queue has %zu entries, video has %zu entries",
           mAudioQueue.size(), mVideoQueue.size());
 }
 
@@ -1605,118 +1890,78 @@ void AmNuPlayer::Renderer::onResume() {
         return;
     }
 
-    if (mHasAudio) {
-        cancelAudioOffloadPauseTimeout();
-        mAudioSink->start();
+    // Note: audio data may not have been decoded, and the AudioSink may not be opened.
+    cancelAudioOffloadPauseTimeout();
+    if (mAudioSink->ready()) {
+        status_t err = mAudioSink->start();
+        if (err != OK) {
+            ALOGE("cannot start AudioSink err %d", err);
+            notifyAudioTearDown(kDueToError);
+        }
     }
 
-    Mutex::Autolock autoLock(mLock);
-    mPaused = false;
-    if (mPauseStartedTimeRealUs != -1) {
-        int64_t newAnchorRealUs =
-            mAnchorTimeRealUs + ALooper::GetNowUs() - mPauseStartedTimeRealUs;
-        setAnchorTime(
-                mAnchorTimeMediaUs, newAnchorRealUs, mAnchorNumFramesWritten, true /* resume */);
-    }
+    {
+        Mutex::Autolock autoLock(mLock);
+        mPaused = false;
+        // rendering started message may have been delayed if we were paused.
+        if (mRenderingDataDelivered) {
+            notifyIfMediaRenderingStarted_l();
+        }
+        // configure audiosink as we did not do it when pausing
+        if (mAudioSink != NULL && mAudioSink->ready()) {
+            mAudioSink->setPlaybackRate(mPlaybackSettings);
+        }
 
-    if (!mAudioQueue.empty()) {
-        postDrainAudioQueue_l();
+        mMediaClock->setPlaybackRate(mPlaybackRate);
+
+        if (!mAudioQueue.empty()) {
+            postDrainAudioQueue_l();
+        }
     }
 
     if (!mVideoQueue.empty()) {
-        postDrainVideoQueue_l();
+        postDrainVideoQueue();
     }
 }
 
 void AmNuPlayer::Renderer::onSetVideoFrameRate(float fps) {
-    fps = fps;
     if (mVideoScheduler == NULL) {
         mVideoScheduler = new VideoFrameScheduler();
     }
     mVideoScheduler->init(fps);
 }
 
-// TODO: Remove unnecessary calls to getPlayedOutAudioDurationUs()
-// as it acquires locks and may query the audio driver.
-//
-// Some calls could conceivably retrieve extrapolated data instead of
-// accessing getTimestamp() or getPosition() every time a data buffer with
-// a media time is received.
-//
-int64_t AmNuPlayer::Renderer::getPlayedOutAudioDurationUs(int64_t nowUs) {
-    uint32_t numFramesPlayed;
-    int64_t numFramesPlayedAt;
-    AudioTimestamp ts;
-    static const int64_t kStaleTimestamp100ms = 100000;
-
-    status_t res = mAudioSink->getTimestamp(ts);
-    if (res == OK) {                 // case 1: mixing audio tracks and offloaded tracks.
-        numFramesPlayed = ts.mPosition;
-        numFramesPlayedAt =
-            ts.mTime.tv_sec * 1000000LL + ts.mTime.tv_nsec / 1000;
-        const int64_t timestampAge = nowUs - numFramesPlayedAt;
-        if (timestampAge > kStaleTimestamp100ms) {
-            // This is an audio FIXME.
-            // getTimestamp returns a timestamp which may come from audio mixing threads.
-            // After pausing, the MixerThread may go idle, thus the mTime estimate may
-            // become stale. Assuming that the MixerThread runs 20ms, with FastMixer at 5ms,
-            // the max latency should be about 25ms with an average around 12ms (to be verified).
-            // For safety we use 100ms.
-            ALOGV("getTimestamp: returned stale timestamp nowUs(%" PRId64 ") numFramesPlayedAt(%" PRId64 ")",
-                    (long long)nowUs, (long long)numFramesPlayedAt);
-            numFramesPlayedAt = nowUs - kStaleTimestamp100ms;
-        }
-        //ALOGD("getTimestamp: OK %d %" PRId64 "", numFramesPlayed, (long long)numFramesPlayedAt);
-    } else if (res == WOULD_BLOCK) { // case 2: transitory state on start of a new track
-        numFramesPlayed = 0;
-        numFramesPlayedAt = nowUs;
-        //ALOGD("getTimestamp: WOULD_BLOCK %d %" PRId64 "",
-        //        numFramesPlayed, (long long)numFramesPlayedAt);
-    } else {                         // case 3: transitory at new track or audio fast tracks.
-        res = mAudioSink->getPosition(&numFramesPlayed);
-        CHECK_EQ(res, (status_t)OK);
-        numFramesPlayedAt = nowUs;
-        numFramesPlayedAt += 1000LL * mAudioSink->latency() / 2; /* XXX */
-        //ALOGD("getPosition: %d %" PRId64 "", numFramesPlayed, numFramesPlayedAt);
-    }
-
-    // TODO: remove the (int32_t) casting below as it may overflow at 12.4 hours.
-    //CHECK_EQ(numFramesPlayed & (1 << 31), 0);  // can't be negative until 12.4 hrs, test
-    int64_t durationUs = (int64_t)((int32_t)numFramesPlayed * 1000LL * mAudioSink->msecsPerFrame())
-            + nowUs - numFramesPlayedAt;
-    if (durationUs < 0) {
-        // Occurs when numFramesPlayed position is very small and the following:
-        // (1) In case 1, the time nowUs is computed before getTimestamp() is called and
-        //     numFramesPlayedAt is greater than nowUs by time more than numFramesPlayed.
-        // (2) In case 3, using getPosition and adding mAudioSink->latency() to
-        //     numFramesPlayedAt, by a time amount greater than numFramesPlayed.
-        //
-        // Both of these are transitory conditions.
-        //ALOGV("getPlayedOutAudioDurationUs: negative duration %" PRId64 " set to zero", (long long)durationUs);
-        durationUs = 0;
-    }
-    //ALOGV("getPlayedOutAudioDurationUs(%" PRId64 ") nowUs(%" PRId64 ") frames(%u) framesAt(%" PRId64 ")",
-    //        (long long)durationUs, (long long)nowUs, numFramesPlayed, (long long)numFramesPlayedAt);
-    return durationUs;
+int32_t AmNuPlayer::Renderer::getQueueGeneration(bool audio) {
+    Mutex::Autolock autoLock(mLock);
+    return (audio ? mAudioQueueGeneration : mVideoQueueGeneration);
 }
 
-void AmNuPlayer::Renderer::onAudioOffloadTearDown(AudioOffloadTearDownReason reason) {
-    if (mAudioOffloadTornDown) {
+int32_t AmNuPlayer::Renderer::getDrainGeneration(bool audio) {
+    Mutex::Autolock autoLock(mLock);
+    return (audio ? mAudioDrainGeneration : mVideoDrainGeneration);
+}
+
+bool AmNuPlayer::Renderer::getSyncQueues() {
+    Mutex::Autolock autoLock(mLock);
+    return mSyncQueues;
+}
+
+void AmNuPlayer::Renderer::onAudioTearDown(AudioTearDownReason reason) {
+    if (mAudioTornDown) {
         return;
     }
-    mAudioOffloadTornDown = true;
+    mAudioTornDown = true;
 
     int64_t currentPositionUs;
-    if (getCurrentPositionOnLooper(&currentPositionUs) != OK) {
-        currentPositionUs = 0;
+    sp<AMessage> notify = mNotify->dup();
+    if (getCurrentPosition(&currentPositionUs) == OK) {
+        notify->setInt64("positionUs", currentPositionUs);
     }
 
     mAudioSink->stop();
     mAudioSink->flush();
 
-    sp<AMessage> notify = mNotify->dup();
-    notify->setInt32("what", kWhatAudioOffloadTearDown);
-    notify->setInt64("positionUs", currentPositionUs);
+    notify->setInt32("what", kWhatAudioTearDown);
     notify->setInt32("reason", reason);
     notify->post();
 }
@@ -1725,16 +1970,22 @@ void AmNuPlayer::Renderer::startAudioOffloadPauseTimeout() {
     if (offloadingAudio()) {
         mWakeLock->acquire();
         sp<AMessage> msg = new AMessage(kWhatAudioOffloadPauseTimeout, this);
-        msg->setInt32("generation", mAudioOffloadPauseTimeoutGeneration);
+        msg->setInt32("drainGeneration", mAudioOffloadPauseTimeoutGeneration);
         msg->post(kOffloadPauseMaxUs);
     }
 }
 
 void AmNuPlayer::Renderer::cancelAudioOffloadPauseTimeout() {
-    if (offloadingAudio()) {
-        mWakeLock->release(true);
-        ++mAudioOffloadPauseTimeoutGeneration;
-    }
+    // We may have called startAudioOffloadPauseTimeout() without
+    // the AudioSink open and with offloadingAudio enabled.
+    //
+    // When we cancel, it may be that offloadingAudio is subsequently disabled, so regardless
+    // we always release the wakelock and increment the pause timeout generation.
+    //
+    // Note: The acquired wakelock prevents the device from suspending
+    // immediately after offload pause (in case a resume happens shortly thereafter).
+    mWakeLock->release(true);
+    ++mAudioOffloadPauseTimeoutGeneration;
 }
 
 status_t AmNuPlayer::Renderer::onOpenAudioSink(
@@ -1773,7 +2024,7 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
                     mime.c_str(), audioFormat);
 
             int avgBitRate = -1;
-            format->findInt32("bit-rate", &avgBitRate);
+            format->findInt32("bitrate", &avgBitRate);
 
             int32_t aacProfile = -1;
             if (audioFormat == AUDIO_FORMAT_AAC
@@ -1809,16 +2060,21 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
             offloadFlags &= ~AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
             audioSinkChanged = true;
             mAudioSink->close();
+
             err = mAudioSink->open(
                     sampleRate,
                     numChannels,
                     (audio_channel_mask_t)channelMask,
                     audioFormat,
-                    8 /* bufferCount */,
+                    0 /* bufferCount - unused */,
                     &AmNuPlayer::Renderer::AudioSinkCallback,
                     this,
                     (audio_output_flags_t)offloadFlags,
                     &offloadInfo);
+
+            if (err == OK) {
+                err = mAudioSink->setPlaybackRate(mPlaybackSettings);
+            }
 
             if (err == OK) {
                 // If the playback is offloaded to h/w, we pass
@@ -1828,7 +2084,9 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
                 // before reaching the hardware.
                 // TODO
                 mCurrentOffloadInfo = offloadInfo;
-                err = mAudioSink->start();
+                if (!mPaused) { // for preview mode, don't start if paused
+                    err = mAudioSink->start();
+                }
                 ALOGV_IF(err == OK, "openAudioSink: offload succeeded");
             }
             if (err != OK) {
@@ -1837,6 +2095,12 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
                 onDisableOffloadAudio();
                 mCurrentOffloadInfo = AUDIO_INFO_INITIALIZER;
                 ALOGV("openAudioSink: offload failed");
+                if (offloadOnly) {
+                    notifyAudioTearDown(kForceNonOffload);
+                }
+            } else {
+                mUseAudioCallback = true;  // offload mode transfers data through callback
+                ++mAudioDrainGeneration;  // discard pending kWhatDrainAudioQueue message.
             }
         }
     }
@@ -1861,29 +2125,55 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
         audioSinkChanged = true;
         mAudioSink->close();
         mCurrentOffloadInfo = AUDIO_INFO_INITIALIZER;
+        // Note: It is possible to set up the callback, but not use it to send audio data.
+        // This requires a fix in AudioSink to explicitly specify the transfer mode.
+        mUseAudioCallback = getUseAudioCallbackSetting();
+        if (mUseAudioCallback) {
+            ++mAudioDrainGeneration;  // discard pending kWhatDrainAudioQueue message.
+        }
+
+        // Compute the desired buffer size.
+        // For callback mode, the amount of time before wakeup is about half the buffer size.
+        const uint32_t frameCount =
+                (unsigned long long)sampleRate * getAudioSinkPcmMsSetting() / 1000;
+
+        // The doNotReconnect means AudioSink will signal back and let AmNuPlayer to re-construct
+        // AudioSink. We don't want this when there's video because it will cause a video seek to
+        // the previous I frame. But we do want this when there's only audio because it will give
+        // AmNuPlayer a chance to switch from non-offload mode to offload mode.
+        // So we only set doNotReconnect when there's no video.
+        const bool doNotReconnect = !hasVideo;
+
+        // We should always be able to set our playback settings if the sink is closed.
+        LOG_ALWAYS_FATAL_IF(mAudioSink->setPlaybackRate(mPlaybackSettings) != OK,
+                "onOpenAudioSink: can't set playback rate on closed sink");
         status_t err = mAudioSink->open(
                     sampleRate,
                     numChannels,
                     (audio_channel_mask_t)channelMask,
                     AUDIO_FORMAT_PCM_16_BIT,
-                    8 /* bufferCount */,
+                    0 /* bufferCount - unused */,
+                    mUseAudioCallback ? &AmNuPlayer::Renderer::AudioSinkCallback : NULL,
+                    mUseAudioCallback ? this : NULL,
+                    (audio_output_flags_t)pcmFlags,
                     NULL,
-                    NULL,
-                    (audio_output_flags_t)pcmFlags);
+                    doNotReconnect,
+                    frameCount);
         if (err != OK) {
             ALOGW("openAudioSink: non offloaded open failed status: %d", err);
+            mAudioSink->close();
             mCurrentPcmInfo = AUDIO_PCMINFO_INITIALIZER;
             return err;
         }
         mCurrentPcmInfo = info;
-        mAudioSink->start();
+        if (!mPaused) { // for preview mode, don't start if paused
+            mAudioSink->start();
+        }
     }
     if (audioSinkChanged) {
         onAudioSinkChanged();
     }
-    if (offloadingAudio()) {
-        mAudioOffloadTornDown = false;
-    }
+    mAudioTornDown = false;
     return OK;
 }
 

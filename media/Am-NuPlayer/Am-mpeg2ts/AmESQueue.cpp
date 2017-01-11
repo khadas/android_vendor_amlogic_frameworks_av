@@ -32,8 +32,8 @@
 #include "include/avc_utils.h"
 #include "HEVC_utils.h"
 
-#include <netinet/in.h>
 #include <inttypes.h>
+#include <netinet/in.h>
 
 namespace android {
 
@@ -41,8 +41,9 @@ AmElementaryStreamQueue::AmElementaryStreamQueue(Mode mode, uint32_t flags)
     : mMode(mode),
       mFlags(flags),
       mStreamType(-1),
+      mEOSReached(false),
       mHevcFindKey(false) {
-    memset(&mDCAParseCtx, 0, sizeof(DCAParseContext));
+      memset(&mDCAParseCtx, 0, sizeof(DCAParseContext));
 }
 
 sp<MetaData> AmElementaryStreamQueue::getFormat() {
@@ -63,16 +64,17 @@ void AmElementaryStreamQueue::clear(bool clearFormat) {
     if (clearFormat) {
         mFormat.clear();
     }
+
+    mEOSReached = false;
 }
 
+#if 0
 // Parse AC3 header assuming the current ptr is start position of syncframe,
 // update metadata only applicable, and return the payload size
 static unsigned parseAC3SyncFrame(
         const uint8_t *ptr, size_t size, sp<MetaData> *metaData) {
     static const unsigned channelCountTable[] = {2, 1, 2, 3, 3, 4, 4, 5};
     static const unsigned samplingRateTable[] = {48000, 44100, 32000};
-    static const unsigned rates[] = {32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256,
-            320, 384, 448, 512, 576, 640};
 
     static const unsigned frameSizeTable[19][3] = {
         { 64, 69, 96 },
@@ -97,7 +99,6 @@ static unsigned parseAC3SyncFrame(
     };
 
     ABitReader bits(ptr, size);
-    unsigned syncStartPos = 0;  // in bytes
     if (bits.numBitsLeft() < 16) {
         return 0;
     }
@@ -129,11 +130,11 @@ static unsigned parseAC3SyncFrame(
         return 0;
     }
 
-    unsigned bsmod = bits.getBits(3);
+    unsigned bsmod __unused = bits.getBits(3);
     unsigned acmod = bits.getBits(3);
-    unsigned cmixlev = 0;
-    unsigned surmixlev = 0;
-    unsigned dsurmod = 0;
+    unsigned cmixlev __unused = 0;
+    unsigned surmixlev __unused = 0;
+    unsigned dsurmod __unused = 0;
 
     if ((acmod & 1) > 0 && acmod != 1) {
         if (bits.numBitsLeft() < 2) {
@@ -177,9 +178,11 @@ static unsigned parseAC3SyncFrame(
     return payloadSize;
 }
 
+
 static bool IsSeeminglyValidAC3Header(const uint8_t *ptr, size_t size) {
     return parseAC3SyncFrame(ptr, size, NULL) > 0;
 }
+#endif
 
 static bool IsSeeminglyValidADTSHeader(
         const uint8_t *ptr, size_t size, size_t *frameLength) {
@@ -253,12 +256,14 @@ static bool IsSeeminglyValidMPEGAudioHeader(const uint8_t *ptr, size_t size) {
     return true;
 }
 
+#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
 static bool IsSeeminglyValidDDPAudioHeader(const uint8_t *ptr, size_t size) {
     if (size < 2) return false;
     if (ptr[0] == 0x0b && ptr[1] == 0x77) return true;
     if (ptr[0] == 0x77 && ptr[1] == 0x0b) return true;
     return false;
 }
+#endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
 
 static bool IsSeeminglyValidDTSAudioHeader(const uint8_t *ptr, size_t size)
 {
@@ -293,9 +298,16 @@ static bool IsSeeminglyValidDTSAudioHeader(const uint8_t *ptr, size_t size)
 
     return false;
 }
-
+#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
+static int calc_dd_frame_size(int code);
+#endif
 status_t AmElementaryStreamQueue::appendData(
         const void *data, size_t size, int64_t timeUs) {
+
+    if (mEOSReached) {
+        ALOGE("appending data after EOS");
+        return ERROR_MALFORMED;
+    }
     if (mBuffer == NULL || mBuffer->size() == 0) {
 
         // this mode is audio in most time,
@@ -312,14 +324,35 @@ status_t AmElementaryStreamQueue::appendData(
                 }
             }
             if (mMode == UNKNOWN_MODE) {
-                for (size_t i = 0; i < size; ++i) {
-                    if (IsSeeminglyValidDDPAudioHeader(&ptr[i], size - i)) {
+#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
+                 size_t len = size;
+                 while (IsSeeminglyValidDDPAudioHeader(ptr, len) &&  len > 6) {
+                    int bsid;
+                    size_t frame_size = 0;
+                    bsid = (ptr[5] >> 3) & 0x1f;
+                    if (bsid > 10 && bsid <= 16)
+                    {
+                        frame_size = 2 * ((((ptr[2] << 8) | ptr[3]) & 0x7ff) + 1);
+                    }
+                    else
+                    {
+                        frame_size = calc_dd_frame_size(ptr[4]);
+                    }
+                    if (frame_size > 0 && frame_size <= len) {
+                        len -= frame_size;
+                        ptr += frame_size;
+                    }
+                    else
+                        break;
+                    ALOGI("frame_size %ld size %ld len %ld",(long)frame_size,(long)size,(long)len);
+                    if (len == 0) {
                         mMode = DDP_AC3_AUDIO;
                         mStreamType = 1;
-                        ALOGI("We got AC3 type here!");
+                        ALOGI("We got AC3 type here! frame_size %ld size %ld",(long)frame_size,(long)size);
                         break;
                     }
                 }
+#endif
             }
         }
 
@@ -436,6 +469,64 @@ status_t AmElementaryStreamQueue::appendData(
 #endif
                 break;
             }
+#if 0
+            case AC3:
+            {
+                uint8_t *ptr = (uint8_t *)data;
+
+                ssize_t startOffset = -1;
+                for (size_t i = 0; i < size; ++i) {
+                    if (IsSeeminglyValidAC3Header(&ptr[i], size - i)) {
+                        startOffset = i;
+                        break;
+                    }
+                }
+
+                if (startOffset < 0) {
+                    return ERROR_MALFORMED;
+                }
+
+                if (startOffset > 0) {
+                    ALOGI("found something resembling an AC3 syncword at "
+                          "offset %zd",
+                          startOffset);
+                }
+
+                data = &ptr[startOffset];
+                size -= startOffset;
+                break;
+            }
+#endif  //ac3 switch to ddp
+
+#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
+            case DDP_AC3_AUDIO:
+            case DDP_EC3_AUDIO:
+            {
+                uint8_t *ptr = (uint8_t *)data;
+
+                ssize_t startOffset = -1;
+                for (size_t i = 0; i < size; ++i) {
+                    if (IsSeeminglyValidDDPAudioHeader(&ptr[i], size - i)) {
+                        startOffset = i;
+                        break;
+                    }
+                }
+
+                if (startOffset < 0) {
+                    return ERROR_MALFORMED;
+                }
+
+                if (startOffset > 0) {
+                    ALOGI("found something resembling a DDP audio "
+                         "syncword at offset %ld",
+                         (long)startOffset);
+                }
+
+                data = &ptr[startOffset];
+                size -= startOffset;
+                break;
+            }
+#endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
 
             case MPEG_AUDIO:
             {
@@ -470,37 +561,6 @@ status_t AmElementaryStreamQueue::appendData(
                 break;
             }
 
-#if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
-            case DDP_AC3_AUDIO:
-            case DDP_EC3_AUDIO:
-            {
-                uint8_t *ptr = (uint8_t *)data;
-
-                ssize_t startOffset = -1;
-                for (size_t i = 0; i < size; ++i) {
-                    if (IsSeeminglyValidDDPAudioHeader(&ptr[i], size - i)) {
-                        startOffset = i;
-                        break;
-                    }
-                }
-
-                if (startOffset < 0) {
-                    return ERROR_MALFORMED;
-                }
-
-                if (startOffset > 0) {
-                    ALOGI("found something resembling a DDP audio "
-                         "syncword at offset %zd",
-                         startOffset);
-                }
-
-                data = &ptr[startOffset];
-                size -= startOffset;
-                break;
-            }
-
-#endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
-
             case DTS:
             {
                 uint8_t *ptr = (uint8_t *)data;
@@ -518,8 +578,8 @@ status_t AmElementaryStreamQueue::appendData(
 
                 if (startOffset > 0) {
                     ALOGI("found something resembling a DTS audio "
-                         "syncword at offset %zd",
-                         startOffset);
+                         "syncword at offset %ld",
+                         (long)startOffset);
                 }
 
                 data = &ptr[startOffset];
@@ -528,8 +588,8 @@ status_t AmElementaryStreamQueue::appendData(
             }
 
             default:
-                TRESPASS();
-                break;
+                ALOGE("Unknown mode: %d", mMode);
+                return ERROR_MALFORMED;
         }
     }
 
@@ -601,12 +661,16 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnit() {
             return dequeueAccessUnitH265();
         case AAC:
             return dequeueAccessUnitAAC();
+        //case AC3:
+        //    return dequeueAccessUnitAC3();
         case MPEG_VIDEO:
             return dequeueAccessUnitMPEGVideo();
         case MPEG4_VIDEO:
             return dequeueAccessUnitMPEG4Video();
         case PCM_AUDIO:
             return dequeueAccessUnitPCMAudio();
+        case METADATA:
+            return dequeueAccessUnitMetadata();
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         case DDP_AC3_AUDIO:
         case DDP_EC3_AUDIO:
@@ -614,13 +678,65 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnit() {
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
         case DTS:
             return dequeueAccessUnitDTS();
-        case METADATA:
-            return dequeueAccessUnitMetadata();
         default:
-            CHECK_EQ((unsigned)mMode, (unsigned)MPEG_AUDIO);
+            if (mMode != MPEG_AUDIO) {
+                ALOGE("Unknown mode");
+                return NULL;
+            }
             return dequeueAccessUnitMPEGAudio();
     }
 }
+
+#if 0
+sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAC3() {
+    unsigned syncStartPos = 0;  // in bytes
+    unsigned payloadSize = 0;
+    sp<MetaData> format = new MetaData;
+    while (true) {
+        if (syncStartPos + 2 >= mBuffer->size()) {
+            return NULL;
+        }
+
+        payloadSize = parseAC3SyncFrame(
+                mBuffer->data() + syncStartPos,
+                mBuffer->size() - syncStartPos,
+                &format);
+        if (payloadSize > 0) {
+            break;
+        }
+        ++syncStartPos;
+    }
+
+    if (mBuffer->size() < syncStartPos + payloadSize) {
+        ALOGV("Not enough buffer size for AC3");
+        return NULL;
+    }
+
+    if (mFormat == NULL) {
+        mFormat = format;
+    }
+
+    sp<ABuffer> accessUnit = new ABuffer(syncStartPos + payloadSize);
+    memcpy(accessUnit->data(), mBuffer->data(), syncStartPos + payloadSize);
+
+    int64_t timeUs = fetchTimestamp(syncStartPos + payloadSize);
+    if (timeUs < 0ll) {
+        ALOGE("negative timeUs");
+        return NULL;
+    }
+    accessUnit->meta()->setInt64("timeUs", timeUs);
+    accessUnit->meta()->setInt32("isSync", 1);
+
+    memmove(
+            mBuffer->data(),
+            mBuffer->data() + syncStartPos + payloadSize,
+            mBuffer->size() - syncStartPos - payloadSize);
+
+    mBuffer->setRange(0, mBuffer->size() - syncStartPos - payloadSize);
+
+    return accessUnit;
+}
+#endif
 
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
     if (mBuffer->size() < 4) {
@@ -634,7 +750,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
     }
     unsigned numAUs = bits.getBits(8);
     bits.skipBits(8);
-    unsigned quantization_word_length = bits.getBits(2);
+    unsigned quantization_word_length __unused = bits.getBits(2);
     unsigned audio_sampling_frequency = bits.getBits(3);
     unsigned num_channels = bits.getBits(3);
 
@@ -652,6 +768,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
         mFormat->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_RAW);
         mFormat->setInt32(kKeyChannelCount, 2);
         mFormat->setInt32(kKeySampleRate, 48000);
+        mFormat->setInt32(kKeyPcmEncoding, kAudioEncodingPcm16bit);
     }
 
     static const size_t kFramesPerAU = 80;
@@ -667,8 +784,12 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
     memcpy(accessUnit->data(), mBuffer->data() + 4, payloadSize);
 
     int64_t timeUs = fetchTimestamp(payloadSize + 4);
-    CHECK_GE(timeUs, 0ll);
+    if (timeUs < 0ll) {
+        ALOGE("Negative timeUs");
+        return NULL;
+    }
     accessUnit->meta()->setInt64("timeUs", timeUs);
+    accessUnit->meta()->setInt32("isSync", 1);
 
     int16_t *ptr = (int16_t *)accessUnit->data();
     for (size_t i = 0; i < payloadSize / sizeof(int16_t); ++i) {
@@ -685,146 +806,9 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitPCMAudio() {
     return accessUnit;
 }
 
-sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
-    if (mBuffer->size() == 0) {
-        return NULL;
-    }
-
-    if (mRangeInfos.empty()) {
-        return NULL;
-    }
-
-    const RangeInfo &info = *mRangeInfos.begin();
-    if (mBuffer->size() < info.mLength) {
-        return NULL;
-    }
-
-    CHECK_GE(info.mTimestampUs, 0ll);
-
-    // The idea here is consume all AAC frames starting at offsets before
-    // info.mLength so we can assign a meaningful timestamp without
-    // having to interpolate.
-    // The final AAC frame may well extend into the next RangeInfo but
-    // that's ok.
-    // TODO: the logic commented above is skipped because codec cannot take
-    // arbitrary sized input buffers;
-    size_t offset = 0;
-    while (offset < info.mLength) {
-        if (offset + 7 > mBuffer->size()) {
-            return NULL;
-        }
-
-        ABitReader bits(mBuffer->data() + offset, mBuffer->size() - offset);
-
-        // adts_fixed_header
-
-        if (bits.getBits(12) != 0xfffu) {
-            ALOGE("Wrong atds_fixed_header");
-            return NULL;
-        }
-        bits.skipBits(3);  // ID, layer
-        bool protection_absent = bits.getBits(1) != 0;
-
-        unsigned profile = bits.getBits(2);
-        if (profile == 3u) {
-            ALOGE("profile should not be 3");
-            return NULL;
-        }
-        unsigned sampling_freq_index = bits.getBits(4);
-        bits.getBits(1);  // private_bit
-        unsigned channel_configuration = bits.getBits(3);
-        if (channel_configuration == 0u) {
-            ALOGE("channel_config should not be 0");
-            return NULL;
-        }
-        bits.skipBits(2);  // original_copy, home
-        if (mFormat == NULL) {
-            mFormat = MakeAACCodecSpecificData(
-                    profile, sampling_freq_index, channel_configuration);
-
-            mFormat->setInt32(kKeyIsADTS, true);
-
-            int32_t sampleRate;
-            int32_t numChannels;
-            if (!mFormat->findInt32(kKeySampleRate, &sampleRate)) {
-                ALOGE("SampleRate not found");
-                return NULL;
-            }
-            if (!mFormat->findInt32(kKeyChannelCount, &numChannels)) {
-                ALOGE("ChannelCount not found");
-                return NULL;
-            }
-            ALOGI("found AAC codec config (%d Hz, %d channels)",
-                 sampleRate, numChannels);
-        } else {
-            CHECK_LE(sampling_freq_index, 11u);
-            static const int32_t kSamplingFreq[] = {
-                96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
-                16000, 12000, 11025, 8000
-            };
-            int32_t sampleRate = kSamplingFreq[sampling_freq_index];
-            int32_t numChannels = channel_configuration;
-            int curSampleRate, curNumChannels;
-
-            if (!mFormat->findInt32(kKeySampleRate, &curSampleRate)) {
-                ALOGE("SampleRate not found");
-                return NULL;
-            }
-            if (!mFormat->findInt32(kKeyChannelCount, &curNumChannels)) {
-                ALOGE("ChannelCount not found");
-                return NULL;
-            }
-            if (curSampleRate != sampleRate || curNumChannels != numChannels) {
-                mFormat->setInt32(kKeySampleRate, sampleRate);
-                mFormat->setInt32(kKeyChannelCount, numChannels);
-                ALOGI("reset sample rate %d, channel %d\n", sampleRate, numChannels);
-            }
-        }
-
-        // adts_variable_header
-
-        // copyright_identification_bit, copyright_identification_start
-        bits.skipBits(2);
-
-        unsigned aac_frame_length = bits.getBits(13);
-
-        bits.skipBits(11);  // adts_buffer_fullness
-
-        unsigned number_of_raw_data_blocks_in_frame = bits.getBits(2);
-
-        if (number_of_raw_data_blocks_in_frame != 0) {
-            // To be implemented.
-            TRESPASS();
-        }
-
-        if (offset + aac_frame_length > mBuffer->size()) {
-            return NULL;
-        }
-
-        size_t headerSize = protection_absent ? 7 : 9;
-
-        offset += aac_frame_length;
-        // TODO: move back to concatenation when codec can support arbitrary input buffers.
-        // For now only queue a single buffer
-        break;
-    }
-
-    int64_t timeUs = fetchTimestampAAC(offset);
-
-    sp<ABuffer> accessUnit = new ABuffer(offset);
-    memcpy(accessUnit->data(), mBuffer->data(), offset);
-
-    memmove(mBuffer->data(), mBuffer->data() + offset,
-            mBuffer->size() - offset);
-    mBuffer->setRange(0, mBuffer->size() - offset);
-
-    accessUnit->meta()->setInt64("timeUs", timeUs);
-    return accessUnit;
-}
 
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
-static int
-calc_dd_frame_size(int code)
+static int calc_dd_frame_size(int code)
 {
     /* tables lifted from TrueHDDecoder.cxx in DMG's decoder framework */
     static const int FrameSize32K[] = { 96, 96, 120, 120, 144, 144, 168, 168, 192, 192, 240, 240, 288, 288, 336, 336, 384, 384, 480, 480, 576, 576, 672, 672, 768, 768, 960, 960, 1152, 1152, 1344, 1344, 1536, 1536, 1728, 1728, 1920, 1920 };
@@ -844,7 +828,6 @@ calc_dd_frame_size(int code)
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDDP() {
     unsigned int size;
     unsigned char* ptr;
-    unsigned int i;
     int bsid;
     size_t frame_size = 0;
     size_t auSize = 0;
@@ -915,6 +898,127 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitDDP() {
     return accessUnit;
 }
 #endif // DOLBY_UDC && DOLBY_UDC_STREAMING_HLS
+
+sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitAAC() {
+    if (mBuffer->size() == 0) {
+        return NULL;
+    }
+
+    if (mRangeInfos.empty()) {
+        return NULL;
+    }
+
+    const RangeInfo &info = *mRangeInfos.begin();
+    if (mBuffer->size() < info.mLength) {
+        return NULL;
+    }
+
+    if (info.mTimestampUs < 0ll) {
+        ALOGE("Negative info.mTimestampUs");
+        return NULL;
+    }
+
+    // The idea here is consume all AAC frames starting at offsets before
+    // info.mLength so we can assign a meaningful timestamp without
+    // having to interpolate.
+    // The final AAC frame may well extend into the next RangeInfo but
+    // that's ok.
+    size_t offset = 0;
+    while (offset < info.mLength) {
+        if (offset + 7 > mBuffer->size()) {
+            return NULL;
+        }
+
+        ABitReader bits(mBuffer->data() + offset, mBuffer->size() - offset);
+
+        // adts_fixed_header
+
+        if (bits.getBits(12) != 0xfffu) {
+            ALOGE("Wrong atds_fixed_header");
+            return NULL;
+        }
+        bits.skipBits(3);  // ID, layer
+        bool protection_absent __unused = bits.getBits(1) != 0;
+
+        if (mFormat == NULL) {
+            unsigned profile = bits.getBits(2);
+            if (profile == 3u) {
+                ALOGE("profile should not be 3");
+                return NULL;
+            }
+            unsigned sampling_freq_index = bits.getBits(4);
+            bits.getBits(1);  // private_bit
+            unsigned channel_configuration = bits.getBits(3);
+            if (channel_configuration == 0u) {
+                ALOGE("channel_config should not be 0");
+                return NULL;
+            }
+            bits.skipBits(2);  // original_copy, home
+
+            mFormat = MakeAACCodecSpecificData(
+                    profile, sampling_freq_index, channel_configuration);
+
+            mFormat->setInt32(kKeyIsADTS, true);
+
+            int32_t sampleRate;
+            int32_t numChannels;
+            if (!mFormat->findInt32(kKeySampleRate, &sampleRate)) {
+                ALOGE("SampleRate not found");
+                return NULL;
+            }
+            if (!mFormat->findInt32(kKeyChannelCount, &numChannels)) {
+                ALOGE("ChannelCount not found");
+                return NULL;
+            }
+
+            ALOGI("found AAC codec config (%d Hz, %d channels)",
+                 sampleRate, numChannels);
+        } else {
+            // profile_ObjectType, sampling_frequency_index, private_bits,
+            // channel_configuration, original_copy, home
+            bits.skipBits(12);
+        }
+
+        // adts_variable_header
+
+        // copyright_identification_bit, copyright_identification_start
+        bits.skipBits(2);
+
+        unsigned aac_frame_length = bits.getBits(13);
+
+        bits.skipBits(11);  // adts_buffer_fullness
+
+        unsigned number_of_raw_data_blocks_in_frame = bits.getBits(2);
+
+        if (number_of_raw_data_blocks_in_frame != 0) {
+            // To be implemented.
+            ALOGE("Should not reach here.");
+            return NULL;
+        }
+
+        if (offset + aac_frame_length > mBuffer->size()) {
+            return NULL;
+        }
+
+        size_t headerSize __unused = protection_absent ? 7 : 9;
+
+        offset += aac_frame_length;
+    }
+
+    int64_t timeUs = fetchTimestamp(offset);
+
+    sp<ABuffer> accessUnit = new ABuffer(offset);
+    memcpy(accessUnit->data(), mBuffer->data(), offset);
+
+    memmove(mBuffer->data(), mBuffer->data() + offset,
+            mBuffer->size() - offset);
+    mBuffer->setRange(0, mBuffer->size() - offset);
+
+    accessUnit->meta()->setInt64("timeUs", timeUs);
+    accessUnit->meta()->setInt32("isSync", 1);
+
+    return accessUnit;
+}
 
 /** DCA syncwords, also used for bitstream type detection */
 #define DCA_MARKER_RAW_BE 0x7FFE8001
@@ -1037,53 +1141,7 @@ int64_t AmElementaryStreamQueue::fetchTimestamp(size_t size) {
     return timeUs;
 }
 
-// TODO: avoid interpolating timestamps once codec supports arbitrary sized input buffers
-int64_t AmElementaryStreamQueue::fetchTimestampAAC(size_t size) {
-    int64_t timeUs = -1;
-    bool first = true;
 
-    size_t samplesize = size;
-    while (size > 0) {
-        if (mRangeInfos.empty()) {
-            return timeUs;
-        }
-
-        RangeInfo *info = &*mRangeInfos.begin();
-
-        if (first) {
-            timeUs = info->mTimestampUs;
-            first = false;
-        }
-
-        if (info->mLength > size) {
-            int32_t sampleRate;
-            CHECK(mFormat->findInt32(kKeySampleRate, &sampleRate));
-            info->mLength -= size;
-            size_t numSamples = 1024 * size / samplesize;
-            info->mTimestampUs += numSamples * 1000000ll / sampleRate;
-            size = 0;
-        } else {
-            size -= info->mLength;
-
-            mRangeInfos.erase(mRangeInfos.begin());
-            info = NULL;
-        }
-
-    }
-
-    if (timeUs == 0ll) {
-        ALOGV("Returning 0 timestamp");
-    }
-
-    return timeUs;
-}
-
-/*
-struct NALPosition {
-    size_t nalOffset;
-    size_t nalSize;
-};
-*/
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
     const uint8_t *data = mBuffer->data();
     size_t size = mBuffer->size();
@@ -1093,7 +1151,6 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
     const uint8_t *nalStart;
     size_t nalSize;
     bool frame_start_found = false;
-
     while ((err = HEVC_getNextNALUnit(&data, &size, &nalStart, &nalSize, false)) == OK) {
         if (nalSize == 0) continue;
         unsigned nalType = (nalStart[0] >> 1) & 0x3f;
@@ -1166,6 +1223,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
     return NULL;
 }
 
+
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
     const uint8_t *data = mBuffer->data();
 
@@ -1173,11 +1231,13 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
     Vector<NALPosition> nals;
 
     size_t totalSize = 0;
+    size_t seiCount = 0;
 
     status_t err;
     const uint8_t *nalStart;
     size_t nalSize;
     bool foundSlice = false;
+    bool foundIDR = false;
     while ((err = getNextNALUnit(&data, &size, &nalStart, &nalSize)) == OK) {
         if (nalSize == 0) continue;
 
@@ -1185,6 +1245,9 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
         bool flush = false;
 
         if (nalType == 1 || nalType == 5) {
+            if (nalType == 5) {
+                foundIDR = true;
+            }
             if (foundSlice) {
                 ABitReader br(nalStart + 1, nalSize);
                 unsigned first_mb_in_slice = parseUE(&br);
@@ -1202,6 +1265,9 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
             // next frame.
 
             flush = true;
+        } else if (nalType == 6 && nalSize > 0) {
+            // found non-zero sized SEI
+            ++seiCount;
         }
 
         if (flush) {
@@ -1210,21 +1276,32 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
 
             size_t auSize = 4 * nals.size() + totalSize;
             sp<ABuffer> accessUnit = new ABuffer(auSize);
+            sp<ABuffer> sei;
+
+            if (seiCount > 0) {
+                sei = new ABuffer(seiCount * sizeof(NALPosition));
+                accessUnit->meta()->setBuffer("sei", sei);
+            }
 
 #if !LOG_NDEBUG
             AString out;
 #endif
 
             size_t dstOffset = 0;
+            size_t seiIndex = 0;
             for (size_t i = 0; i < nals.size(); ++i) {
                 const NALPosition &pos = nals.itemAt(i);
 
                 unsigned nalType = mBuffer->data()[pos.nalOffset] & 0x1f;
 
-                if (nalType == 6) {
-                    sp<ABuffer> sei = new ABuffer(pos.nalSize);
-                    memcpy(sei->data(), mBuffer->data() + pos.nalOffset, pos.nalSize);
-                    accessUnit->meta()->setBuffer("sei", sei);
+                if (nalType == 6 && pos.nalSize > 0) {
+                    if (seiIndex >= sei->size() / sizeof(NALPosition)) {
+                        ALOGE("Wrong seiIndex");
+                        return NULL;
+                    }
+                    NALPosition &seiPos = ((NALPosition *)sei->data())[seiIndex++];
+                    seiPos.nalOffset = dstOffset + 4;
+                    seiPos.nalSize = pos.nalSize;
                 }
 
 #if !LOG_NDEBUG
@@ -1259,19 +1336,18 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
             mBuffer->setRange(0, mBuffer->size() - nextScan);
 
             int64_t timeUs = fetchTimestamp(nextScan);
-            CHECK_GE(timeUs, 0ll);
+            if (timeUs < 0ll) {
+                ALOGE("Negative timeUs");
+                return NULL;
+            }
 
             accessUnit->meta()->setInt64("timeUs", timeUs);
-            accessUnit->meta()->setInt32("iskeyframe", IsIDR(accessUnit));
+            if (foundIDR) {
+                accessUnit->meta()->setInt32("isSync", 1);
+            }
 
             if (mFormat == NULL) {
                 mFormat = MakeAVCCodecSpecificData(accessUnit);
-                if (mFormat != NULL) {
-                    int32_t width, height;
-                    mFormat->findInt32(kKeyWidth, &width);
-                    mFormat->findInt32(kKeyHeight, &height);
-                    ALOGI("found AVC video codec config (%d x %d)", width, height);
-                }
             }
 
             return accessUnit;
@@ -1285,7 +1361,10 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
 
         totalSize += nalSize;
     }
-    CHECK_EQ(err, (status_t)-EAGAIN);
+    if (err != (status_t)-EAGAIN) {
+        ALOGE("Unexpeted err");
+        return NULL;
+    }
 
     return NULL;
 }
@@ -1302,9 +1381,22 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGAudio() {
 
     size_t frameSize;
     int samplingRate, numChannels, bitrate, numSamples;
-    CHECK(GetMPEGAudioFrameSize(
+    if (!GetMPEGAudioFrameSize(
                 header, &frameSize, &samplingRate, &numChannels,
-                &bitrate, &numSamples));
+                &bitrate, &numSamples)) {
+        ALOGE("Failed to get audio frame size");
+        //only remove a frame data add  @pengbang
+        if (mRangeInfos.empty()) {
+            mBuffer->setRange(0,0);
+            return NULL;
+        }
+        RangeInfo *info = &*mRangeInfos.begin();
+        frameSize = info->mLength;
+        mRangeInfos.erase(mRangeInfos.begin());
+        memmove(mBuffer->data(),mBuffer->data() + frameSize,mBuffer->size() - frameSize);
+        mBuffer->setRange(0, mBuffer->size() - frameSize);
+        return NULL;
+    }
 
     if (size < frameSize) {
         return NULL;
@@ -1322,9 +1414,13 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGAudio() {
     mBuffer->setRange(0, mBuffer->size() - frameSize);
 
     int64_t timeUs = fetchTimestamp(frameSize);
-    CHECK_GE(timeUs, 0ll);
+    if (timeUs < 0ll) {
+        ALOGE("Negative timeUs");
+        return NULL;
+    }
 
     accessUnit->meta()->setInt64("timeUs", timeUs);
+    accessUnit->meta()->setInt32("isSync", 1);
 
     if (mFormat == NULL) {
         mFormat = new MetaData;
@@ -1343,7 +1439,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGAudio() {
                         kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_MPEG);
                 break;
             default:
-                TRESPASS();
+                return NULL;
         }
 
         mFormat->setInt32(kKeySampleRate, samplingRate);
@@ -1354,7 +1450,10 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGAudio() {
 }
 
 static void EncodeSize14(uint8_t **_ptr, size_t size) {
-    CHECK_LE(size, 0x3fff);
+    if (size > 0x3fff) {
+        ALOGE("Wrong size");
+        return;
+    }
 
     uint8_t *ptr = *_ptr;
 
@@ -1397,10 +1496,15 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGVideo() {
     const uint8_t *data = mBuffer->data();
     size_t size = mBuffer->size();
 
+    Vector<size_t> userDataPositions;
+
     bool sawPictureStart = false;
     int pprevStartCode = -1;
     int prevStartCode = -1;
     int currentStartCode = -1;
+    bool gopFound = false;
+    bool isClosedGop = false;
+    bool brokenLink = false;
 
     size_t offset = 0;
     while (offset + 3 < size) {
@@ -1466,6 +1570,21 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGVideo() {
             }
         }
 
+        if (mFormat != NULL && currentStartCode == 0xb8) {
+            // GOP layer
+            if (offset + 7 >= size) {
+                ALOGE("Size too small");
+                return NULL;
+            }
+            gopFound = true;
+            isClosedGop = (data[offset + 7] & 0x40) != 0;
+            brokenLink = (data[offset + 7] & 0x20) != 0;
+        }
+
+        if (mFormat != NULL && currentStartCode == 0xb2) {
+            userDataPositions.add(offset);
+        }
+
         if (mFormat != NULL && currentStartCode == 0x00) {
             // Picture start
 
@@ -1482,16 +1601,35 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEGVideo() {
                 mBuffer->setRange(0, mBuffer->size() - offset);
 
                 int64_t timeUs = fetchTimestamp(offset);
-                CHECK_GE(timeUs, 0ll);
+                if (timeUs < 0ll) {
+                    ALOGE("Negative timeUs");
+                    return NULL;
+                }
 
                 offset = 0;
 
                 accessUnit->meta()->setInt64("timeUs", timeUs);
+                if (gopFound && (!brokenLink || isClosedGop)) {
+                    accessUnit->meta()->setInt32("isSync", 1);
+                }
 
                 ALOGV("returning MPEG video access unit at time %" PRId64 " us",
                       timeUs);
 
                 // hexdump(accessUnit->data(), accessUnit->size());
+
+                if (userDataPositions.size() > 0) {
+                    sp<ABuffer> mpegUserData =
+                        new ABuffer(userDataPositions.size() * sizeof(size_t));
+                    if (mpegUserData != NULL && mpegUserData->data() != NULL) {
+                        for (size_t i = 0; i < userDataPositions.size(); ++i) {
+                            memcpy(
+                                    mpegUserData->data() + i * sizeof(size_t),
+                                    &userDataPositions[i], sizeof(size_t));
+                        }
+                        accessUnit->meta()->setBuffer("mpegUserData", mpegUserData);
+                    }
+                }
 
                 return accessUnit;
             }
@@ -1512,7 +1650,7 @@ static ssize_t getNextChunkSize(
     }
 
     if (memcmp(kStartCode, data, 3)) {
-        TRESPASS();
+        return -EAGAIN;
     }
 
     size_t offset = 3;
@@ -1643,6 +1781,8 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
             case SKIP_TO_VOP_START:
             {
                 if (chunkType == 0xb6) {
+                    int vopCodingType = (data[offset + 4] & 0xc0) >> 6;
+
                     offset += chunkSize;
 
                     sp<ABuffer> accessUnit = new ABuffer(offset);
@@ -1653,11 +1793,17 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
                     mBuffer->setRange(0, size);
 
                     int64_t timeUs = fetchTimestamp(offset);
-                    CHECK_GE(timeUs, 0ll);
+                    if (timeUs < 0ll) {
+                        ALOGE("Negative timeus");
+                        return NULL;
+                    }
 
                     offset = 0;
 
                     accessUnit->meta()->setInt64("timeUs", timeUs);
+                    if (vopCodingType == 0) {  // intra-coded VOP
+                        accessUnit->meta()->setInt32("isSync", 1);
+                    }
 
                     ALOGV("returning MPEG4 video access unit at time %" PRId64 " us",
                          timeUs);
@@ -1674,7 +1820,8 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
             }
 
             default:
-                TRESPASS();
+                ALOGE("Unknown state: %d", state);
+                return NULL;
         }
 
         if (discard) {
@@ -1689,6 +1836,18 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMPEG4Video() {
     }
 
     return NULL;
+}
+
+void AmElementaryStreamQueue::signalEOS() {
+    if (!mEOSReached) {
+        if (mMode == MPEG_VIDEO) {
+            const char *theEnd = "\x00\x00\x01\x00";
+            appendData(theEnd, 4, 0);
+        }
+        mEOSReached = true;
+    } else {
+        ALOGW("EOS already signaled");
+    }
 }
 
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitMetadata() {

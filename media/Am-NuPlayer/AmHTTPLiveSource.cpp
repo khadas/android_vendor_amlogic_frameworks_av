@@ -23,7 +23,6 @@
 #include "AmAnotherPacketSource.h"
 #include "AmLiveDataSource.h"
 
-#include <cutils/properties.h>
 #include <media/IMediaHTTPService.h>
 #include <media/stagefright/foundation/ABuffer.h>
 #include <media/stagefright/foundation/ADebug.h>
@@ -43,7 +42,6 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
     : Source(notify),
       mHTTPService(httpService),
       mURL(url),
-      mBuffering(false),
       mFlags(0),
       mFinalResult(OK),
       mOffset(0),
@@ -51,10 +49,8 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
       mFetchMetaDataGeneration(0),
       mHasMetadata(false),
       mMetadataSelected(false),
-      mHasSub(false),
       mInterruptCallback(pfunc),
-      mBufferingAnchorUs(-1),
-      mDelayBufferingMS(0) {
+      mBuffering(false) {
     if (headers) {
         mExtraHeaders = *headers;
 
@@ -67,24 +63,19 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
             mExtraHeaders.removeItemsAt(index);
         }
     }
-    char value[PROPERTY_VALUE_MAX];
-    if (property_get("media.hls.delay_buffering_ms", value, "10")) {
-        mDelayBufferingMS = atoi(value);
-    }
 }
 
 AmNuPlayer::HTTPLiveSource::~HTTPLiveSource() {
-    ALOGI("[%s:%d] start !", __FUNCTION__, __LINE__);
-    release();
     if (mLiveSession != NULL) {
+        mLiveSession->disconnect();
+
         mLiveLooper->unregisterHandler(mLiveSession->id());
-        //mLiveLooper->unregisterHandler(this);
+        mLiveLooper->unregisterHandler(id());
         mLiveLooper->stop();
 
         mLiveSession.clear();
         mLiveLooper.clear();
     }
-    ALOGI("[%s:%d] end !", __FUNCTION__, __LINE__);
 }
 
 void AmNuPlayer::HTTPLiveSource::prepareAsync() {
@@ -103,37 +94,32 @@ void AmNuPlayer::HTTPLiveSource::prepareAsync() {
             (mFlags & kFlagIncognito) ? AmLiveSession::kFlagIncognito : 0,
             mHTTPService,
             mInterruptCallback);
-
     mLiveSession->setParentThreadId(mParentThreadId);
 
     mLiveLooper->registerHandler(mLiveSession);
 
     mLiveSession->connectAsync(
             mURL.c_str(), mExtraHeaders.isEmpty() ? NULL : &mExtraHeaders);
-
 }
 
 void AmNuPlayer::HTTPLiveSource::start() {
 }
-void AmNuPlayer::HTTPLiveSource::release() {
-    if (mLiveSession != NULL)
-        mLiveSession->disconnect();
-}
-
-void AmNuPlayer::HTTPLiveSource::setParentThreadId(android_thread_id_t thread_id) {
-    mParentThreadId = thread_id;
-}
 
 sp<AMessage> AmNuPlayer::HTTPLiveSource::getFormat(bool audio) {
-    if (mLiveSession == NULL) {
-        return NULL;
+    sp<AMessage> format;
+    status_t err = -EWOULDBLOCK;
+    if (mLiveSession != NULL) {
+        err = mLiveSession->getStreamFormat(
+                audio ? AmLiveSession::STREAMTYPE_AUDIO
+                      : AmLiveSession::STREAMTYPE_VIDEO,
+                &format);
     }
 
-    sp<AMessage> format;
-    status_t err = mLiveSession->getStreamFormat(
-            audio ? AmLiveSession::STREAMTYPE_AUDIO
-                  : AmLiveSession::STREAMTYPE_VIDEO,
-            &format);
+    if (err == -EWOULDBLOCK) {
+        format = new AMessage();
+        format->setInt32("err", err);
+        return format;
+    }
 
     if (err != OK) {
         return NULL;
@@ -148,44 +134,8 @@ status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {
 
 status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         bool audio, sp<ABuffer> *accessUnit) {
-    {
-        Mutex::Autolock autoLock(mLock);
-        if (mBuffering) {
-            if (!mLiveSession->haveSufficientDataOnAVTracks()) {
-                return -EWOULDBLOCK;
-            }
-            mBuffering = false;
-            mLiveSession->setBufferingStatus(false);
-            sp<AMessage> notify = dupNotify();
-            notify->setInt32("what", kWhatResumeOnBufferingEnd);
-            notify->post();
-            ALOGI("HTTPLiveSource buffering end!\n");
-        }
-
-        bool needBuffering = false;
-        status_t finalResult = mLiveSession->hasBufferAvailable(audio, &needBuffering);
-        if (needBuffering) {
-            if (mBufferingAnchorUs < 0) {
-                mBufferingAnchorUs = ALooper::GetNowUs();
-                ALOGI("HTTPLiveSource delay buffering(%d)ms", mDelayBufferingMS);
-            }
-            if (ALooper::GetNowUs() - mBufferingAnchorUs >= mDelayBufferingMS * 1000ll) {
-                mBuffering = true;
-                mLiveSession->setBufferingStatus(true);
-                mBufferingAnchorUs = -1;
-                sp<AMessage> notify = dupNotify();
-                notify->setInt32("what", kWhatPauseOnBufferingStart);
-                notify->post();
-                ALOGI("HTTPLiveSource buffering start!\n");
-                return finalResult;
-            } else {
-                return -EWOULDBLOCK;
-            }
-        }
-    }
-
-    mBufferingAnchorUs = -1;
-
+    if (mBuffering)
+        return -EWOULDBLOCK;
     return mLiveSession->dequeueAccessUnit(
             audio ? AmLiveSession::STREAMTYPE_AUDIO
                   : AmLiveSession::STREAMTYPE_VIDEO,
@@ -221,12 +171,12 @@ status_t AmNuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select,
         return INVALID_OPERATION;
     }
 
-    ALOGI("%s track(%d)", select ? "select" : "unselect", trackIndex);
     status_t err = INVALID_OPERATION;
-    bool postFetchMsg = false;
+    bool postFetchMsg = false, isSub = false;
     if (!mHasMetadata || trackIndex != mLiveSession->getTrackCount() - 1) {
         err = mLiveSession->selectTrack(trackIndex, select);
         postFetchMsg = select;
+        isSub = true;
     } else {
         // metadata track; i.e. (mHasMetadata && trackIndex == mLiveSession->getTrackCount() - 1)
         if (mMetadataSelected && !select) {
@@ -235,65 +185,41 @@ status_t AmNuPlayer::HTTPLiveSource::selectTrack(size_t trackIndex, bool select,
             postFetchMsg = true;
             err = OK;
         } else {
-            err = BAD_VALUE; // behave as LiveSession::selectTrack
+            err = BAD_VALUE; // behave as AmLiveSession::selectTrack
         }
 
         mMetadataSelected = select;
     }
 
     if (err == OK) {
-        int32_t trackType, generation;
-        bool isSub = false, isMetaData = false;
-        sp<AMessage> format = mLiveSession->getTrackInfo(trackIndex);
-        if (format != NULL && format->findInt32("type", &trackType)) {
-            if (trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
-                isSub = true;
-                mFetchSubtitleDataGeneration++;
-                generation = mFetchSubtitleDataGeneration;
-            } else if (trackType == MEDIA_TRACK_TYPE_METADATA) {
-                isMetaData = true;
-                mFetchMetaDataGeneration++;
-                generation = mFetchMetaDataGeneration;
-            }
-        }
+        int32_t &generation = isSub ? mFetchSubtitleDataGeneration : mFetchMetaDataGeneration;
+        generation++;
         if (postFetchMsg) {
-            if (isSub) {
-                ALOGI("subtitle selected!");
-                mHasSub = true;
-                mLiveSession->setSubTrackIndex(trackIndex);
-                sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
-                msg->setInt32("generation", generation);
-                msg->post();
-            } else if (isMetaData) {
-                ALOGI("metadata selected!");
-                mHasSub = false;
-                sp<AMessage> msg = new AMessage(kWhatFetchMetaData, this);
-                msg->setInt32("generation", generation);
-                msg->post();
-            } else {
-                mHasSub = false;
-            }
+            int32_t what = isSub ? kWhatFetchSubtitleData : kWhatFetchMetaData;
+            sp<AMessage> msg = new AMessage(what, this);
+            msg->setInt32("generation", generation);
+            msg->post();
         }
     }
 
-    // LiveSession::selectTrack returns BAD_VALUE when selecting the currently
+    // AmLiveSession::selectTrack returns BAD_VALUE when selecting the currently
     // selected track, or unselecting a non-selected track. In this case it's an
     // no-op so we return OK.
     return (err == OK || err == BAD_VALUE) ? (status_t)OK : err;
 }
 
 status_t AmNuPlayer::HTTPLiveSource::seekTo(int64_t seekTimeUs) {
-    if (mHasSub) {
-        sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
-        msg->setInt32("generation", mFetchSubtitleDataGeneration);
-        msg->post();
-    }
     return mLiveSession->seekTo(seekTimeUs);
+}
+
+void AmNuPlayer::HTTPLiveSource::setParentThreadId(android_thread_id_t thread_id) {
+    mParentThreadId = thread_id;
 }
 
 void AmNuPlayer::HTTPLiveSource::pollForRawData(
         const sp<AMessage> &msg, int32_t currentGeneration,
         AmLiveSession::StreamType fetchType, int32_t pushWhat) {
+
     int32_t generation;
     CHECK(msg->findInt32("generation", &generation));
 
@@ -374,12 +300,10 @@ void AmNuPlayer::HTTPLiveSource::onMessageReceived(const sp<AMessage> &msg) {
 void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
     int32_t what;
     CHECK(msg->findInt32("what", &what));
-    ALOGI("session notify : %d\n", what);
 
     switch (what) {
         case AmLiveSession::kWhatPrepared:
         {
-            // notify the current size here if we have it, otherwise report an initial size of (0,0)
             ALOGI("session notify prepared!\n");
 
             sp<AMessage> notify = dupNotify();
@@ -387,6 +311,7 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             notify->setInt32("err", 0);
             notify->post();
 
+            // notify the current size here if we have it, otherwise report an initial size of (0,0)
             sp<AMessage> format = getFormat(false /* audio */);
             int32_t width;
             int32_t height;
@@ -416,7 +341,6 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
 
         case AmLiveSession::kWhatPreparationFailed:
         {
-            ALOGI("session notify preparation failed!\n");
             status_t err;
             CHECK(msg->findInt32("err", &err));
 
@@ -426,7 +350,6 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
 
         case AmLiveSession::kWhatStreamsChanged:
         {
-            ALOGI("session notify streams changed!\n");
             uint32_t changedMask;
             CHECK(msg->findInt32(
                         "changedMask", (int32_t *)&changedMask));
@@ -446,11 +369,54 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             break;
         }
 
+        case AmLiveSession::kWhatBufferingStart:
+        {
+            mBuffering = true;
+            sp<AMessage> notify = dupNotify();
+            notify->setInt32("what", kWhatPauseOnBufferingStart);
+            notify->post();
+            break;
+        }
+
+        case AmLiveSession::kWhatBufferingEnd:
+        {
+            mBuffering = false;
+            sp<AMessage> notify = dupNotify();
+            notify->setInt32("what", kWhatResumeOnBufferingEnd);
+            notify->post();
+            break;
+        }
+
+
+        case AmLiveSession::kWhatBufferingUpdate:
+        {
+            sp<AMessage> notify = dupNotify();
+            int32_t percentage;
+            CHECK(msg->findInt32("percentage", &percentage));
+            notify->setInt32("what", kWhatBufferingUpdate);
+            notify->setInt32("percentage", percentage);
+            notify->post();
+            break;
+        }
+
+        case AmLiveSession::kWhatMetadataDetected:
+        {
+            if (!mHasMetadata) {
+                mHasMetadata = true;
+
+                sp<AMessage> notify = dupNotify();
+                // notification without buffer triggers MEDIA_INFO_METADATA_UPDATE
+                notify->setInt32("what", kWhatTimedMetaData);
+                notify->post();
+            }
+            break;
+        }
+
         case AmLiveSession::kWhatError:
         {
             int32_t err;
             CHECK(msg->findInt32("err", &err));
-            if (err == ERROR_UNSUPPORTED) {
+            if (err == ERROR_UNSUPPORTED) {  //add
                 sp<AMessage> notify = dupNotify();
                 notify->setInt32("what", kWhatSourceReady);
                 notify->setInt32("err", 1);
@@ -467,30 +433,6 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             CHECK(msg->findInt32("err", &err));
             notify->setInt32("err", err);
             notify->post();
-            break;
-        }
-
-        case AmLiveSession::kWhatSetFrameRate:
-        {
-            sp<AMessage> notify = dupNotify();
-            float frameRate;
-            CHECK(msg->findFloat("frame-rate", &frameRate));
-            notify->setInt32("what", kWhatFrameRate);
-            notify->setFloat("frame-rate", frameRate);
-            notify->post();
-            break;
-        }
-
-        case AmLiveSession::kWhatMetadataDetected:
-        {
-            if (!mHasMetadata) {
-                mHasMetadata = true;
-
-                sp<AMessage> notify = dupNotify();
-                // notification without buffer triggers MEDIA_INFO_METADATA_UPDATE
-                notify->setInt32("what", kWhatTimedMetaData);
-                notify->post();
-            }
             break;
         }
 

@@ -8,8 +8,8 @@ LOCAL_SRC_FILES:=               \
         AmLiveSession.cpp         \
         AmM3UParser.cpp           \
         AmPlaylistFetcher.cpp     \
-        StreamSniffer.cpp
-
+        StreamSniffer.cpp		\
+	    AmHTTPDownloader.cpp
 LOCAL_C_INCLUDES:= \
 	$(TOP)/frameworks/av/media/libstagefright \
 	$(TOP)/frameworks/native/include/media/openmax \

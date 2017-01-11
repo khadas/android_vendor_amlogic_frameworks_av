@@ -36,7 +36,7 @@ struct AmNuPlayer::HTTPLiveSource : public AmNuPlayer::Source {
 
     virtual void prepareAsync();
     virtual void start();
-    virtual void release();
+
     virtual status_t dequeueAccessUnit(bool audio, sp<ABuffer> *accessUnit);
     virtual sp<AMessage> getFormat(bool audio);
 
@@ -48,7 +48,6 @@ struct AmNuPlayer::HTTPLiveSource : public AmNuPlayer::Source {
     virtual status_t selectTrack(size_t trackIndex, bool select, int64_t timeUs);
     virtual status_t seekTo(int64_t seekTimeUs);
     virtual void setParentThreadId(android_thread_id_t thread_id);
-
 protected:
     virtual ~HTTPLiveSource();
 
@@ -69,7 +68,6 @@ private:
     sp<IMediaHTTPService> mHTTPService;
     AString mURL;
     KeyedVector<String8, String8> mExtraHeaders;
-    bool mBuffering;
     uint32_t mFlags;
     status_t mFinalResult;
     off64_t mOffset;
@@ -79,14 +77,10 @@ private:
     int32_t mFetchMetaDataGeneration;
     bool mHasMetadata;
     bool mMetadataSelected;
-    bool mHasSub;
 
     interruptcallback mInterruptCallback;
     android_thread_id_t mParentThreadId;
-
-    int32_t mDelayBufferingMS;
-    int64_t mBufferingAnchorUs;
-    Mutex mLock;
+    bool mBuffering;
 
     void onSessionNotify(const sp<AMessage> &msg);
     void pollForRawData(

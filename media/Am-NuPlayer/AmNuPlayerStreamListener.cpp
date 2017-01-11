@@ -29,9 +29,9 @@ namespace android {
 
 AmNuPlayer::NuPlayerStreamListener::NuPlayerStreamListener(
         const sp<IStreamSource> &source,
-        ALooper::handler_id id)
+        const sp<AHandler> &targetHandler)
     : mSource(source),
-      mTargetID(id),
+      mTargetHandler(targetHandler),
       mEOS(false),
       mSendDataNotification(true) {
     mSource->setListener(this);
@@ -65,8 +65,8 @@ void AmNuPlayer::NuPlayerStreamListener::queueBuffer(size_t index, size_t size) 
     if (mSendDataNotification) {
         mSendDataNotification = false;
 
-        if (mTargetID != 0) {
-            //(new AMessage(kWhatMoreDataQueued, mTargetID))->post();
+        if (mTargetHandler != NULL) {
+            (new AMessage(kWhatMoreDataQueued, mTargetHandler))->post();
         }
     }
 }
@@ -86,8 +86,8 @@ void AmNuPlayer::NuPlayerStreamListener::issueCommand(
     if (mSendDataNotification) {
         mSendDataNotification = false;
 
-        if (mTargetID != 0) {
-            //(new AMessage(kWhatMoreDataQueued, mTargetID))->post();
+        if (mTargetHandler != NULL) {
+            (new AMessage(kWhatMoreDataQueued, mTargetHandler))->post();
         }
     }
 }
@@ -144,8 +144,17 @@ ssize_t AmNuPlayer::NuPlayerStreamListener::read(
         copy = size;
     }
 
+    if (entry->mIndex >= mBuffers.size()) {
+        return ERROR_MALFORMED;
+    }
+
+    sp<IMemory> mem = mBuffers.editItemAt(entry->mIndex);
+    if (mem == NULL || mem->size() < copy || mem->size() - copy < entry->mOffset) {
+        return ERROR_MALFORMED;
+    }
+
     memcpy(data,
-           (const uint8_t *)mBuffers.editItemAt(entry->mIndex)->pointer()
+           (const uint8_t *)mem->pointer()
             + entry->mOffset,
            copy);
 

@@ -23,19 +23,23 @@
 
 #include <utils/String8.h>
 
+#include "AmATSParser.h"
+
 #include "curl_fetch.h"
 
 namespace android {
 
 struct ABuffer;
+struct AReplyToken;
 struct AmAnotherPacketSource;
 class DataSource;
 struct HTTPBase;
 struct IMediaHTTPService;
-struct AmLiveDataSource;
+struct LiveDataSource;
 struct AmM3UParser;
 struct AmPlaylistFetcher;
-class Parcel;
+struct HLSTime;
+struct AmHTTPDownloader;
 
 typedef int32_t (*interruptcallback)(android_thread_id_t thread_id);
 
@@ -44,11 +48,6 @@ struct AmLiveSession : public AHandler {
         // Don't log any URLs.
         kFlagIncognito = 1,
     };
-    AmLiveSession(
-            const sp<AMessage> &notify,
-            uint32_t flags,
-            const sp<IMediaHTTPService> &httpService,
-            interruptcallback pfunc);
 
     enum StreamIndex {
         kAudioIndex    = 0,
@@ -66,15 +65,26 @@ struct AmLiveSession : public AHandler {
         STREAMTYPE_METADATA     = 1 << kMetaDataIndex,
     };
 
-    enum FetcherStatus {
-        STATUS_ACTIVE,
-        STATUS_PAUSED,
-        STATUS_STOPPED,
+    enum SeekMode {
+        kSeekModeExactPosition = 0, // used for seeking
+        kSeekModeNextSample    = 1, // used for seamless switching
+        kSeekModeNextSegment   = 2, // used for seamless switching
     };
 
+    AmLiveSession(
+            const sp<AMessage> &notify,
+            uint32_t flags,
+            const sp<IMediaHTTPService> &httpService,
+            interruptcallback pfunc);
+
+    int64_t calculateMediaTimeUs(int64_t firstTimeUs, int64_t timeUs, int32_t discontinuitySeq);
     status_t dequeueAccessUnit(StreamType stream, sp<ABuffer> *accessUnit);
 
     status_t getStreamFormat(StreamType stream, sp<AMessage> *format);
+
+    sp<AmHTTPDownloader> getHTTPDownloader();
+
+    void notifySourceReady();//add
 
     void connectAsync(
             const char *url,
@@ -93,33 +103,25 @@ struct AmLiveSession : public AHandler {
 
     bool isSeekable() const;
     bool hasDynamicDuration() const;
-    bool haveSufficientDataOnAVTracks();
-    status_t hasBufferAvailable(bool audio, bool * needBuffering);
-    void setEOSTimeout(bool audio, int64_t timeout);
+
+    static const char *getKeyForStream(StreamType type);
+    static const char *getNameForStream(StreamType type);
+    static AmATSParser::SourceType getSourceTypeForStream(StreamType type);
 
     void setParentThreadId(android_thread_id_t thread_id);
-
-    void setFrameRate(float frameRate);
-    float getFrameRate() const { return mFrameRate; };
-
-    void setSubTrackIndex(size_t subTrackIndex) { mSubTrackIndex = subTrackIndex; }
-    void setBufferingStatus(bool buffing);
 
     enum {
         kWhatStreamsChanged,
         kWhatError,
         kWhatPrepared,
         kWhatPreparationFailed,
-        kWhatSourceReady,
-        kWhatSetFrameRate,
+        kWhatBufferingStart,
+        kWhatBufferingEnd,
+        kWhatBufferingUpdate,
         kWhatMetadataDetected,
+        kWhatSourceReady,
     };
 
-    // create a format-change discontinuity
-    //
-    // swap:
-    //   whether is format-change discontinuity should trigger a buffer swap
-    sp<ABuffer> createFormatChangeBuffer(bool swap = true);
 protected:
     virtual ~AmLiveSession();
 
@@ -133,48 +135,56 @@ private:
         kWhatDisconnect                 = 'disc',
         kWhatSeek                       = 'seek',
         kWhatFetcherNotify              = 'notf',
-        kWhatCheckBandwidth             = 'bndw',
         kWhatChangeConfiguration        = 'chC0',
         kWhatChangeConfiguration2       = 'chC2',
         kWhatChangeConfiguration3       = 'chC3',
-        kWhatFinishDisconnect2          = 'fin2',
-        kWhatSwapped                    = 'swap',
-        kWhatCheckSwitchDown            = 'ckSD',
-        kWhatSwitchDown                 = 'sDwn',
-        kWhatPostPrepared               = 'pstP',
+        kWhatPollBuffering              = 'poll',
     };
 
-    static const size_t kBandwidthHistoryBytes;
+    // Bandwidth Switch Mark Defaults
+    static const int64_t kUpSwitchMarkUs;
+    static const int64_t kDownSwitchMarkUs;
+    static const int64_t kUpSwitchMarginUs;
+    static const int64_t kResumeThresholdUs;
 
+    // Buffer Prepare/Ready/Underflow Marks
+    static const int64_t kReadyMarkUs;
+    static const int64_t kPrepareMarkUs;
+    static const int64_t kUnderflowMarkUs;
+
+    struct BandwidthEstimator;
     struct BandwidthItem {
         size_t mPlaylistIndex;
         unsigned long mBandwidth;
+        int64_t mLastFailureUs;
     };
 
     struct FetcherInfo {
         sp<AmPlaylistFetcher> mFetcher;
         int64_t mDurationUs;
-        FetcherStatus mStatus;
-        bool mIsPrepared;
         bool mToBeRemoved;
+        bool mToBeResumed;
     };
 
     struct StreamItem {
         const char *mType;
         AString mUri, mNewUri;
+        SeekMode mSeekMode;
         size_t mCurDiscontinuitySeq;
         int64_t mLastDequeuedTimeUs;
         int64_t mLastSampleDurationUs;
         StreamItem()
-            : mType(""),
-              mCurDiscontinuitySeq(0),
-              mLastDequeuedTimeUs(0),
-              mLastSampleDurationUs(0) {}
+            : StreamItem("") {}
         StreamItem(const char *type)
             : mType(type),
-              mCurDiscontinuitySeq(0),
-              mLastDequeuedTimeUs(0),
-              mLastSampleDurationUs(0) {}
+              mSeekMode(kSeekModeExactPosition) {
+                  reset();
+              }
+        void reset() {
+            mCurDiscontinuitySeq = 0;
+            mLastDequeuedTimeUs = -1ll;
+            mLastSampleDurationUs = 0ll;
+        }
         AString uriKey() {
             AString key(mType);
             key.append("URI");
@@ -193,45 +203,38 @@ private:
     uint32_t mFlags;
     sp<IMediaHTTPService> mHTTPService;
 
-    uint32_t mBuffTimeSec;
-    int32_t mFailureWaitSec;
-    int32_t mAbnormalWaitSec;
-    int32_t mStartBuffMSec;
-
-    bool mFirstSniff;
-    bool mCodecSpecificDataSend;
-    bool mSeeked;
     bool mNeedExit;
+
+    bool mBuffering;
     bool mInPreparationPhase;
-    FILE * mDebugHandle;
+    int32_t mPollBufferingGeneration;
+    int32_t mPrevBufferPercentage;
 
     static const String8 kHTTPUserAgentDefault;
 
-    uint8_t * mCodecSpecificData;
-    uint32_t mCodecSpecificDataSize;
+    //add
+    int32_t mFailureWaitSec;
+    int32_t mAbnormalWaitSec;
+
+    bool mFirstSniff;
+    bool mSeeked;
 
     KeyedVector<String8, String8> mExtraHeaders;
-    KeyedVector<size_t, int64_t> mAudioDiscontinuityAbsStartTimesUs;
-    KeyedVector<size_t, int64_t> mVideoDiscontinuityAbsStartTimesUs;
-    KeyedVector<size_t, int64_t> mAudioDiscontinuityOffsetTimesUs;
-    KeyedVector<size_t, int64_t> mVideoDiscontinuityOffsetTimesUs;
 
-    // defined for metadata.
-    KeyedVector<size_t, int64_t> mDiscontinuityAbsStartTimesUs;
-    KeyedVector<size_t, int64_t> mDiscontinuityOffsetTimesUs;
-
-    AString mLastPlayListURL;
     AString mMasterURL;
 
     Vector<BandwidthItem> mBandwidthItems;
-    Vector<sp<ALooper> > mFetcherLooper;
-
     ssize_t mCurBandwidthIndex;
+    ssize_t mOrigBandwidthIndex;
+    int32_t mLastBandwidthBps;
+    bool mLastBandwidthStable;
+    sp<BandwidthEstimator> mBandwidthEstimator;
 
     sp<AmM3UParser> mPlaylist;
-    KeyedVector<AString, sp<AmM3UParser> > mFetcherPlaylist;
-    Mutex mFetcherPlaylistMutex;
+    int32_t mMaxWidth;
+    int32_t mMaxHeight;
 
+    sp<ALooper> mFetcherLooper;
     KeyedVector<AString, FetcherInfo> mFetcherInfos;
     uint32_t mStreamMask;
 
@@ -244,18 +247,10 @@ private:
     // we use this to track reconfiguration progress.
     uint32_t mSwapMask;
 
-    KeyedVector<StreamType, sp<AmAnotherPacketSource> > mDiscontinuities;
     KeyedVector<StreamType, sp<AmAnotherPacketSource> > mPacketSources;
     // A second set of packet sources that buffer content for the variant we're switching to.
     KeyedVector<StreamType, sp<AmAnotherPacketSource> > mPacketSources2;
 
-    // A mutex used to serialize two sets of events:
-    // * the swapping of packet sources in dequeueAccessUnit on the player thread, AND
-    // * a forced bandwidth switch termination in cancelSwitch on the live looper.
-    Mutex mSwapMutex;
-
-    int32_t mEstimatedBWbps;
-    int32_t mCheckBandwidthGeneration;
     int32_t mSwitchGeneration;
     int32_t mSubtitleGeneration;
 
@@ -268,48 +263,38 @@ private:
 
     bool mReconfigurationInProgress;
     bool mSwitchInProgress;
+    int64_t mUpSwitchMark;
+    int64_t mDownSwitchMark;
+    int64_t mUpSwitchMargin;
+    int64_t mReadyS;
+    int64_t mPrepareMs;
     sp<AReplyToken> mDisconnectReplyID;
     sp<AReplyToken> mSeekReplyID;
 
     bool mFirstTimeUsValid;
     int64_t mFirstTimeUs;
     int64_t mLastSeekTimeUs;
-    int64_t mAudioFirstTimeUs;
-    int64_t mVideoFirstTimeUs;
-
-    int64_t mEOSTimeoutAudio;
-    int64_t mEOSTimeoutVideo;
-
-    sp<AMessage> mSwitchDownMonitor;
-
-    float mFrameRate;
-
-    size_t mSubTrackIndex;
     bool mHasMetadata;
+    bool mDebPTS;
+    KeyedVector<size_t, int64_t> mDiscontinuityAbsStartTimesUs;
+    KeyedVector<size_t, int64_t> mDiscontinuityOffsetTimesUs;
 
-    sp<AmAnotherPacketSource> getPacketSourceForStreamIndex(size_t trackIndex, bool newUri);
-    sp<AmAnotherPacketSource> getMetadataSource(sp<AmAnotherPacketSource> sources[kNumSources], uint32_t streamMask, bool newUri);
     sp<AmPlaylistFetcher> addFetcher(const char *uri);
 
     void onConnect(const sp<AMessage> &msg);
-    status_t onSeek(const sp<AMessage> &msg);
-    void onFinishDisconnect2();
+    void onMasterPlaylistFetched(const sp<AMessage> &msg);
+    void onSeek(const sp<AMessage> &msg);
+
+    bool UriIsSameAsIndex( const AString &uri, int32_t index, bool newUri);
+    sp<AmAnotherPacketSource> getPacketSourceForStreamIndex(size_t trackIndex, bool newUri);
+    sp<AmAnotherPacketSource> getMetadataSource(
+            sp<AmAnotherPacketSource> sources[kNumSources], uint32_t streamMask, bool newUri);
 
     int32_t interrupt_callback();
     ssize_t readFromSource(CFContext * cfc, uint8_t * data, size_t size);
     int32_t retryCase(int32_t arg);
+    void threadWaitTimeNs(int64_t timeNs);
 
-    // If given a non-zero block_size (default 0), it is used to cap the number of
-    // bytes read in from the DataSource. If given a non-NULL buffer, new content
-    // is read into the end.
-    //
-    // The DataSource we read from is responsible for signaling error or EOF to help us
-    // break out of the read loop. The DataSource can be returned to the caller, so
-    // that the caller can reuse it for subsequent fetches (within the initially
-    // requested range).
-    //
-    // For reused HTTP sources, the caller must download a file sequentially without
-    // any overlaps or gaps to prevent reconnection.
     ssize_t fetchFile(
             const char *url, sp<ABuffer> *out,
             /* request/open a file starting at range_offset for range_length bytes */
@@ -323,48 +308,49 @@ private:
     sp<AmM3UParser> fetchPlaylist(
             const char *url, uint8_t *curPlaylistHash, bool *unchanged, status_t &err, CFContext ** cfc = NULL, bool isMasterPlaylist = false);
 
-    size_t getBandwidthIndex();
-    int64_t latestMediaSegmentStartTimeUs();
-    int64_t getSegmentStartTimeUsAfterSeek(StreamType type);
+    bool resumeFetcher(
+            const AString &uri, uint32_t streamMask,
+            int64_t timeUs = -1ll, bool newUri = false);
 
+    float getAbortThreshold(
+            ssize_t currentBWIndex, ssize_t targetBWIndex) const;
+    void addBandwidthMeasurement(size_t numBytes, int64_t delayUs);
+    size_t getBandwidthIndex(int32_t bandwidthBps);
+    ssize_t getLowestValidBandwidthIndex() const;
+    HLSTime latestMediaSegmentStartTime() const;
+
+    static bool isBandwidthValid(const BandwidthItem &item);
     static int SortByBandwidth(const BandwidthItem *, const BandwidthItem *);
     static StreamType indexToType(int idx);
     static ssize_t typeToIndex(int32_t type);
 
     void changeConfiguration(
-            int64_t timeUs, size_t bandwidthIndex, bool pickTrack = false);
+            int64_t timeUs, ssize_t bwIndex = -1, bool pickTrack = false);
     void onChangeConfiguration(const sp<AMessage> &msg);
     void onChangeConfiguration2(const sp<AMessage> &msg);
     void onChangeConfiguration3(const sp<AMessage> &msg);
-    void onSwapped(const sp<AMessage> &msg);
-    void onCheckSwitchDown();
-    void onSwitchDown();
-    void tryToFinishBandwidthSwitch();
 
-    // no need to rebuild fetcher when bandwidth changed, this is light method.
-    void reconfigFetcher(size_t bandwidthIndex);
+    void swapPacketSource(StreamType stream);
+    void tryToFinishBandwidthSwitch(const AString &oldUri);
+    void cancelBandwidthSwitch(bool resume = false);
+    bool checkSwitchProgress(
+            sp<AMessage> &msg, int64_t delayUs, bool *needResumeUntil);
 
-    void scheduleCheckBandwidthEvent();
-    void cancelCheckBandwidthEvent();
+    bool switchBandwidthIfNeeded(bool bufferHigh, bool bufferLow);
+    bool tryBandwidthFallback();
 
-    void checkBandwidth(bool * needFetchPlaylist);
-
-    // cancelBandwidthSwitch is atomic wrt swapPacketSource; call it to prevent packet sources
-    // from being swapped out on stale discontinuities while manipulating
-    // mPacketSources/mPacketSources2.
-    void cancelBandwidthSwitch();
-
-    bool canSwitchBandwidthTo(size_t bandwidthIndex);
-    void onCheckBandwidth(const sp<AMessage> &msg);
-
+    void schedulePollBuffering();
+    void cancelPollBuffering();
+    void restartPollBuffering();
+    void onPollBuffering();
+    bool checkBuffering(bool &underflow, bool &ready, bool &down, bool &up);
+    void startBufferingIfNecessary();
+    void stopBufferingIfNecessary();
+    void notifyBufferingUpdate(int32_t percentage);
     void finishDisconnect();
 
     void postPrepared(status_t err);
-
-    void swapPacketSource(StreamType stream);
-    bool canSwitchUp();
-
-    void threadWaitTimeNs(int64_t timeNs);
+    void postError(status_t err);
 
     DISALLOW_EVIL_CONSTRUCTORS(AmLiveSession);
 };

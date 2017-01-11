@@ -31,9 +31,10 @@ class DecryptHandle;
 class DrmManagerClient;
 struct AmAnotherPacketSource;
 struct ARTSPController;
-struct DataSource;
+class DataSource;
+class IDataSource;
 struct IMediaHTTPService;
-struct IMediaSource;
+struct MediaSource;
 class MediaBuffer;
 struct NuCachedSource2;
 class WVMExtractor;
@@ -47,6 +48,8 @@ struct AmNuPlayer::GenericSource : public AmNuPlayer::Source {
             const KeyedVector<String8, String8> *headers);
 
     status_t setDataSource(int fd, int64_t offset, int64_t length);
+
+    status_t setDataSource(const sp<DataSource>& dataSource);
 
     virtual void prepareAsync();
 
@@ -72,6 +75,10 @@ struct AmNuPlayer::GenericSource : public AmNuPlayer::Source {
 
     virtual status_t setBuffers(bool audio, Vector<MediaBuffer *> &buffers);
 
+    virtual bool isStreaming() const;
+
+    virtual void setOffloadAudio(bool offload);
+
 protected:
     virtual ~GenericSource();
 
@@ -85,6 +92,7 @@ private:
         kWhatFetchSubtitleData,
         kWhatFetchTimedTextData,
         kWhatSendSubtitleData,
+        kWhatSendGlobalTimedTextData,
         kWhatSendTimedTextData,
         kWhatChangeAVSource,
         kWhatPollBuffering,
@@ -103,6 +111,83 @@ private:
         size_t mIndex;
         sp<IMediaSource> mSource;
         sp<AmAnotherPacketSource> mPackets;
+    };
+
+    // Helper to monitor buffering status. The polling happens every second.
+    // When necessary, it will send out buffering events to the player.
+    struct BufferingMonitor : public AHandler {
+    public:
+        BufferingMonitor(const sp<AMessage> &notify);
+
+        // Set up state.
+        void prepare(const sp<NuCachedSource2> &cachedSource,
+                const sp<WVMExtractor> &wvmExtractor,
+                int64_t durationUs,
+                int64_t bitrate,
+                bool isStreaming);
+        // Stop and reset buffering monitor.
+        void stop();
+        // Cancel the current monitor task.
+        void cancelPollBuffering();
+        // Restart the monitor task.
+        void restartPollBuffering();
+        // Stop buffering task and send out corresponding events.
+        void stopBufferingIfNecessary();
+        // Make sure data source is getting data.
+        void ensureCacheIsFetching();
+        // Update media time of just extracted buffer from data source.
+        void updateQueuedTime(bool isAudio, int64_t timeUs);
+
+        // Set the offload mode.
+        void setOffloadAudio(bool offload);
+        // Update media time of last dequeued buffer which is sent to the decoder.
+        void updateDequeuedBufferTime(int64_t mediaUs);
+
+    protected:
+        virtual ~BufferingMonitor();
+        virtual void onMessageReceived(const sp<AMessage> &msg);
+
+    private:
+        enum {
+            kWhatPollBuffering,
+        };
+
+        sp<AMessage> mNotify;
+
+        sp<NuCachedSource2> mCachedSource;
+        sp<WVMExtractor> mWVMExtractor;
+        int64_t mDurationUs;
+        int64_t mBitrate;
+        bool mIsStreaming;
+
+        int64_t mAudioTimeUs;
+        int64_t mVideoTimeUs;
+        int32_t mPollBufferingGeneration;
+        bool mPrepareBuffering;
+        bool mBuffering;
+        int32_t mPrevBufferPercentage;
+
+        mutable Mutex mLock;
+
+        bool mOffloadAudio;
+        int64_t mFirstDequeuedBufferRealUs;
+        int64_t mFirstDequeuedBufferMediaUs;
+        int64_t mlastDequeuedBufferMediaUs;
+
+        void prepare_l(const sp<NuCachedSource2> &cachedSource,
+                const sp<WVMExtractor> &wvmExtractor,
+                int64_t durationUs,
+                int64_t bitrate,
+                bool isStreaming);
+        void cancelPollBuffering_l();
+        void notifyBufferingUpdate_l(int32_t percentage);
+        void startBufferingIfNecessary_l();
+        void stopBufferingIfNecessary_l();
+        void sendCacheStats_l();
+        void ensureCacheIsFetching_l();
+        int64_t getLastReadPosition_l();
+        void onPollBuffering_l();
+        void schedulePollBuffering_l();
     };
 
     Vector<sp<IMediaSource> > mSources;
@@ -140,17 +225,16 @@ private:
     sp<DecryptHandle> mDecryptHandle;
     bool mStarted;
     bool mStopRead;
-    String8 mContentType;
-    AString mSniffedMIME;
-    off64_t mMetaDataSize;
     int64_t mBitrate;
-    int32_t mPollBufferingGeneration;
+    sp<BufferingMonitor> mBufferingMonitor;
     uint32_t mPendingReadBufferTypes;
-    bool mBuffering;
-    bool mPrepareBuffering;
+    sp<ABuffer> mGlobalTimedText;
+
     mutable Mutex mReadBufferLock;
+    mutable Mutex mDisconnectLock;
 
     sp<ALooper> mLooper;
+    sp<ALooper> mBufferingMonitorLooper;
 
     void resetDataSource();
 
@@ -158,8 +242,6 @@ private:
     void checkDrmStatus(const sp<DataSource>& dataSource);
     int64_t getLastReadPosition();
     void setDrmPlaybackStatusIfNeeded(int playbackStatus, int64_t position);
-
-    status_t prefillCacheIfNecessary();
 
     void notifyPreparedAndCleanup(status_t err);
     void onSecureDecodersInstantiated(status_t err);
@@ -184,6 +266,10 @@ private:
             uint32_t what, media_track_type type,
             int32_t curGen, sp<AmAnotherPacketSource> packets, sp<AMessage> msg);
 
+    void sendGlobalTextData(
+            uint32_t what,
+            int32_t curGen, sp<AMessage> msg);
+
     void sendTextData(
             uint32_t what, media_track_type type,
             int32_t curGen, sp<AmAnotherPacketSource> packets, sp<AMessage> msg);
@@ -200,15 +286,8 @@ private:
             media_track_type trackType,
             int64_t seekTimeUs = -1ll, int64_t *actualTimeUs = NULL, bool formatChange = false);
 
-    void schedulePollBuffering();
-    void cancelPollBuffering();
-    void restartPollBuffering();
-    void onPollBuffering();
-    void notifyBufferingUpdate(int percentage);
-    void startBufferingIfNecessary();
-    void stopBufferingIfNecessary();
-    void sendCacheStats();
-    void ensureCacheIsFetching();
+    void queueDiscontinuityIfNeeded(
+            bool seeking, bool formatChange, media_track_type trackType, Track *track);
 
     DISALLOW_EVIL_CONSTRUCTORS(GenericSource);
 };
