@@ -18,7 +18,7 @@
 #define LOG_TAG "HEVC_utils"
 #include <utils/Log.h>
 
-#include "include/HEVC_utils.h"
+#include "HEVC_utils.h"
 
 #include <media/stagefright/foundation/ABitReader.h>
 #include <media/stagefright/MediaErrors.h>
