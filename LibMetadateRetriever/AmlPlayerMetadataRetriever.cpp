@@ -101,7 +101,7 @@ status_t AmlPlayerMetadataRetriever::setDataSource(const sp<DataSource>& source)
     //mParsedMetaData = false;
     //mMetaData.clear();
 
-    return NULL;//setdatasource(NULL, fd, offset, length);
+    return NO_INIT;//setdatasource(NULL, fd, offset, length);
 }
 
 status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int64_t offset, int64_t length)
@@ -245,7 +245,7 @@ MediaAlbumArt *AmlPlayerMetadataRetriever::extractAlbumArt()
     }
 
     if (mAlbumArt) {
-        return mAlbumArt;
+        return mAlbumArt->clone();
     }
 
     return NULL;
