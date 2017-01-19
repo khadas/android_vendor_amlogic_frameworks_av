@@ -336,7 +336,7 @@ MediaAlbumArt *AmlPlayerMetadataRetriever0::extractAlbumArt()
     }
 
     if (mAlbumArt) {
-        return new MediaAlbumArt(*mAlbumArt);
+        return mAlbumArt->clone();
     }
 
     return NULL;
