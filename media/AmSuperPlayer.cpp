@@ -531,7 +531,7 @@ status_t    AmSuperPlayer::getParameter(int key, Parcel *reply)
 		}
 
         if(key==KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO &&
-            ((mPlayer->playerType()!=AMLOGIC_PLAYER)/* && (mPlayer->playerType()!=NU_PLAYER)*/)){
+            ((mPlayer->playerType()!=AMLOGIC_PLAYER) && (mPlayer->playerType()!=AMNUPLAYER))){
             LOGV("[%s::%d] playertype=%d, \n",__FUNCTION__,__LINE__, mPlayer->playerType());
             return 0;
         }
@@ -703,6 +703,23 @@ int AmSuperPlayer::match_codecs(const char *filefmtstr,const char *fmtsetting)
         return 0;
 }
 
+static bool isAmNuplayerSupport(char *type)
+{
+    LOGV("%s\n",type,type);
+
+    if ((NULL != strstr(type, "mpegts"))
+        || (NULL != strstr(type, "mov"))
+        || (NULL != strstr(type, "3gp"))
+        || (NULL != strstr(type, "ogg"))) {
+        if ((NULL == strstr(type, "avs"))) { // not support avs now
+            LOGV("%s is AmNuplayer support type\n",type);
+            return true;
+        }
+    }
+    LOGV("%s is not AmNuplayer support type\n",type);
+
+    return false;
+}
 player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
 {
     int ret;
@@ -753,6 +770,11 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
         if ((NULL != strstr(formats, "ts") && mIsTs) || (NULL != strstr(formats, "3gp") && mIs3Gp)) {
             return NU_PLAYER;
         }
+    }
+
+    bool amnuPlayerLocalplay = AmlogicPlayer::PropIsEnable("media.amnuplayer.localplay", true);
+    if (amnuPlayerLocalplay && (type != NULL) && isAmNuplayerSupport(type)) {
+            return AMNUPLAYER;
     }
     //----end add-------------------------------------
 

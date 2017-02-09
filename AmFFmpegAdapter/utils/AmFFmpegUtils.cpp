@@ -87,8 +87,8 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_AUDIO_DTS, AV_CODEC_ID_DTS },
     { MEDIA_MIMETYPE_AUDIO_G711_ALAW, AV_CODEC_ID_PCM_ALAW },
     { MEDIA_MIMETYPE_AUDIO_G711_MLAW, AV_CODEC_ID_PCM_MULAW },
-    { MEDIA_MIMETYPE_AUDIO_MP1, AV_CODEC_ID_MP1 },
-    { MEDIA_MIMETYPE_AUDIO_MP2, AV_CODEC_ID_MP2 },
+    { MEDIA_MIMETYPE_AUDIO_MPEG_LAYER_I, AV_CODEC_ID_MP1 },
+    { MEDIA_MIMETYPE_AUDIO_MPEG_LAYER_II, AV_CODEC_ID_MP2 },
     { MEDIA_MIMETYPE_AUDIO_MPEG, AV_CODEC_ID_MP3 },
     // TODO: add more PCM codecs including A/MuLAW.
     { MEDIA_MIMETYPE_AUDIO_RAW, AV_CODEC_ID_PCM_S16LE },
@@ -101,7 +101,7 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_AUDIO_RAW, AV_CODEC_ID_PCM_S24BE },
     { MEDIA_MIMETYPE_AUDIO_RAW, AV_CODEC_ID_PCM_U24LE },
     { MEDIA_MIMETYPE_AUDIO_RAW, AV_CODEC_ID_PCM_U24BE },
-    { MEDIA_MIMETYPE_AUDIO_RAW, AV_CODEC_ID_PCM_BLURAY },
+    { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_PCM_BLURAY },
     { MEDIA_MIMETYPE_AUDIO_VORBIS, AV_CODEC_ID_VORBIS },
     { MEDIA_MIMETYPE_AUDIO_WMA, AV_CODEC_ID_WMAV1 },
     { MEDIA_MIMETYPE_AUDIO_WMA, AV_CODEC_ID_WMAV2 },
@@ -287,7 +287,8 @@ static void initInputFormatToMimeTypeMap(
     map.add(av_find_input_format("flv"), MEDIA_MIMETYPE_CONTAINER_FLV);
     map.add(av_find_input_format("wav"), MEDIA_MIMETYPE_CONTAINER_WAV);
     //map.add(av_find_input_format("ogg"), MEDIA_MIMETYPE_CONTAINER_OGG);
-    //map.add(av_find_input_format("mp3"), MEDIA_MIMETYPE_AUDIO_MPEG);
+    map.add(av_find_input_format("mp3"), MEDIA_MIMETYPE_AUDIO_MPEG);
+    map.add(av_find_input_format("mp2"), MEDIA_MIMETYPE_AUDIO_MPEG_LAYER_II);
     map.add(av_find_input_format("matroska"), MEDIA_MIMETYPE_CONTAINER_MATROSKA);
     map.add(av_find_input_format("ac3"), MEDIA_MIMETYPE_AUDIO_AC3);
     map.add(av_find_input_format("eac3"), MEDIA_MIMETYPE_AUDIO_EAC3);

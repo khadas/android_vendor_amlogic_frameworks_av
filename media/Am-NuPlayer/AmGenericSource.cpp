@@ -177,7 +177,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         extractor = mWVMExtractor;
     } else {
         extractor = MediaExtractor::Create(mDataSource,
-                mimeType.isEmpty() ? NULL : mimeType.string());
+                mimeType.isEmpty() ? "amnu+" : mimeType.string());
     }
 
     if (extractor == NULL) {
@@ -974,6 +974,9 @@ sp<AMessage> AmNuPlayer::GenericSource::getTrackInfo(size_t trackIndex) const {
 
     const char *mime;
     CHECK(meta->findCString(kKeyMIMEType, &mime));
+    if (!strncasecmp(mime, "audio/", 6)) {
+        convertMetaDataToMessage(meta, &format);
+    }
     format->setString("mime", mime);
 
     int32_t trackType;

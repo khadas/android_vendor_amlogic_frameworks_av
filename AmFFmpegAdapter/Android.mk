@@ -13,9 +13,9 @@ LOCAL_SRC_FILES:= \
     codec/AmAudioCodec.cpp \
     formatters/AACFormatter.cpp \
     formatters/AVCCFormatter.cpp \
+    formatters/HVCCFormatter.cpp \
     formatters/MPEG42Formatter.cpp \
     formatters/PassthruFormatter.cpp \
-    formatters/PCMBlurayFormatter.cpp \
     formatters/StreamFormatter.cpp \
     formatters/VorbisFormatter.cpp \
     formatters/VC1Formatter.cpp \

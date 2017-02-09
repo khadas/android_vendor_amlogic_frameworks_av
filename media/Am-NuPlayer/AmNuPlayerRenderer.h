@@ -75,6 +75,9 @@ struct AmNuPlayer::Renderer : public AHandler {
 
     void setHasMedia(bool audio); // in order to kown a/v
 
+    void setHasNoMedia(bool audio);
+
+
     status_t openAudioSink(
             const sp<AMessage> &format,
             bool offloadOnly,
