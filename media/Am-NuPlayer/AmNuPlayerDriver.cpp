@@ -505,7 +505,7 @@ status_t AmNuPlayerDriver::setLooping(int loop) {
 }
 
 player_type AmNuPlayerDriver::playerType() {
-    return NU_PLAYER;
+    return AMNUPLAYER;
 }
 
 status_t AmNuPlayerDriver::invoke(const Parcel &request, Parcel *reply) {
@@ -761,15 +761,15 @@ void AmNuPlayerDriver::notifyListener_l(
             // fall through
         }
 
-        case 0xffff:
-        {
-            mSourceReady = ext1;
-            break;
-        }
-
         case MEDIA_ERROR:
         {
             mAtEOS = true;
+            break;
+        }
+
+        case 0xffff:
+        {
+            mSourceReady = ext1;
             break;
         }
 

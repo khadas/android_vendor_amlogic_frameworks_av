@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef PCM_BLURAY_FORMATTER_H_
-#define PCM_BLURAY_FORMATTER_H_
+#ifndef HVCC_FORMATTER_H_
+#define HVCC_FORMATTER_H_
 
-#include "formatters/PassthruFormatter.h"
+#include "formatters/StreamFormatter.h"
 
 namespace android {
 
-class PCMBlurayFormatter : public StreamFormatter {
+class HVCCFormatter: public StreamFormatter {
 public:
-    PCMBlurayFormatter(AVCodecContext *codec);
-    virtual ~PCMBlurayFormatter() { }
+    HVCCFormatter(AVCodecContext *codec);
+    virtual ~HVCCFormatter();
 
     virtual bool addCodecMeta(const sp<MetaData> &meta) const;
 
@@ -32,10 +32,19 @@ public:
             const uint8_t* in, uint32_t inAllocLen) const;
 
     virtual int32_t formatES(
-          const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
-          uint32_t outAllocLen) const;
+            const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
+            uint32_t outAllocLen) const;
+
+private:
+    bool parseCodecExtraData(AVCodecContext* codec);
+    size_t parseNALSize(const uint8_t *data) const ;
+
+    bool mHVCCFound;
+    uint8_t* mHVCC;
+    uint32_t mHVCCSize;
+    size_t mNALLengthSize;
 };
 
 }  // namespace android
 
-#endif  // PCM_BLURAY_FORMATTER_H_
+#endif  // HVCC_FORMATTER_H_

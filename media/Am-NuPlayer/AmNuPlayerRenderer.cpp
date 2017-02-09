@@ -443,6 +443,14 @@ void AmNuPlayer::Renderer::setHasMedia(bool audio) {
     }
 }
 
+void AmNuPlayer::Renderer::setHasNoMedia(bool audio) {
+    if (audio) {
+        mHasAudio = false;
+    } else {
+        mHasVideo = false;
+    }
+}
+
 status_t AmNuPlayer::Renderer::openAudioSink(
         const sp<AMessage> &format,
         bool offloadOnly,
@@ -1103,7 +1111,7 @@ int64_t AmNuPlayer::Renderer::getDurationUsIfPlayedAtSampleRate(uint32_t numFram
 
 // Calculate duration of pending samples if played at normal rate (i.e., 1.0).
 int64_t AmNuPlayer::Renderer::getPendingAudioPlayoutDurationUs(int64_t nowUs) {
-#if 0 //12.4 hours.
+#if 1 //12.4 hours.
     int64_t writtenAudioDurationUs = getDurationUsIfPlayedAtSampleRate(mNumFramesWritten);
     if (mUseVirtualAudioSink) {
         int64_t nowUs = ALooper::GetNowUs();

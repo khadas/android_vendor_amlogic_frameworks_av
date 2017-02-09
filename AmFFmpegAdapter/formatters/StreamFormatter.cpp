@@ -23,9 +23,9 @@
 #include "AmFFmpegUtils.h"
 #include <formatters/AACFormatter.h>
 #include <formatters/AVCCFormatter.h>
+#include <formatters/HVCCFormatter.h>
 #include <formatters/MPEG42Formatter.h>
 #include <formatters/PassthruFormatter.h>
-#include <formatters/PCMBlurayFormatter.h>
 #include <formatters/VorbisFormatter.h>
 #include <formatters/VC1Formatter.h>
 #include <formatters/WMAFormatter.h>
@@ -53,6 +53,14 @@ sp<StreamFormatter> StreamFormatter::Create(
                 && reinterpret_cast<uint8_t *>(codec->extradata)[0] == 0x01) {
             return new AVCCFormatter(codec);
         }
+    } else if (!strcmp(codecMime, MEDIA_MIMETYPE_VIDEO_HEVC)
+            && (format == av_find_input_format("mp4")
+                    || format == av_find_input_format("flv")
+                    || format == av_find_input_format("matroska"))) {
+        if (codec->extradata_size >= 22
+                && reinterpret_cast<uint8_t *>(codec->extradata)[0] == 0x01) {
+            return new HVCCFormatter(codec);
+        }
     } else if (!strcmp(codecMime, MEDIA_MIMETYPE_AUDIO_AAC)
             && (format == av_find_input_format("mp4")
                     || format == av_find_input_format("avi")
@@ -64,9 +72,8 @@ sp<StreamFormatter> StreamFormatter::Create(
         return new WMAFormatter(codec);
     } else if (!strcmp(codecMime, MEDIA_MIMETYPE_AUDIO_VORBIS)) {
         return new VorbisFormatter(codec);
-    } else if (codec->codec_id == AV_CODEC_ID_PCM_BLURAY) {
-        return new PCMBlurayFormatter(codec);
-    } else if(!strcmp(codecMime, MEDIA_MIMETYPE_AUDIO_APE)){
+    }
+    else if(!strcmp(codecMime, MEDIA_MIMETYPE_AUDIO_APE)){
         return new APEFormatter(codec);
     }
     return new PassthruFormatter(codec);

@@ -492,79 +492,162 @@ status_t AmNuPlayer::updateMediaInfo(void) {
     ALOGI("updateMediaInfo");
     maudio_info_t *ainfo;
     mvideo_info_t *vinfo;
+    int cur_video_index = 0;
+    int cur_audio_index = 0;
     mStreamInfo.stream_info.total_video_num = 0;
     mStreamInfo.stream_info.total_audio_num = 0;
-    sp<AMessage> aformat= mSource->getFormat(true);  //audio
-    sp<AMessage> vformat= mSource->getFormat(false);   // video
-    if (vformat != NULL) {
-        vinfo = (mvideo_info_t *)malloc(sizeof(mvideo_info_t));
-        memset(vinfo, 0, sizeof(mvideo_info_t));
-        int32_t codecid=-1,width=-1,height=-1,bitrate=-1;
-        int64_t duration = -1;
-        vinfo->index = 0;
-        if (vformat->findInt32("code-id", &codecid)) {
-            vinfo->id = codecid;
+    mStreamInfo.stream_info.cur_sub_index   = -1;
+    if (mSource->isStreaming()) {
+        sp<AMessage> aformat= mSource->getFormat(true);  //audio
+        sp<AMessage> vformat= mSource->getFormat(false);   // video
+        if (vformat != NULL) {
+            vinfo = (mvideo_info_t *)malloc(sizeof(mvideo_info_t));
+            memset(vinfo, 0, sizeof(mvideo_info_t));
+            int32_t codecid=-1,width=-1,height=-1,bitrate=-1;
+            int64_t duration = -1;
+            vinfo->index = 0;
+            if (vformat->findInt32("codec-id", &codecid)) {
+                vinfo->id = codecid;
+            }
+            if (vformat->findInt32("width", &width)) {
+                vinfo->width = width;
+            }
+            if (vformat->findInt32("height", &height)) {
+                vinfo->height = height;
+            }
+            if (vformat->findInt64("durationUs", &duration)) {
+                 vinfo->duartion = duration;
+            }
+            if (vformat->findInt32("bit-rate", &bitrate)) {
+                vinfo->bit_rate = bitrate;
+            }
+            vinfo->format  = (vformat_t)0;
+            vinfo->aspect_ratio_num = 0;
+            vinfo->aspect_ratio_den = 0;
+            vinfo->frame_rate_num   = 0;
+            vinfo->frame_rate_den   = 0;
+            vinfo->video_rotation_degree = 0;
+            mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
+            mStreamInfo.stream_info.total_video_num++;
         }
-        if (vformat->findInt32("width", &width)) {
-            vinfo->width = width;
+        if (aformat != NULL) {
+            ainfo = (maudio_info_t *)malloc(sizeof(maudio_info_t));
+            memset(ainfo, 0, sizeof(maudio_info_t));
+            int32_t codecid=-1, bitrate=-1, samplerate=-1, channelcount=-1;
+            int64_t duration=-1;
+            ainfo->index = 0;
+            AString mime;
+            if (aformat->findInt32("codec-id", &codecid)) {
+                ainfo->id = codecid;
+            }
+            if (aformat->findString("mime", &mime)) {
+                if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
+                    ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
+                    mStrCurrentAudioCodec = "DTSHD";
+                    ainfo->id = CODEC_ID_DTS;
+                }
+            }
+            if (aformat->findInt32("bit-rate", &bitrate)) {
+                ainfo->bit_rate = bitrate;
+            }
+            if (aformat->findInt32("channel-count", &channelcount)) {
+                ainfo->channel = channelcount;
+            }
+            if (aformat->findInt32("sample-rate", &samplerate)) {
+                ainfo->sample_rate = samplerate;
+            }
+            if (vformat->findInt64("durationUs", &duration)) {
+                ainfo->duration = duration;
+            }
+            if (ainfo->id  > 0)
+                ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
+            ALOGV("aformat %d",ainfo->aformat);
+            mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
+            mStreamInfo.stream_info.total_audio_num++;
+
         }
-        if (vformat->findInt32("height", &height)) {
-            vinfo->height = height;
-        }
-        if (vformat->findInt64("durationUs", &duration)) {
-             vinfo->duartion = duration;
-        }
-        if (vformat->findInt32("bit-rate", &bitrate)) {
-            vinfo->bit_rate = bitrate;
-        }
-        vinfo->format  = (vformat_t)0;
-        vinfo->aspect_ratio_num = 0;
-        vinfo->aspect_ratio_den = 0;
-        vinfo->frame_rate_num   = 0;
-        vinfo->frame_rate_den   = 0;
-        vinfo->video_rotation_degree = 0;
-        mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
-        mStreamInfo.stream_info.total_video_num++;
-    }
-    if (aformat != NULL) {
-        ainfo = (maudio_info_t *)malloc(sizeof(maudio_info_t));
-        memset(ainfo, 0, sizeof(maudio_info_t));
-        int32_t codecid=-1, bitrate=-1, samplerate=-1, channelcount=-1;
-        int64_t duration=-1;
-        ainfo->index = 0;
-        AString mime;
-        if (aformat->findInt32("code-id", &codecid)) {
-            ainfo->id = codecid;
-        }
-        if (aformat->findString("mime", &mime)) {
-            if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
-                ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
-                mStrCurrentAudioCodec = "DTSHD";
-                ainfo->id = CODEC_ID_DTS;
+        mStreamInfo.stream_info.cur_video_index = cur_video_index;
+        mStreamInfo.stream_info.cur_audio_index = cur_audio_index;
+        mStreamInfo.stream_info.cur_sub_index   = -1;
+    }else {
+        int track_num = mSource->getTrackCount();
+        for (size_t i = 0; i < track_num; i++) {
+            sp<AMessage> format = mSource->getTrackInfo(i);
+            ALOGV("i: %d",i);
+            AString mime;
+            format->findString("mime", &mime);
+
+            if (mime.startsWith("video/")) {
+                vinfo = (mvideo_info_t *)malloc(sizeof(mvideo_info_t));
+                memset(vinfo, 0, sizeof(mvideo_info_t));
+
+                int32_t codecid,width,height,bitrate;
+                int64_t duration;
+                vinfo->index       = i;
+                if (format->findInt32("codec-id", &codecid)) {
+                    vinfo->id = codecid;
+                }
+                if (format->findInt32("width", &width)) {
+                    vinfo->width = width;
+                }
+                if (format->findInt32("height", &height)) {
+                    vinfo->height = height;
+                }
+                if (format->findInt64("durationUs", &duration)) {
+                     vinfo->duartion = duration;
+                }
+                if (format->findInt32("bit-rate", &bitrate)) {
+                    vinfo->bit_rate = bitrate;
+                }
+                vinfo->format      = (vformat_t)0;
+                vinfo->aspect_ratio_num = 0;
+                vinfo->aspect_ratio_den = 0;
+                vinfo->frame_rate_num   = 0;
+                vinfo->frame_rate_den   = 0;
+                vinfo->video_rotation_degree = 0;
+                mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
+                mStreamInfo.stream_info.total_video_num++;
+                if (i == mSource->getSelectedTrack(MEDIA_TRACK_TYPE_VIDEO)) {
+                    cur_video_index = i;
+                }
+            } else if (mime.startsWith("audio/")) {
+                ainfo = (maudio_info_t *)malloc(sizeof(maudio_info_t));
+                memset(ainfo, 0, sizeof(maudio_info_t));
+                int32_t codecid, bitrate, samplerate, channelcount;
+                int64_t duration;
+                ainfo->index     = i;
+                if (format->findInt32("codec-id", &codecid)) {
+                    ainfo->id = codecid;
+                }
+                if (format->findInt32("bit-rate", &bitrate)) {
+                    ainfo->bit_rate = bitrate;
+                }
+                if (format->findInt32("channel-count", &channelcount)) {
+                    ainfo->channel = channelcount;
+                }
+                if (format->findInt32("sample-rate", &samplerate)) {
+                    ainfo->sample_rate = samplerate;
+                }
+                if (format->findInt64("durationUs", &duration)) {
+                    ainfo->duration = duration;
+                }
+                ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
+                mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
+                mStreamInfo.stream_info.total_audio_num++;
+                if (i == mSource->getSelectedTrack(MEDIA_TRACK_TYPE_AUDIO)) {
+                    cur_audio_index = i;
+                    if (mime == MEDIA_MIMETYPE_AUDIO_DTSHD) {
+                        ALOGI("mime:%s",MEDIA_MIMETYPE_AUDIO_DTSHD);
+                        mStrCurrentAudioCodec = "DTSHD";
+                    } else {
+                        mStrCurrentAudioCodec = NULL;
+                    }
+                }
             }
         }
-        if (aformat->findInt32("bit-rate", &bitrate)) {
-            ainfo->bit_rate = bitrate;
-        }
-        if (aformat->findInt32("channel-count", &channelcount)) {
-            ainfo->channel = channelcount;
-        }
-        if (aformat->findInt32("sample-rate", &samplerate)) {
-            ainfo->sample_rate = samplerate;
-        }
-        if (vformat->findInt64("durationUs", &duration)) {
-            ainfo->duration = duration;
-        }
-        if (ainfo->id  > 0)
-            ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
-        ALOGI("aformat %d",ainfo->aformat);
-        mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
-        mStreamInfo.stream_info.total_audio_num++;
+
 
     }
-    mStreamInfo.stream_info.cur_video_index = 0;
-    mStreamInfo.stream_info.cur_audio_index = 0;
-    mStreamInfo.stream_info.cur_sub_index   = -1;
 
     return OK;
 
@@ -689,10 +772,14 @@ void AmNuPlayer::setDataSourceAsync(const sp<IStreamSource> &source) {
     msg->post();
 }
 
+#define IS_LOCAL_HTTP(uri) (uri && (strcasestr(uri,"://127.0.0.1") || strcasestr(uri,"://localhost")))
 static bool IsHTTPLiveURL(const char *url) {
     if (!strncasecmp("http://", url, 7)
             || !strncasecmp("https://", url, 8)
             || !strncasecmp("file://", url, 7)) {
+            if (IS_LOCAL_HTTP(url) && !strstr(url,"m3u8")) {// not hls localhost
+                return false;
+            }
             return true;
 #if 0
         size_t len = strlen(url);
@@ -1153,6 +1240,13 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                                            FLUSH_CMD_SHUTDOWN /* video */));
 
             mDeferredActions.push_back(new SetSurfaceAction(surface));
+
+            if (obj == NULL) {
+                // if surface is NULL, set hasVideoMedia false
+                if (mRenderer != NULL) {
+                    mRenderer->setHasNoMedia(false);
+                }
+            }
 
             if (obj != NULL || mAudioDecoder != NULL) {
                 if (mStarted) {

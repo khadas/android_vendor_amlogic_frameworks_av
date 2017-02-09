@@ -160,9 +160,12 @@ status_t AmFFmpegSource::init(
     if (parent->findInt64(kKeyDuration, &durationUs)) {
         mMeta->setInt64(kKeyDuration, durationUs);
     }
+    if ((stream->start_time != AV_NOPTS_VALUE) && (mStartTimeUs != convertStreamTimeToUs(stream->start_time))) {
+        mStartTimeUs = convertStreamTimeToUs(stream->start_time);
+    }
 
     if (stream->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
-        ALOGI("demux: extradata_size = %d", stream->codec->extradata_size);
+        ALOGI("audio:demux: extradata_size = %d", stream->codec->extradata_size);
         ALOGI("demux: fmt = %d\n", stream->codec->sample_fmt);
 
         if(stream->codec->extradata_size > 0){
@@ -199,13 +202,26 @@ status_t AmFFmpegSource::init(
             mMeta->setInt32(
                     kKeyPCMDataSigned, static_cast<int32_t>(dataSigned));
         }
-		if(stream->codec->codec_tag==354){
-		   mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_WMAPRO);
-		}else{
-		   mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_WMA);
-		}
-//		mMeta->setInt32(kKeyCodecID,stream->codec->codec_tag);
+        if (stream->codec->codec_tag == 354) {
+            mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_WMAPRO);
+        } else {
+            mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_WMA);
+        }
+        //mMeta->setInt32(kKeyCodecID,stream->codec->codec_tag);
+        //add for aac gapless playback
+        if (stream->codec->codec_id == AV_CODEC_ID_AAC) {
+            AVDictionaryEntry *lang =
+                av_dict_get(stream->metadata, "iTunSMPB", NULL, 0);
+            if (lang != NULL) {
+                int encoderDelay, encoderPadding, samples;
+                if (sscanf(lang->value, "%*X %X %X %X", &encoderDelay, &encoderPadding, &samples) == 3) {
+                    mMeta->setInt32(kKeyEncoderDelay, encoderDelay);
+                    mMeta->setInt32(kKeyEncoderPadding, encoderPadding);
+                }
+            }
+        }
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+        ALOGI("video:demux: extradata_size = %d", stream->codec->extradata_size);
         mMeta->setInt32(kKeyWidth, stream->codec->width);
         mMeta->setInt32(kKeyHeight, stream->codec->height);
         mMeta->setInt32(kKeyCodecID, stream->codec->codec_id);
@@ -362,11 +378,6 @@ status_t AmFFmpegSource::read(
     uint32_t requiredLen =
             mFormatter->computeNewESLen(packet->data, packet->size);
 
-    int32_t hevc_header_size = 0;
-    if(mFirstPacket && !strcmp(mMime, MEDIA_MIMETYPE_VIDEO_HEVC) && mStream->codec->extradata_size > 0) {
-        hevc_header_size = 10 + mStream->codec->extradata_size;
-        requiredLen += hevc_header_size;
-    }
     if (buffer->size() < requiredLen) {
         size_t newSize = buffer->size();
         while (newSize < requiredLen) {
@@ -388,21 +399,11 @@ status_t AmFFmpegSource::read(
     }
 
     int32_t filledLength = 0;
-    if(mFirstPacket && !strcmp(mMime, MEDIA_MIMETYPE_VIDEO_HEVC) && hevc_header_size > 0) {
-        const char * tag = "extradata";
-        memcpy(static_cast<uint8_t *>(buffer->data()), tag, 9);
-	 static_cast<uint8_t *>(buffer->data())[9] = mStream->codec->extradata_size;
-	 memcpy(static_cast<uint8_t *>(buffer->data()) + 10, static_cast<uint8_t *>(mStream->codec->extradata), mStream->codec->extradata_size);
-        filledLength = mFormatter->formatES(
+
+    filledLength = mFormatter->formatES(
             packet->data, packet->size,
-            static_cast<uint8_t *>(buffer->data()) + hevc_header_size, buffer->size());
-	 filledLength += hevc_header_size;
-    } else {
-        filledLength = mFormatter->formatES(
-                packet->data, packet->size,
-                static_cast<uint8_t *>(buffer->data()), buffer->size());
-    }
-    mFirstPacket = false;
+            static_cast<uint8_t *>(buffer->data()), buffer->size());
+
     if (filledLength <= 0) {
         ALOGE("Failed to format packet data.");
         buffer->release();
@@ -567,16 +568,21 @@ void AmFFmpegExtractor::init() {
                 convertTimeBaseToMicroSec(mFFmpegContext->duration));
     }
 
-    // TODO: to support multiple track.
-    bool audioAdded = false;
-    bool videoAdded = false;
+    // multiple track support has been added
     int32_t primaryTrack = getPrimaryStreamIndex(mFFmpegContext);
     for (uint32_t i = 0; i < mFFmpegContext->nb_streams; ++i) {
+        bool streamValid = true;
         AVCodecContext *codec = mFFmpegContext->streams[i]->codec;
-        bool shouldAdd =
-                ((codec->codec_type == AVMEDIA_TYPE_AUDIO) && !audioAdded)
-                || ((codec->codec_type == AVMEDIA_TYPE_VIDEO) && !videoAdded)
-                || ((codec->codec_type == AVMEDIA_TYPE_SUBTITLE));
+
+        if (!mFFmpegContext->streams[i]->codec_info_nb_frames
+                && codec->codec_type == AVMEDIA_TYPE_AUDIO
+                && codec->codec_id != CODEC_ID_DTS
+                ) {
+            streamValid = false;
+        }
+        bool shouldAdd = streamValid && ((codec->codec_type == AVMEDIA_TYPE_AUDIO)
+                                            || (codec->codec_type == AVMEDIA_TYPE_VIDEO)
+                                            || (codec->codec_type == AVMEDIA_TYPE_SUBTITLE));
         const char *mimeType =
                 convertCodecIdToMimeType(mFFmpegContext->streams[i]->codec);
         if (shouldAdd && NULL != mimeType) {
@@ -591,11 +597,6 @@ void AmFFmpegExtractor::init() {
                     new AmFFmpegSource(this, mFFmpegContext->streams[i],
                             mInputFormat, mPTSPopulator, seekable, startTimeUs);
             mStreamIdxToSourceIdx.add(mSources.size() - 1);
-            if (codec->codec_type == AVMEDIA_TYPE_AUDIO) {
-                audioAdded = true;
-            } else if (codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-                videoAdded = true;
-            }
         } else {
             mStreamIdxToSourceIdx.add(kInvalidSourceIdx);
         }
@@ -614,7 +615,9 @@ status_t AmFFmpegExtractor::feedMore() {
                 sourceIdx = mStreamIdxToSourceIdx[packet->stream_index];
             }
             if (sourceIdx == kInvalidSourceIdx
-                    || !mSources[sourceIdx].mIsActive || packet->size <= 0 || packet->pts < 0) {
+                    || !mSources[sourceIdx].mIsActive
+                    || packet->size <= 0
+                    || (packet->pts < 0 &&  packet->pts != AV_NOPTS_VALUE)) {
                 av_free_packet(packet);
                 continue;
             }
