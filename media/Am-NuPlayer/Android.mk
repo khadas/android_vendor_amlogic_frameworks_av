@@ -26,7 +26,8 @@ LOCAL_C_INCLUDES := \
     $(TOP)/external/curl/include                                  \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amffmpeg
+    $(TOP)/vendor/amlogic/external/ffmpeg/
+
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
         libcrypto \

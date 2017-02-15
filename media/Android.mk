@@ -47,9 +47,13 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
         AmlogicMediaFactory.cpp \
         SStreamingExtractor.cpp \
         AmSysControl.cpp \
-
-
+else
+ifeq ($(BUILD_WITH_AMNUPLAYER),true)
+	LOCAL_SRC_FILES +=  AmlogicMediaFactory.cpp
 endif
+endif
+
+
 
 
 LOCAL_SHARED_LIBRARIES :=       \
@@ -72,6 +76,15 @@ LOCAL_SHARED_LIBRARIES :=       \
     libion \
     libamnuplayer \
     libsystemcontrolservice
+
+
+ifeq ($(BUILD_WITH_AMNUPLAYER),true)
+LOCAL_SHARED_LIBRARIES :=\
+	 libamnuplayer
+
+##flags for NUPLAYER
+LOCAL_CFLAGS += -DBUILD_WITH_AMNUPLAYER=1
+endif
 
 LOCAL_C_INCLUDES :=                                                 \
     $(call include-path-for, graphics corecg)                       \

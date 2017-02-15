@@ -204,13 +204,18 @@ int AmlogicMediaFactoryInit(void)
 {
 
     status_t err;
+#ifdef BUILD_WITH_AMLOGIC_PLAYER
     AmlogicPlayer::BasicInit();
     err = MediaPlayerFactory::registerFactory(new AmlogicPlayerFactory(), AMLOGIC_PLAYER);
     ALOGV("register  AmlogicPlayerFactory err =%d\n", err);
     err = MediaPlayerFactory::registerFactory(new AmSuperPlayerFactory(), AMSUPER_PLAYER);
     ALOGV("register  AmSuperPlayerFactory err =%d\n", err);
+#endif
+#ifdef BUILD_WITH_AMNUPLAYER
     err = MediaPlayerFactory::registerFactory(new AmNuPlayerFactory(), AMNUPLAYER);
     ALOGV("register  AmNuPlayerFactory err =%d\n", err);
+#endif
+
     DataSource::RegisterDefaultSniffers();
     ALOGV("register default sniffers\n");
 

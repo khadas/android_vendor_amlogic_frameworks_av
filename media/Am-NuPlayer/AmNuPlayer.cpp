@@ -26,8 +26,7 @@
 #include <sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#include <libavcodec/avcodec.h>
+#include <inttypes.h>
 
 
 #include "AmNuPlayer.h"
