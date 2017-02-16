@@ -13,6 +13,7 @@ LOCAL_SRC_FILES:= \
     codec/AmAudioCodec.cpp \
     formatters/AACFormatter.cpp \
     formatters/AVCCFormatter.cpp \
+    formatters/AVCTSFormatter.cpp \
     formatters/HVCCFormatter.cpp \
     formatters/MPEG42Formatter.cpp \
     formatters/PassthruFormatter.cpp \

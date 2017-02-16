@@ -124,6 +124,9 @@ private:
 
     int32_t mSourceReady;
 
+    int32_t mVideoWidth;
+    int32_t mVideoHeight;
+
     status_t prepare_l();
     status_t start_l();
     void notifyListener_l(int msg, int ext1 = 0, int ext2 = 0, const Parcel *in = NULL);

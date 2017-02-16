@@ -24,6 +24,8 @@
 #include <utils/Vector.h>
 #include <utils/misc.h>
 
+#include <media/stagefright/foundation/ABuffer.h>
+
 struct AVInputFormat;
 struct AVFormatContext;
 
@@ -69,6 +71,13 @@ private:
         sp<AmFFmpegSource> mSource;
         bool mIsActive;
     };
+
+    sp<ABuffer> mBuffer;
+    List<sp<ABuffer> > mBuffers;
+    status_t appendData(const void *data, size_t size);
+    sp<ABuffer> parseSei();
+    void queueAccessUnit(const sp<ABuffer> &buffer);
+    status_t dequeueAccessUnit(sp<ABuffer> *buffer);
 
     sp<MetaData> mMeta;
     sp<DataSource> mDataSource;

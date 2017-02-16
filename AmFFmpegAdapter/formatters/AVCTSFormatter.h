@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef AVCC_FORMATTER_H_
-#define AVCC_FORMATTER_H_
+#ifndef AVC_FORMATTER_H_
+#define AVC_FORMATTER_H_
 
 #include "formatters/StreamFormatter.h"
+#include <utils/List.h>
 
 namespace android {
 
-class AVCCFormatter: public StreamFormatter {
+class AVCTSFormatter: public android::StreamFormatter {
 public:
-    AVCCFormatter(AVCodecContext *codec);
-    virtual ~AVCCFormatter();
+    AVCTSFormatter(AVCodecContext *codec);
+    virtual ~AVCTSFormatter();
 
     virtual bool addCodecMeta(const sp<MetaData> &meta) const;
 
@@ -35,16 +36,21 @@ public:
             const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
             uint32_t outAllocLen) const;
 
-private:
-    bool parseCodecExtraData(AVCodecContext* codec);
-    size_t parseNALSize(const uint8_t *data) const ;
+    void checkNAL(const uint8_t* in, uint32_t inAllocLen);
 
-    bool mAVCCFound;
-    uint8_t* mAVCC;
-    uint32_t mAVCCSize;
-    size_t mNALLengthSize;
+    status_t dequeueAccessUnit(sp<ABuffer> *buffer);
+
+protected:
+    uint8_t* mExtraData;
+    uint32_t mExtraSize;
+
+private:
+    void queueAccessUnit(const sp<ABuffer> &buffer);
+    status_t appendData(const void *data, size_t size);
+    sp<ABuffer> parseSei();
+    bool parseCodecExtraData(AVCodecContext* codec);
 };
 
 }  // namespace android
 
-#endif  // AVCC_FORMATTER_H_
+#endif  // AVC_FORMATTER_H_

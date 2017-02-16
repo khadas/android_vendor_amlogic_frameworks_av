@@ -20,6 +20,7 @@
 #include <utils/Errors.h>
 #include <utils/RefBase.h>
 #include <utils/StrongPointer.h>
+#include <media/stagefright/foundation/ABuffer.h>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -57,6 +58,9 @@ class StreamFormatter : public RefBase{
     virtual int32_t formatES(
             const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
             uint32_t outAllocLen) const = 0;
+
+    void checkNAL(const uint8_t* in, uint32_t inAllocLen);
+    status_t dequeueAccessUnit(sp<ABuffer> *buffer);
 };
 
 }  // namespace android

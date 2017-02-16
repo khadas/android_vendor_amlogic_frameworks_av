@@ -46,6 +46,12 @@ extern "C" {
 #include "AmFFmpegUtils.h"
 #include "formatters/StreamFormatter.h"
 
+#include <media/stagefright/foundation/AMessage.h>
+#include <media/stagefright/foundation/ABitReader.h>
+
+#include "include/avc_utils.h"
+
+
 namespace android {
 
 static const uint32_t kInvalidSourceIdx = 0xFFFFFFFF;
@@ -74,10 +80,11 @@ struct AmFFmpegSource : public MediaSource {
     status_t queuePacket(AVPacket *packet);
     status_t clearPendingPackets();
 
+    sp<StreamFormatter> mFormatter;
+
 private:
     sp<AmFFmpegExtractor> mExtractor;
     sp<MetaData> mMeta;
-    sp<StreamFormatter> mFormatter;
     sp<AmPTSPopulator> mPTSPopulator;
     AVStream *mStream;
 
@@ -96,6 +103,7 @@ private:
     int32_t mDenominator;
 
     const char * mMime;
+    const AVInputFormat *mInputFormat;
 
     // If there are both audio and video streams, only the video stream
     // will be seekable, otherwise the single stream will be seekable.
@@ -283,6 +291,7 @@ status_t AmFFmpegSource::init(
         return ERROR_UNSUPPORTED;
     }
 
+    mInputFormat = inputFormat;
     mMime= convertCodecIdToMimeType(stream->codec);
     if (mMime) {
         mMeta->setCString(kKeyMIMEType, mMime);
@@ -378,6 +387,30 @@ status_t AmFFmpegSource::read(
             }
             packet = dequeuePacket();
         }
+
+        // seek to current position for timed text change track(cts test)
+        bool skipTimedTextSeek = false;
+        if (!strcmp(mMime, MEDIA_MIMETYPE_VIDEO_AVC)
+                    && (mInputFormat == av_find_input_format("mp4")
+                    || mInputFormat == av_find_input_format("flv")
+                    || mInputFormat == av_find_input_format("matroska")
+                    || mInputFormat == av_find_input_format("mpegts"))) {
+            skipTimedTextSeek = true;
+        }
+        if (options && options->getSeekTo(&seekTimeUs, &seekMode)) {
+            if (seekTimeUs > 0 && !skipTimedTextSeek) {
+                int64_t seekTimeMs = seekTimeUs / 1000;
+                while (packet->pts < seekTimeMs) {
+                    packet = dequeuePacket();
+                    while (packet == NULL) {
+                        if (ERROR_END_OF_STREAM == extractor->feedMore()) {
+                            return ERROR_END_OF_STREAM;
+                        }
+                        packet = dequeuePacket();
+                    }
+                }
+            }
+        }
     }
 
     MediaBuffer *buffer = NULL;
@@ -453,6 +486,17 @@ status_t AmFFmpegSource::read(
     // OMX_BUFFERFLAG_TIMESTAMPINVALID flag once we move to OpenMax IL 1.2.
     buffer->meta_data()->setInt64(kKeyTime, normalizedPTSInUs);
     buffer->meta_data()->setInt32(kKeyIsSyncFrame, isKeyFrame ? 1 : 0);
+
+    //dequeue accessUnit for close caption from SEI of H264
+    sp<ABuffer> accessUnit;
+    status_t err = mFormatter->dequeueAccessUnit(&accessUnit);
+    if (err == OK) {
+        sp<ABuffer> sei;
+        if (accessUnit->meta()->findBuffer("sei", &sei) && sei != NULL) {
+            buffer->meta_data()->setData(kKeySEI, 0, sei->data(), sei->size());
+        }
+    }
+
     *out = buffer;
     av_free_packet(packet);
     delete packet;
@@ -638,6 +682,10 @@ status_t AmFFmpegExtractor::feedMore() {
                 continue;
             }
             av_dup_packet(packet);
+
+            //parse and store SEI for cc subtitle
+            mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
+
             mSources[sourceIdx].mSource->queuePacket(packet);
         } else {
             delete packet;
