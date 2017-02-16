@@ -603,6 +603,14 @@ status_t AmNuPlayerDriver::getMetadata(
             Metadata::kSeekAvailable,
             mPlayerFlags & AmNuPlayer::Source::FLAG_CAN_SEEK);
 
+    meta.appendInt32(
+            Metadata::kVideoWidth,
+            mVideoWidth);
+
+    meta.appendInt32(
+            Metadata::kVideoHeight,
+            mVideoHeight);
+
     return OK;
 }
 
@@ -766,6 +774,11 @@ void AmNuPlayerDriver::notifyListener_l(
             mAtEOS = true;
             break;
         }
+
+        case MEDIA_SET_VIDEO_SIZE:
+            mVideoWidth = ext1;
+            mVideoHeight = ext2;
+        break;
 
         case 0xffff:
         {

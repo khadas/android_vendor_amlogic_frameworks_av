@@ -23,6 +23,7 @@
 #include "AmFFmpegUtils.h"
 #include <formatters/AACFormatter.h>
 #include <formatters/AVCCFormatter.h>
+#include <formatters/AVCTSFormatter.h>
 #include <formatters/HVCCFormatter.h>
 #include <formatters/MPEG42Formatter.h>
 #include <formatters/PassthruFormatter.h>
@@ -53,6 +54,9 @@ sp<StreamFormatter> StreamFormatter::Create(
                 && reinterpret_cast<uint8_t *>(codec->extradata)[0] == 0x01) {
             return new AVCCFormatter(codec);
         }
+    } else if (!strcmp(codecMime, MEDIA_MIMETYPE_VIDEO_AVC)
+            && (format == av_find_input_format("mpegts"))) {
+        return new AVCTSFormatter(codec);
     } else if (!strcmp(codecMime, MEDIA_MIMETYPE_VIDEO_HEVC)
             && (format == av_find_input_format("mp4")
                     || format == av_find_input_format("flv")
@@ -77,6 +81,14 @@ sp<StreamFormatter> StreamFormatter::Create(
         return new APEFormatter(codec);
     }
     return new PassthruFormatter(codec);
+}
+
+void StreamFormatter::checkNAL(const uint8_t* in, uint32_t inAllocLen) {
+
+}
+
+status_t StreamFormatter::dequeueAccessUnit(sp<ABuffer> *buffer) {
+    return NOT_ENOUGH_DATA;
 }
 
 }  // namespace android
