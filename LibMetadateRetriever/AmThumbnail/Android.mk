@@ -21,6 +21,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_ARM_MODE := arm
 LOCAL_PRELINK_MODULE := false
 
+LOCAL_32_BIT_ONLY := true
 LOCAL_MODULE:= libamthumbnail
 
 include $(BUILD_STATIC_LIBRARY)

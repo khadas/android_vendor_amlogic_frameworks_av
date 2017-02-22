@@ -298,6 +298,21 @@ static char *StringFromDetector(const char *name)
 }
 
 
+static bool convertCreationTimeToDate(const char *time, String8* date)
+{
+    struct tm tb;
+    if (strptime(time, "%Y-%m-%d %H:%M:%S", &tb) != NULL) {
+        char tmp[32];
+        if (strftime(tmp, 32, "%Y%m%dT%H%M%S.000Z", &tb) > 0) {
+            date->setTo(tmp);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 void AmlPlayerMetadataRetriever::parseMetaData()
 {
 #if 0
@@ -330,7 +345,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
         { "track", METADATA_KEY_CD_TRACK_NUMBER },
         { "disc", METADATA_KEY_DISC_NUMBER },
         { "composer", METADATA_KEY_COMPOSER },
-        { "date", METADATA_KEY_DATE},
+        { "creation_time", METADATA_KEY_DATE}, //use creation_time for date
        // { "GPSCoordinates", METADATA_KEY_LOCATION },//old ffmpeg
         { "location", METADATA_KEY_LOCATION }, //new ffmpeg on externel
         { "rotate", METADATA_KEY_VIDEO_ROTATION },
@@ -367,7 +382,14 @@ void AmlPlayerMetadataRetriever::parseMetaData()
             for (size_t n = 0; n < kNumMapEntries; ++n) {
                 char *detectorName = StringFromDetector(name);
                 if (!strcmp(kMap[n].from, detectorName)) {
-                    mMetaData.add(kMap[n].to, String8(value));
+                    if (!strcmp(kMap[n].from, "creation_time")) {
+                        String8 s;
+                        if (convertCreationTimeToDate(value, &s)) {
+                            mMetaData.add(kMap[n].to, s);
+                        }
+                    } else {
+                        mMetaData.add(kMap[n].to, String8(value));
+                    }
                 }
             }
         }
