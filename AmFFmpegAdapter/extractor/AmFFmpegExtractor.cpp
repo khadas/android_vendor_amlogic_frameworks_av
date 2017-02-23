@@ -702,6 +702,7 @@ uint32_t AmFFmpegExtractor::flags() const {
 AmFFmpegExtractor::SourceInfo::SourceInfo()
     : mIsActive(false) { }
 
+//add ffmpeg audio ret 2
 int get_codec_id(const sp<DataSource> &source, AVInputFormat *inputFormat){
 
     int ret = -1;
@@ -728,18 +729,26 @@ int get_codec_id(const sp<DataSource> &source, AVInputFormat *inputFormat){
 
     int hasvideo = 0;
     int hasaudio = 0;
+    int is_ffmpeg_audio = 0;
     for (uint32_t i = 0; i < context->nb_streams; i++) {
         if (context->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
            hasvideo ++;
         }else if(context->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
            if (context->streams[i]->codec->codec_id == AV_CODEC_ID_PCM_S16LE) {
                hasaudio ++;
+            } else if (context->streams[i]->codec->codec_id == AV_CODEC_ID_COOK ||
+                    context->streams[i]->codec->codec_id == AV_CODEC_ID_FLAC) {
+                //android mkv extrator do not support cook and flac, use ffmpeg parse
+                is_ffmpeg_audio = 1;
             }
         }
     }
 
     if (hasvideo == 0 && hasaudio == context->nb_streams) {
         ret = 1;
+    }
+    if (is_ffmpeg_audio) {
+        ret = 2;
     }
 
     avformat_free_context(context);
@@ -755,9 +764,14 @@ bool SniffAmFFmpeg(
         const char *mimeDetected = convertInputFormatToMimeType(inputFormat);
         if (NULL != mimeDetected) {
             if (!strcmp(mimeDetected,MEDIA_MIMETYPE_CONTAINER_MATROSKA)) {
-                if (get_codec_id(source, inputFormat) == 1) {
+                int ret = get_codec_id(source, inputFormat);
+                if (ret == 1) {
                     ALOGI("using MatroskaExtractor\n");
                     return false;
+                } else if (ret == 2) {
+                    *mimeType = mimeDetected;
+                    *confidence = 0.8;
+                    return true;
                 }
             }
             *mimeType = mimeDetected;
