@@ -46,10 +46,12 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
         AmlPlayerMetadataRetriever0.cpp \
         AmlogicMediaFactory.cpp \
         SStreamingExtractor.cpp \
-        AmSysControl.cpp \
+		AmSysControl.cpp
+
+
 else
-ifeq ($(BUILD_WITH_AMNUPLAYER),true)
-	LOCAL_SRC_FILES +=  AmlogicMediaFactory.cpp
+ifeq ($(TARGET_WITH_AMNUPLAYER),true)
+LOCAL_SRC_FILES +=  AmlogicMediaFactory.cpp
 endif
 endif
 
@@ -74,12 +76,11 @@ LOCAL_SHARED_LIBRARIES :=       \
     libstagefright              \
     libstagefright_foundation \
     libion \
-    libamnuplayer \
     libsystemcontrolservice
 
 
-ifeq ($(BUILD_WITH_AMNUPLAYER),true)
-LOCAL_SHARED_LIBRARIES :=\
+ifeq ($(TARGET_WITH_AMNUPLAYER),true)
+LOCAL_SHARED_LIBRARIES +=\
 	 libamnuplayer
 
 ##flags for NUPLAYER

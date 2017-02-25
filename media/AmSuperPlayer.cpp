@@ -841,14 +841,16 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
     sp<MediaPlayerBase> p;
 	LOGV("createPlayer");
     switch (playerType) {
+        case AMNUPLAYER:
+#ifdef BUILD_WITH_AMLPLAYER
+            LOGV(" create AmNuPlayer");
+            p = new AmNuPlayerDriver(pid);
+            break;
+#endif//if no amnuplayer use nuplayer
         case NU_PLAYER:
             LOGV(" create NuPlayer");
             p = new NuPlayerDriver(pid);
             break;
-        case AMNUPLAYER:
-            LOGV(" create AmNuPlayer");
-            p = new AmNuPlayerDriver(pid);
-            break;	
         case TEST_PLAYER:
             LOGV("Create Test Player stub");
             p = new TestPlayerStub();
