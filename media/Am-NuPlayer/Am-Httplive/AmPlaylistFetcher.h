@@ -32,6 +32,8 @@ struct HTTPBase;
 struct AmLiveDataSource;
 struct AmM3UParser;
 class String8;
+struct IMediaExtractor;
+
 
 struct AmPlaylistFetcher : public AHandler {
     static const int64_t kMinBufferedDurationUs;
@@ -189,6 +191,16 @@ private:
 
     bool mHasMetadata;
 
+    bool mNeedSniff;
+    bool mIsTs;// m3u8 + mp4
+    bool mFirstTypeProbe;
+
+    sp<IMediaExtractor> mExtractor;
+    sp<IMediaSource> mAudioTrack;
+    sp<IMediaSource> mVideoTrack;
+    sp<AmAnotherPacketSource> mAudioSource;
+    sp<AmAnotherPacketSource> mVideoSource;
+
     // Set first to true if decrypting the first segment of a playlist segment. When
     // first is true, reset the initialization vector based on the available
     // information in the manifest; otherwise, use the initialization vector as
@@ -239,9 +251,14 @@ private:
     bool isStartTimeReached(int64_t timeUs);
     size_t resyncTs(const uint8_t *data, size_t size);
     status_t extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &buffer);
+    status_t extractAndQueueAccessUnitsFromNonTs();
+    status_t queueAccessUnits();
 
     status_t extractAndQueueAccessUnits(
             const sp<ABuffer> &buffer, const sp<AMessage> &itemMeta);
+    void sniff(const sp<ABuffer> &buffer);
+    void readFromNonTsFile();
+    sp<ABuffer> mediaBufferToABuffer(MediaBuffer* mediaBuffer);
 
     void notifyStopReached();
     void notifyError(status_t err);
