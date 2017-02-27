@@ -34,6 +34,10 @@
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/Utils.h>
 
+#include <media/stagefright/MediaExtractor.h>
+#include "AmHLSDataSource.h"
+
+
 #include <ctype.h>
 #include <inttypes.h>
 #include <openssl/aes.h>
@@ -181,7 +185,15 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mVideoBuffer(new AmAnotherPacketSource(NULL)),
       mThresholdRatio(-1.0f),
       mDownloadState(new DownloadState()),
-      mHasMetadata(false) {
+      mHasMetadata(false),
+      mNeedSniff(true),
+      mIsTs(false),
+      mFirstTypeProbe(true),
+      mExtractor(NULL),
+      mAudioTrack(NULL),
+      mVideoTrack(NULL),
+      mAudioSource(NULL),
+      mVideoSource(NULL) {
     memset(mPlaylistHash, 0, sizeof(mPlaylistHash));
     mHTTPDownloader = mSession->getHTTPDownloader();
 
@@ -1388,8 +1400,16 @@ void AmPlaylistFetcher::onDownloadNext() {
 
         bool startUp = mStartup; // save current start up state
 
+        if (mNeedSniff) { // just probe in first buffer.
+            mIsTs = bufferStartsWithTsSyncByte(buffer);
+            if (!mIsTs && !bufferStartsWithWebVTTMagicSequence(buffer)) {
+                sniff(buffer);
+            }
+        }
+        mNeedSniff = false;
         err = OK;
-        if (bufferStartsWithTsSyncByte(buffer)) {
+
+        if (mIsTs) {
             // Incremental extraction is only supported for MPEG2 transport streams.
             if (tsBuffer == NULL) {
                 tsBuffer = new ABuffer(buffer->data(), buffer->capacity());
@@ -1401,11 +1421,19 @@ void AmPlaylistFetcher::onDownloadNext() {
             }
             tsBuffer->setRange(tsBuffer->offset(), tsBuffer->size() + bytesRead);
             err = extractAndQueueAccessUnitsFromTs(tsBuffer);
+        } else if (mExtractor !=NULL) {
+            err = extractAndQueueAccessUnitsFromNonTs();
         }
 
         if (err == -EAGAIN) {  //  This can also be fixed
+            ALOGI("extractAndQueueAccessUnits eagain");
             // starting sequence number too low/high
-            mTSParser.clear();
+            if (mTSParser != NULL) {
+                mTSParser.clear();
+            } else if (mExtractor != NULL) {
+                mExtractor.clear();
+            }
+
             for (size_t i = 0; i < mPacketSources.size(); i++) {
                 sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
                 packetSource->clear();
@@ -1413,6 +1441,7 @@ void AmPlaylistFetcher::onDownloadNext() {
             postMonitorQueue();
             return;
         } else if (err == ERROR_OUT_OF_RANGE) {
+            ALOGI("extractAndQueueAccessUnits ERROR_OUT_OF_RANGE");
             // reached stopping point
             notifyStopReached();
             return;
@@ -1459,32 +1488,46 @@ void AmPlaylistFetcher::onDownloadNext() {
         FLOGI("segment duration : %lld us, size : %d bytes, time : %lld",
             (long long)item_durationUs, (int)total_size,(long long)(ALooper::GetNowUs() - startUs));
     }
-    if (bufferStartsWithTsSyncByte(buffer)) {
-        // If we don't see a stream in the program table after fetching a full ts segment
-        // mark it as nonexistent.
-        AmATSParser::SourceType srcTypes[] =
-                { AmATSParser::VIDEO, AmATSParser::AUDIO };
-        AmLiveSession::StreamType streamTypes[] =
-                { AmLiveSession::STREAMTYPE_VIDEO, AmLiveSession::STREAMTYPE_AUDIO };
-        const size_t kNumTypes = NELEM(srcTypes);
 
-        for (size_t i = 0; i < kNumTypes; i++) {
-            AmATSParser::SourceType srcType = srcTypes[i];
-            AmLiveSession::StreamType streamType = streamTypes[i];
+    if (mFirstTypeProbe) { // just once
+        if (mIsTs) {
+            // If we don't see a stream in the program table after fetching a full ts segment
+            // mark it as nonexistent.
+            AmATSParser::SourceType srcTypes[] =
+                    { AmATSParser::VIDEO, AmATSParser::AUDIO };
+            AmLiveSession::StreamType streamTypes[] =
+                    { AmLiveSession::STREAMTYPE_VIDEO, AmLiveSession::STREAMTYPE_AUDIO };
+            const size_t kNumTypes = NELEM(srcTypes);
 
-            sp<AmAnotherPacketSource> source =
-                static_cast<AmAnotherPacketSource *>(
-                    mTSParser->getSource(srcType).get());
+            for (size_t i = 0; i < kNumTypes; i++) {
+                AmATSParser::SourceType srcType = srcTypes[i];
+                AmLiveSession::StreamType streamType = streamTypes[i];
 
-            if (!mTSParser->hasSource(srcType)) {
-                ALOGW("MPEG2 Transport stream does not contain %s data.",
-                      srcType == AmATSParser::VIDEO ? "video" : "audio");
+                sp<AmAnotherPacketSource> source =
+                    static_cast<AmAnotherPacketSource *>(
+                        mTSParser->getSource(srcType).get());
 
-                mStreamTypeMask &= ~streamType;
-                mPacketSources.removeItem(streamType);
+                if (!mTSParser->hasSource(srcType)) {
+                    ALOGW("MPEG2 Transport stream does not contain %s data.",
+                          srcType == AmATSParser::VIDEO ? "video" : "audio");
+
+                    mStreamTypeMask &= ~streamType;
+                    mPacketSources.removeItem(streamType);
+                }
             }
-        }
-
+       } else if(mExtractor != NULL) {
+            // If we don't see a stream after fetching a full segment
+            // mark it as nonexistent.
+            if (mVideoSource == NULL) {
+                mStreamTypeMask &= ~AmLiveSession::STREAMTYPE_VIDEO;
+                mPacketSources.removeItem(AmLiveSession::STREAMTYPE_VIDEO);
+            }
+            if (mAudioSource == NULL) {
+                mStreamTypeMask &= ~AmLiveSession::STREAMTYPE_AUDIO;
+                mPacketSources.removeItem(AmLiveSession::STREAMTYPE_AUDIO);
+            }
+       }
+       mFirstTypeProbe = false;
     }
 
     if (checkDecryptPadding(buffer) != OK) {
@@ -1496,18 +1539,19 @@ void AmPlaylistFetcher::onDownloadNext() {
     if (tsBuffer != NULL) {
         AString method;
         CHECK(buffer->meta()->findString("cipher-method", &method));
-        if ((tsBuffer->size() > 0 && method == "NONE")
-                || tsBuffer->size() > 16) {
+        if (((tsBuffer->size() > 0 && method == "NONE")
+                || tsBuffer->size() > 16) && mExtractor == NULL) {
             ALOGE("MPEG2 transport stream is not an even multiple of 188 "
                     "bytes in length.");
-            notifyError(ERROR_MALFORMED);
-            return;
+            //notifyError(ERROR_MALFORMED);
+            //return;
         }
     }
 
     // bulk extract non-ts files
     bool startUp = mStartup;
-    if (tsBuffer == NULL) {
+    if (tsBuffer == NULL && mExtractor == NULL) {
+        //aac and webkvtt
         status_t err = extractAndQueueAccessUnits(buffer, itemMeta);
         if (err == -EAGAIN) {
             // starting sequence number too low/high
@@ -1535,6 +1579,12 @@ void AmPlaylistFetcher::onDownloadNext() {
 
     if (!shouldPause) {
         postMonitorQueue();
+    }
+
+    if (mExtractor != NULL) {
+        mExtractor.clear();
+        mExtractor = NULL;
+        mNeedSniff = true;
     }
 }
 
@@ -1732,7 +1782,6 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &
 
         mNextPTSTimeUs = -1ll;
     }
-
     size_t offset = 0;
     while (offset + 188 <= buffer->size()) {
         status_t err = mTSParser->feedTSPacket(buffer->data() + offset, 188);
@@ -1749,7 +1798,30 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &
     // setRange to indicate consumed bytes.
     buffer->setRange(buffer->offset() + offset, buffer->size() - offset);
 
-    if (mSegmentFirstPTS < 0ll) {
+    return queueAccessUnits();
+
+}
+
+status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromNonTs() {
+    if (mNextPTSTimeUs >= 0ll) {
+        sp<AMessage> extra = new AMessage;
+        // Since we are using absolute timestamps, signal an offset of 0 to prevent
+        // ATSParser from skewing the timestamps of access units.
+        extra->setInt64(IStreamListener::kKeyMediaTimeUs, 0);
+
+        mNextPTSTimeUs = -1ll;
+        mFirstPTSValid = false;
+    }
+
+    readFromNonTsFile();
+
+    return queueAccessUnits();
+}
+
+
+status_t AmPlaylistFetcher::queueAccessUnits() {
+
+    if (mSegmentFirstPTS < 0ll && mExtractor == NULL) {
         // get the smallest first PTS from all streams present in this parser
         for (size_t i = mPacketSources.size(); i > 0;) {
             i--;
@@ -1810,24 +1882,45 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &
     for (size_t i = mPacketSources.size(); i > 0;) {
         i--;
         sp<AmAnotherPacketSource> packetSource = mPacketSources.valueAt(i);
-
+        const char *key;
+        AmATSParser::SourceType type;
         const AmLiveSession::StreamType stream = mPacketSources.keyAt(i);
-        if (stream == AmLiveSession::STREAMTYPE_SUBTITLES) {
-            ALOGE("MPEG2 Transport streams do not contain subtitles.");
-            return ERROR_MALFORMED;
+        sp<AmAnotherPacketSource> source;
+        switch (stream) {
+            case AmLiveSession::STREAMTYPE_VIDEO:
+                type = AmATSParser::VIDEO;
+                key = "timeUsVideo";
+                source = mVideoSource;
+                break;
+
+            case AmLiveSession::STREAMTYPE_AUDIO:
+                type = AmATSParser::AUDIO;
+                key = "timeUsAudio";
+                source = mAudioSource;
+                break;
+
+            case AmLiveSession::STREAMTYPE_METADATA:
+                type = AmATSParser::META;
+                key = "timeUsMetadata";
+                break;
+
+            case AmLiveSession::STREAMTYPE_SUBTITLES:
+            {
+                ALOGE("MPEG2 Transport streams do not contain subtitles.");
+                return ERROR_MALFORMED;
+                break;
+            }
+            default:
+                TRESPASS();
         }
 
-        const char *key = AmLiveSession::getKeyForStream(stream);
-        AmATSParser::SourceType type =AmLiveSession::getSourceTypeForStream(stream);
-
-        sp<AmAnotherPacketSource> source =
-            static_cast<AmAnotherPacketSource *>(
-                    mTSParser->getSource(type).get());
-
+        if (mExtractor == NULL) {
+            source =static_cast<AmAnotherPacketSource *>(
+                        mTSParser->getSource(type).get());
+        }
         if (source == NULL) {
             continue;
         }
-
         const char *mime;
         sp<MetaData> format  = source->getFormat();
         bool isAvc = format != NULL && format->findCString(kKeyMIMEType, &mime)
@@ -1948,6 +2041,87 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnitsFromTs(const sp<ABuffer> &
     }
 
     return OK;
+
+}
+
+void AmPlaylistFetcher::sniff(const sp<ABuffer> &buffer) {
+    sp<DataSource> dataSource = new HLSDataSource(buffer);
+    mExtractor = MediaExtractor::Create(dataSource);
+    if (mExtractor == NULL) {
+        ALOGI("lzhnpng: sniff error");
+        return;
+    }
+
+    size_t numtracks = mExtractor->countTracks();
+
+    if (numtracks == 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < numtracks; ++i) {
+        const char *mime;
+        sp<MetaData> meta = mExtractor->getTrackMetaData(i);
+        sp<IMediaSource> track = mExtractor->getTrack(i);
+        if (track->start(meta.get()) != OK) {
+            track.clear();
+            continue;
+        }
+        CHECK(meta->findCString(kKeyMIMEType, &mime));
+        if (!strncasecmp(mime, "audio/", 6)) {
+            mAudioTrack = track;
+            mAudioSource = new AmAnotherPacketSource(track->getFormat());
+        } else if (!strncasecmp(mime, "video/", 6)) {
+            mVideoTrack = track;
+            mVideoSource = new AmAnotherPacketSource(track->getFormat());
+        }
+    }
+}
+
+void AmPlaylistFetcher::readFromNonTsFile() {
+    MediaSource::ReadOptions options;
+    MediaBuffer *mediaBuffer;
+    sp<ABuffer> accessUnit;
+    if (mAudioTrack != NULL) {
+        while (mAudioTrack->read(&mediaBuffer, &options) == OK) {
+            if (mediaBuffer != NULL) {
+                accessUnit = mediaBufferToABuffer(mediaBuffer);
+                mAudioSource->queueAccessUnit(accessUnit);
+                mediaBuffer->release();
+                mediaBuffer = NULL;
+            }
+        }
+    }
+    if (mVideoSource != NULL) {
+        while (mVideoTrack->read(&mediaBuffer, &options) == OK) {
+            if (mediaBuffer != NULL) {
+                accessUnit = mediaBufferToABuffer(mediaBuffer);
+                mVideoSource->queueAccessUnit(accessUnit);
+                mediaBuffer->release();
+                mediaBuffer = NULL;
+            }
+        }
+    }
+}
+
+sp<ABuffer> AmPlaylistFetcher::mediaBufferToABuffer(MediaBuffer* mediaBuffer) {
+    sp<ABuffer> abuffer = new ABuffer(mediaBuffer->range_length());
+
+    memcpy(abuffer->data(),
+        (const uint8_t *)mediaBuffer->data() + mediaBuffer->range_offset(),
+        mediaBuffer->range_length());
+
+    sp<AMessage> meta = abuffer->meta();
+    int64_t timeUs;
+    CHECK(mediaBuffer->meta_data()->findInt64(kKeyTime, &timeUs));
+    timeUs += getSegmentStartTimeUs(mSeqNumber);
+    meta->setInt64("timeUs", timeUs);
+
+    int64_t durationUs;
+    if (mediaBuffer->meta_data()->findInt64(kKeyDuration, &durationUs)) {
+        meta->setInt64("durationUs", durationUs);
+    }
+
+    return abuffer;
 }
 
 /* static */
