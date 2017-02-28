@@ -110,6 +110,8 @@ struct AmLiveSession : public AHandler {
 
     void setParentThreadId(android_thread_id_t thread_id);
 
+    void setFrameRate(float frameRate);
+    float getFrameRate() const { return mFrameRate; };
     enum {
         kWhatStreamsChanged,
         kWhatError,
@@ -120,6 +122,7 @@ struct AmLiveSession : public AHandler {
         kWhatBufferingUpdate,
         kWhatMetadataDetected,
         kWhatSourceReady,
+        kWhatSetFrameRate,
     };
 
 protected:
@@ -278,6 +281,8 @@ private:
     bool mDebPTS;
     KeyedVector<size_t, int64_t> mDiscontinuityAbsStartTimesUs;
     KeyedVector<size_t, int64_t> mDiscontinuityOffsetTimesUs;
+
+    float mFrameRate;
 
     sp<AmPlaylistFetcher> addFetcher(const char *uri);
 

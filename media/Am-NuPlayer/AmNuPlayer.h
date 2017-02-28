@@ -218,6 +218,9 @@ private:
     int32_t mVideoScalingMode;
 
     bool mEnableFrameRate;
+    float mFrameRate;
+    int32_t mWaitSeconds;
+
     int64_t mStartTimeUs;
 
     AudioPlaybackRate mPlaybackSettings;

@@ -200,6 +200,8 @@ AmNuPlayer::AmNuPlayer(pid_t pid)
       mResumePending(false),
       mVideoScalingMode(NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW),
       mEnableFrameRate(false),
+      mFrameRate(-1.0),
+      mWaitSeconds(10),
       mPlaybackSettings(AUDIO_PLAYBACK_RATE_DEFAULT),
       mVideoFpsHint(-1.f),
       mStarted(false),
@@ -215,6 +217,10 @@ AmNuPlayer::AmNuPlayer(pid_t pid)
     DtsHdMulAssetHint=0;
     DtsHdHpsHint=0;
     mStrCurrentAudioCodec = NULL;
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.hls.wait-seconds", value, NULL)) {
+        mWaitSeconds = atoi(value);
+    }
 }
 
 AmNuPlayer::~AmNuPlayer() {
@@ -1355,6 +1361,17 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                 // Drop obsolete msg.
                 break;
             }
+            if (mEnableFrameRate && mFrameRate < 0.0) {
+                int32_t num = 0;
+                msg->findInt32("scan-num", &num);
+                if (num < mWaitSeconds * 100) {     // wait up to 10 seconds
+                    ALOGI("scan sources wait %d", num);
+                    ++num;
+                    msg->setInt32("scan-num", num);
+                    msg->post(10 * 1000);
+                    break;
+                }
+            }
 
             mScanSourcesPending = false;
 
@@ -1689,7 +1706,7 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                     (long long)seekTimeUs, needNotify);
 
             // temporarily close auto frame-rate to avoid black srceen when seek
-            if (mEnableFrameRate) {
+            if (mEnableFrameRate && mFrameRate > 0.0) {
                 int64_t nowUs = ALooper::GetNowUs();
                 int64_t timeSinceStart = nowUs - mStartTimeUs;
                 if (timeSinceStart > 100000) {
@@ -2137,6 +2154,8 @@ status_t AmNuPlayer::instantiateDecoder(
         sp<AMessage> notify = new AMessage(kWhatVideoNotify, this);
         ++mVideoDecoderGeneration;
         notify->setInt32("generation", mVideoDecoderGeneration);
+
+        format->setFloat("frame-rate", mFrameRate);
 
         *decoder = new Decoder(
                 notify, mSource, mPID, mRenderer, mSurface, mCCDecoder);
@@ -2851,6 +2870,13 @@ void AmNuPlayer::onSourceNotify(const sp<AMessage> &msg) {
             int32_t err;
             CHECK(msg->findInt32("err", &err));
             notifyListener(0xffff, err, 0);
+            break;
+        }
+
+        case Source::kWhatFrameRate:
+        {
+            CHECK(msg->findFloat("frame-rate", &mFrameRate));
+            //ALOGI("frame-rate %.2f",mFrameRate);
             break;
         }
 

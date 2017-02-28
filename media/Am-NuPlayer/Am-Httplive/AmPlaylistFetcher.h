@@ -113,6 +113,10 @@ private:
     FILE * mDumpHandle;
     bool mHttpUseCurl;
 
+    bool mEnableFrameRate;
+    Vector<int64_t> mVecTimeUs;
+    static const size_t kFrameNum;
+
     static const int64_t kMaxMonitorDelayUs;
     static const int32_t kNumSkipFrames;
 

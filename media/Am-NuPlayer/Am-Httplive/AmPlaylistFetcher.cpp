@@ -60,6 +60,8 @@ const int64_t AmPlaylistFetcher::kMinBufferedDurationUs = 30000000ll;
 const int64_t AmPlaylistFetcher::kMaxMonitorDelayUs = 3000000ll;
 // LCM of 188 (size of a TS packet) & 1k works well
 const int32_t AmPlaylistFetcher::kDownloadBlockSize = 47 * 1024;
+// use 12 frames to calculate frame rate
+const size_t  AmPlaylistFetcher::kFrameNum = 12;
 
 const AString AmPlaylistFetcher::DumpPath = "/data/tmp/";
 
@@ -158,6 +160,7 @@ AmPlaylistFetcher::AmPlaylistFetcher(
     : mDumpMode(-1),
       mDumpHandle(NULL),
       mHttpUseCurl(false),
+      mEnableFrameRate(false),
       mNotify(notify),
       mSession(session),
       mURI(uri),
@@ -205,6 +208,10 @@ AmPlaylistFetcher::AmPlaylistFetcher(
         && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
         mHttpUseCurl = true;
     }
+    if (property_get("media.hls.frame-rate", value, NULL)) {
+        mEnableFrameRate = atoi(value);
+    }
+
 
 }
 
@@ -1743,6 +1750,10 @@ bool AmPlaylistFetcher::isStartTimeReached(int64_t timeUs) {
     }
     return startTimeReached;
 }
+static status_t int64cmp(const int64_t *a, const int64_t *b )
+{
+    return (status_t)(*a - *b);
+}
 
 size_t AmPlaylistFetcher::resyncTs(const uint8_t * data, size_t size) {
     size_t offset = 0;
@@ -1935,6 +1946,10 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
             int64_t timeUs;
             CHECK(accessUnit->meta()->findInt64("timeUs", &timeUs));
 
+            if (mEnableFrameRate && mSession->getFrameRate() < 0.0 && type == AmATSParser::VIDEO && mVecTimeUs.size() < kFrameNum) {
+                mVecTimeUs.push(timeUs);
+            }
+
             if (mStartup && !isHevc) {
                 bool startTimeReached = isStartTimeReached(timeUs);
 
@@ -2018,6 +2033,18 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
             setAccessUnitProperties(accessUnit, source);
             packetSource->queueAccessUnit(accessUnit);
             FSLOGV(stream, "queueAccessUnit, timeUs=%lld", (long long)timeUs);
+        }
+
+        if (mEnableFrameRate && mSession->getFrameRate() < 0.0 && type == AmATSParser::VIDEO && mVecTimeUs.size() >= kFrameNum) {
+            mVecTimeUs.sort(int64cmp);
+            int64_t durations = 0;
+            size_t size = mVecTimeUs.size() / 2;
+
+            for (size_t n = 1; n <= size; n++) {
+                durations += (mVecTimeUs[n] - mVecTimeUs[n-1]);
+            }
+
+            mSession->setFrameRate(1000000.0 * size / durations);
         }
 
         if (err != OK) {
