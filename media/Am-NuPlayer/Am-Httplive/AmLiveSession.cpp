@@ -322,7 +322,8 @@ AmLiveSession::AmLiveSession(
       mFirstTimeUs(0),
       mLastSeekTimeUs(0),
       mHasMetadata(false),
-      mDebPTS(false){
+      mDebPTS(false),
+      mFrameRate(-1.0) {
     mStreams[kAudioIndex] = StreamItem("audio");
     mStreams[kVideoIndex] = StreamItem("video");
     mStreams[kSubtitleIndex] = StreamItem("subtitles");
@@ -2781,6 +2782,12 @@ void AmLiveSession::postPrepared(status_t err) {
     mInPreparationPhase = false;
 }
 
+void AmLiveSession::setFrameRate(float frameRate) {
+    sp<AMessage> notify = mNotify->dup();
+    notify->setInt32("what", kWhatSetFrameRate);
+    notify->setFloat("frame-rate", frameRate);
+    notify->post();
+}
 
 }  // namespace android
 

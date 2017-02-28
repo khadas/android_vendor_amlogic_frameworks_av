@@ -56,6 +56,7 @@ struct AmNuPlayer::Source : public AHandler {
         kWhatDrmNoLicense,
         kWhatInstantiateSecureDecoders,
         kWhatSourceReady,
+        kWhatFrameRate,
     };
 
     // The provides message is used to notify the player about various

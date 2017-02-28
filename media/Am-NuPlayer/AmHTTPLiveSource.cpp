@@ -435,6 +435,16 @@ void AmNuPlayer::HTTPLiveSource::onSessionNotify(const sp<AMessage> &msg) {
             notify->post();
             break;
         }
+        case AmLiveSession::kWhatSetFrameRate:
+        {
+            sp<AMessage> notify = dupNotify();
+            float frameRate;
+            CHECK(msg->findFloat("frame-rate", &frameRate));
+            notify->setInt32("what", kWhatFrameRate);
+            notify->setFloat("frame-rate", frameRate);
+            notify->post();
+            break;
+        }
 
         default:
             TRESPASS();
