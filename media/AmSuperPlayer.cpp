@@ -842,7 +842,7 @@ static sp<MediaPlayerBase> createPlayer(player_type playerType, void* cookie,
 	LOGV("createPlayer");
     switch (playerType) {
         case AMNUPLAYER:
-#ifdef BUILD_WITH_AMLPLAYER
+#ifdef BUILD_WITH_AMNUPLAYER
             LOGV(" create AmNuPlayer");
             p = new AmNuPlayerDriver(pid);
             break;
