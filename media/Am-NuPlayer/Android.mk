@@ -14,6 +14,7 @@ LOCAL_SRC_FILES:=                       \
         AmNuPlayerStreamListener.cpp      \
         AmRTSPSource.cpp                  \
         AmStreamingSource.cpp             \
+		AmUDPSource.cpp					 \
 
 LOCAL_C_INCLUDES := \
 	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-Httplive \
@@ -27,6 +28,7 @@ LOCAL_C_INCLUDES := \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include \
     $(TOP)/vendor/amlogic/external/ffmpeg/
+
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \

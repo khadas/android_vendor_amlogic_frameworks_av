@@ -2635,7 +2635,7 @@ void AmNuPlayer::performDecoderFlush(FlushCommand audio, FlushCommand video) {
 }
 
 void AmNuPlayer::performReset() {
-    ALOGV("performReset");
+    ALOGI("performReset");
 
     CHECK(mAudioDecoder == NULL);
     CHECK(mVideoDecoder == NULL);

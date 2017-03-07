@@ -38,6 +38,7 @@ struct MediaSource;
 class MediaBuffer;
 struct NuCachedSource2;
 class WVMExtractor;
+class IMediaExtractor;
 
 struct AmNuPlayer::GenericSource : public AmNuPlayer::Source {
     GenericSource(const sp<AMessage> &notify, bool uidValid, uid_t uid);
@@ -216,6 +217,7 @@ private:
     int64_t mOffset;
     int64_t mLength;
 
+    sp<IMediaExtractor> extractor;
     sp<DataSource> mDataSource;
     sp<NuCachedSource2> mCachedSource;
     sp<DataSource> mHttpSource;

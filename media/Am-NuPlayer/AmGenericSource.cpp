@@ -37,6 +37,7 @@
 #include "../../libstagefright/include/NuCachedSource2.h"
 #include "../../libstagefright/include/WVMExtractor.h"
 #include "../../libstagefright/include/HTTPBase.h"
+#include "AmUDPSource.h"
 
 namespace android {
 
@@ -74,8 +75,17 @@ AmNuPlayer::GenericSource::GenericSource(
 }
 
 void AmNuPlayer::GenericSource::resetDataSource() {
+    for (int i = 0;i < mSources.size();i++)
+        mSources.itemAt(i)->pause();
+    while (!mSources.empty()) {
+        mSources.erase(mSources.begin());
+    }
     mHTTPService.clear();
     mHttpSource.clear();
+    extractor.clear();
+    sp<DataSource> dataSource = mDataSource;
+    dataSource.clear();
+    ALOGI("[%s %d]", __FUNCTION__, __LINE__);
     mUri.clear();
     mUriHeaders.clear();
     if (mFd >= 0) {
@@ -140,11 +150,12 @@ sp<MetaData> AmNuPlayer::GenericSource::getFileFormatMeta() const {
 }
 
 status_t AmNuPlayer::GenericSource::initFromDataSource() {
-    sp<IMediaExtractor> extractor;
+
     String8 mimeType;
     float confidence;
     sp<AMessage> dummy;
     bool isWidevineStreaming = false;
+    ALOGI(">>>[%s %d]", __FUNCTION__, __LINE__);
 
     CHECK(mDataSource != NULL);
 
@@ -179,6 +190,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         extractor = MediaExtractor::Create(mDataSource,
                 mimeType.isEmpty() ? "amnu+" : mimeType.string());
     }
+    ALOGI(">>>MediaExtractor::Create [%s %d]", __FUNCTION__, __LINE__);
 
     if (extractor == NULL) {
         return UNKNOWN_ERROR;
@@ -352,6 +364,7 @@ AmNuPlayer::GenericSource::~GenericSource() {
         mLooper->unregisterHandler(id());
         mLooper->stop();
     }
+    ALOGI(">>>[%s %d]", __FUNCTION__, __LINE__);
     resetDataSource();
 }
 
@@ -369,13 +382,18 @@ void AmNuPlayer::GenericSource::prepareAsync() {
 }
 
 void AmNuPlayer::GenericSource::onPrepareAsync() {
+
     // delayed data source creation
     if (mDataSource == NULL) {
         // set to false first, if the extractor
         // comes back as secure, set it to true then.
         mIsSecure = false;
-
-        if (!mUri.empty()) {
+        ALOGI("patch:%s",mUri.c_str());
+        if (!mUri.empty() && !strncasecmp("udp:", mUri.c_str(), 4)) {
+            mIsWidevine = false;
+            mDataSource = new AmUDPSource(mUri.c_str());
+            ALOGI("create a AmUDPSource");
+        } else if (!mUri.empty()) {
             const char* uri = mUri.c_str();
             String8 contentType;
             mIsWidevine = !strncasecmp(uri, "widevine://", 11);
@@ -1067,7 +1085,7 @@ ssize_t AmNuPlayer::GenericSource::doGetSelectedTrack(media_track_type type) con
 }
 
 status_t AmNuPlayer::GenericSource::selectTrack(size_t trackIndex, bool select, int64_t timeUs) {
-    ALOGV("%s track: %zu", select ? "select" : "deselect", trackIndex);
+    ALOGI("%s track: %zu", select ? "select" : "deselect", trackIndex);
     sp<AMessage> msg = new AMessage(kWhatSelectTrack, this);
     msg->setInt32("trackIndex", trackIndex);
     msg->setInt32("select", select);
