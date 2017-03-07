@@ -143,11 +143,15 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
                                float curScore)
    {
         static const float kOurScore = 1.0;
-
+        bool udpenable = false;
         char value[PROPERTY_VALUE_MAX];
         if (property_get("media.hls.disable-nuplayer", value, NULL)
             && (!strcasecmp(value, "true") || !strcmp(value, "1"))) {
             return 0.0;
+        }
+        if (property_get("media.udp.use-nuplayer", value, "1")//default use amnuplayer
+            && (!strcasecmp(value, "true") || !strcmp(value, "1"))) {
+            udpenable = true;
         }
 
         if (kOurScore <= curScore)
@@ -156,7 +160,7 @@ class AmNuPlayerFactory : public MediaPlayerFactory::IFactory {
         // use amnuplayer to play hls.
         // add other stream type afterwards.
         if (!strncasecmp("http://", url, 7)
-            || !strncasecmp("https://", url, 8)) {
+            || !strncasecmp("https://", url, 8) || (!strncasecmp("udp:", url, 4) && udpenable)) {
             size_t len = strlen(url);
 
             // skip over DASH & MS-SS.

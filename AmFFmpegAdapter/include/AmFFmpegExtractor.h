@@ -85,8 +85,10 @@ private:
 
     virtual ~AmFFmpegExtractor();
     void init();
+
     status_t feedMore();
     int32_t getPrimaryStreamIndex(AVFormatContext *context);
+    void release(AmFFmpegSource* source);
 
     DISALLOW_EVIL_CONSTRUCTORS(AmFFmpegExtractor);
 };

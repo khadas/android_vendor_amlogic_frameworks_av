@@ -68,6 +68,7 @@ struct AmFFmpegSource : public MediaSource {
 
     virtual status_t read(
             MediaBuffer **buffer, const ReadOptions *options = NULL);
+    virtual status_t pause();
 
     // Callee retains the ownership of the packet.
     status_t queuePacket(AVPacket *packet);
@@ -134,6 +135,7 @@ AmFFmpegSource::AmFFmpegSource(
       mNumerator(0),
       mDenominator(0),
       mSeekable(seekable) {
+      ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     init(stream, inputFormat, extractor);
 }
 
@@ -141,6 +143,8 @@ AmFFmpegSource::~AmFFmpegSource() {
     if (mStarted) {
         stop();
     }
+
+    ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     clearPendingPackets();
 }
 
@@ -149,6 +153,7 @@ status_t AmFFmpegSource::init(
         const sp<AmFFmpegExtractor> &extractor) {
     CHECK(stream);
     CHECK(inputFormat);
+    ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
 
     mTimeBase = AV_TIME_BASE;
     mNumerator = stream->time_base.num;
@@ -308,12 +313,18 @@ status_t AmFFmpegSource::start(MetaData *params) {
 }
 
 status_t AmFFmpegSource::stop() {
-    CHECK(mStarted);
-
+    ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
+    if (!mStarted)
+        return OK;
     delete mGroup;
     mGroup = NULL;
     mStarted = false;
 
+    return OK;
+}
+
+status_t AmFFmpegSource::pause(){
+    mExtractor->release(this);
     return OK;
 }
 
@@ -496,13 +507,17 @@ AmFFmpegExtractor::AmFFmpegExtractor(const sp<DataSource> &source)
       mInputFormat(NULL),
       mPTSPopulator(NULL),
       mFFmpegContext(NULL) {
+      ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     init();
 }
 
 AmFFmpegExtractor::~AmFFmpegExtractor() {
     if (NULL != mFFmpegContext) {
         avformat_close_input(&mFFmpegContext);
+        ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     }
+    mDataSource.clear();
+    ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
 }
 
 size_t AmFFmpegExtractor::countTracks() {
@@ -520,7 +535,7 @@ sp<IMediaSource> AmFFmpegExtractor::getTrack(size_t index) {
     // TODO: We may need to check and deactivate other sources which have the
     // same media type if the player plays only single track per media type.
 
-    return mSources[index].mSource;
+    return mSources[index].mSource;////////////// this shoule return a soure ,not to  be ref
 }
 
 sp<MetaData> AmFFmpegExtractor::getTrackMetaData(
@@ -562,6 +577,7 @@ void AmFFmpegExtractor::init() {
     const char *mimeType = convertInputFormatToMimeType(mInputFormat);
     if (mimeType) {
         mMeta->setCString(kKeyMIMEType, mimeType);
+        ALOGI("[%s %d] %s", __FUNCTION__, __LINE__,mimeType);
     }
     if (static_cast<int64_t>(AV_NOPTS_VALUE) != mFFmpegContext->duration) {
         mMeta->setInt64(kKeyDuration,
@@ -689,6 +705,19 @@ int32_t AmFFmpegExtractor::getPrimaryStreamIndex(AVFormatContext *context) {
         }
     }
     return firstAudioIndex;
+}
+void AmFFmpegExtractor::release(AmFFmpegSource* source){
+    ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
+    for (uint32_t i = 0; i < mSources.size(); ++i) {
+        if (source != mSources[i].mSource.get())
+            continue;
+        ALOGI("source addr %p",source);
+        if (mSources[i].mIsActive) {
+            mSources[i].mSource->clearPendingPackets();
+        }
+        mSources.erase(mSources.begin());
+    }
+
 }
 
 uint32_t AmFFmpegExtractor::flags() const {
