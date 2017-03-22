@@ -773,7 +773,11 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
     }
 
     bool amnuPlayerLocalplay = AmlogicPlayer::PropIsEnable("media.amnuplayer.localplay", true);
-    if (amnuPlayerLocalplay && (type != NULL) && isAmNuplayerSupport(type)) {
+    bool isamplayer =
+        muri != NULL && (!strncasecmp("http://", muri, 7) || !strncasecmp("https://", muri, 8) || !(strncasecmp("bluray:", muri, 7)));
+    LOGI(" url = %s",muri);
+
+    if (amnuPlayerLocalplay && !isamplayer && (type != NULL) && isAmNuplayerSupport(type)) {
             return AMNUPLAYER;
     }
     //----end add-------------------------------------
