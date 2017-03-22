@@ -28,6 +28,7 @@
 
 struct AVInputFormat;
 struct AVFormatContext;
+struct AVCodecContext;
 
 namespace android {
 
@@ -97,6 +98,7 @@ private:
 
     status_t feedMore();
     int32_t getPrimaryStreamIndex(AVFormatContext *context);
+    bool checkStreamValid(AVCodecContext *codec);
     void release(AmFFmpegSource* source);
 
     DISALLOW_EVIL_CONSTRUCTORS(AmFFmpegExtractor);
