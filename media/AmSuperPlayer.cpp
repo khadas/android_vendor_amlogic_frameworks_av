@@ -711,7 +711,7 @@ static bool isAmNuplayerSupport(char *type)
         || (NULL != strstr(type, "mov"))
         || (NULL != strstr(type, "3gp"))
         || (NULL != strstr(type, "ogg"))) {
-        if ((NULL == strstr(type, "avs"))) { // not support avs now
+        if ((NULL == strstr(type, "avs")) && (NULL == strstr(type, "dra"))) { // not support avs now
             LOGV("%s is AmNuplayer support type\n",type);
             return true;
         }
