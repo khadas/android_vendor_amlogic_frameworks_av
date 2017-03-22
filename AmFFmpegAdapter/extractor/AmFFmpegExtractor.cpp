@@ -644,9 +644,7 @@ void AmFFmpegExtractor::init() {
         AVCodecContext *codec = mFFmpegContext->streams[i]->codec;
 
         if (!mFFmpegContext->streams[i]->codec_info_nb_frames
-                && codec->codec_type == AVMEDIA_TYPE_AUDIO
-                && codec->codec_id != CODEC_ID_DTS
-                ) {
+                && !checkStreamValid(codec)) {
             streamValid = false;
         }
         bool shouldAdd = streamValid && ((codec->codec_type == AVMEDIA_TYPE_AUDIO)
@@ -786,6 +784,28 @@ uint32_t AmFFmpegExtractor::flags() const {
     }
 
     return flags;
+}
+
+bool AmFFmpegExtractor::checkStreamValid(AVCodecContext *codec) {
+    bool ret = false;
+    switch (codec->codec_type) {
+        case AVMEDIA_TYPE_AUDIO:
+            if ((codec->codec_id == CODEC_ID_AAC) ||
+                (codec->codec_id == CODEC_ID_AC3) ||
+                (codec->codec_id == CODEC_ID_DTS)) {
+                ret = true;
+            } else {
+                ret = (codec->sample_rate > 0) && (codec->channels > 0);
+            }
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            ret = codec->width > 0;
+            break;
+        default:
+            ret = true;
+        break;
+    }
+    return ret;
 }
 
 AmFFmpegExtractor::SourceInfo::SourceInfo()
