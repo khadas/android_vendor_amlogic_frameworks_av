@@ -317,6 +317,7 @@ status_t AmFFmpegSource::start(MetaData *params) {
     resetBufferGroup(kDefaultFrameBufferSize);
 
     mStarted = true;
+    clearPendingPackets();
 
     return OK;
 }
@@ -328,6 +329,7 @@ status_t AmFFmpegSource::stop() {
     delete mGroup;
     mGroup = NULL;
     mStarted = false;
+    clearPendingPackets();
 
     return OK;
 }
@@ -517,6 +519,13 @@ void AmFFmpegSource::resetBufferGroup(size_t size) {
 
 status_t AmFFmpegSource::queuePacket(AVPacket *packet) {
     Mutex::Autolock autoLock(mPacketQueueLock);
+
+    if (!mStarted) {
+        av_free_packet(packet);
+        delete packet;
+        return OK;
+    }
+
     mPacketQueue.push_back(packet);
     return OK;
 }
