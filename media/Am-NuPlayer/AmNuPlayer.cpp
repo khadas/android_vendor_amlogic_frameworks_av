@@ -726,6 +726,7 @@ status_t AmNuPlayer::setParameter(int key , const Parcel &  request ) {
         }
     }else{
         ALOGI("unsupport setParameter value!=%d\n", key);
+        return INVALID_OPERATION;
     }
     return OK;
 }
