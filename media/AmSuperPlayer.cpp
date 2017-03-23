@@ -703,14 +703,14 @@ int AmSuperPlayer::match_codecs(const char *filefmtstr,const char *fmtsetting)
         return 0;
 }
 
-static bool isAmNuplayerSupport(char *type)
+static bool isAmNuplayerSupport(char *type,int videos,int audios)
 {
     LOGV("%s\n",type,type);
 
     if ((NULL != strstr(type, "mpegts"))
         || (NULL != strstr(type, "mov"))
         || (NULL != strstr(type, "3gp"))
-        || (NULL != strstr(type, "ogg"))) {
+        || ( NULL != strstr(type, "ogg") && !videos))/*just audio jump*/ {
         if ((NULL == strstr(type, "avs")) && (NULL == strstr(type, "dra"))) { // not support avs now
             LOGV("%s is AmNuplayer support type\n",type);
             return true;
@@ -777,7 +777,7 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
         muri != NULL && (!strncasecmp("http://", muri, 7) || !strncasecmp("https://", muri, 8) || !(strncasecmp("bluray:", muri, 7)));
     LOGI(" url = %s",muri);
 
-    if (amnuPlayerLocalplay && !isamplayer && (type != NULL) && isAmNuplayerSupport(type)) {
+    if (amnuPlayerLocalplay && !isamplayer && (type != NULL) && isAmNuplayerSupport(type,videos,audios)) {
             return AMNUPLAYER;
     }
     //----end add-------------------------------------
