@@ -261,6 +261,14 @@ status_t AmFFmpegSource::init(
         }
         if (stream->codec->block_align > 0)
             mMeta->setInt32(kKeyBlockAlign, stream->codec->block_align);
+
+        AVDictionaryEntry *lang =
+                av_dict_get(stream->metadata, "rotate", NULL, 0);
+        if (lang != NULL && lang->value != NULL) {
+            int rotate = atoi(lang->value);
+            ALOGE("=rotate %d", rotate);
+            mMeta->setInt32(kKeyRotation, rotate);
+        }
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
             // Add ISO-14496-12 atom header (BigEndian size + FOURCC tx3g),
