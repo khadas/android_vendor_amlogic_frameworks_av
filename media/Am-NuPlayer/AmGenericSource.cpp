@@ -259,7 +259,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                 }
             }
         } else if (!strncasecmp(mime, "video/", 6)) {
-            if (mVideoTrack.mSource == NULL) {
+            if (mVideoTrack.mSource == NULL) {//  default is first
                 mVideoTrack.mIndex = i;
                 mVideoTrack.mSource = track;
                 mVideoTrack.mPackets =
@@ -273,6 +273,14 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                     if (mUIDValid) {
                         extractor->setUID(mUID);
                     }
+                }
+                float frameRate;
+                if (meta->findFloat('frRa',&frameRate)) {
+                    sp<AMessage> msg = dupNotify();
+                    msg->setInt32("what", kWhatFrameRate);
+                    msg->setFloat("frame-rate", frameRate);
+                    //ALOGI("send a frame-rate %.2f",frameRate);
+                    msg->post();
                 }
             }
         }

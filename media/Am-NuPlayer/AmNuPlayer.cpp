@@ -816,6 +816,7 @@ void AmNuPlayer::setDataSourceAsync(
         if (property_get("media.hls.frame-rate", value, NULL)) {
             mEnableFrameRate = atoi(value);
         }
+
     } else if (!strncasecmp(url, "rtsp://", 7)) {
         source = new RTSPSource(
                 notify, httpService, url, headers, mUIDValid, mUID);
@@ -840,6 +841,7 @@ void AmNuPlayer::setDataSourceAsync(
             ALOGE("Failed to set data source!");
         }
     }
+
     msg->setObject("source", source);
     msg->post();
 }
@@ -2251,7 +2253,7 @@ status_t AmNuPlayer::instantiateDecoder(
         notify->setInt32("generation", mVideoDecoderGeneration);
 
         format->setFloat("frame-rate", mFrameRate);
-
+        ALOGI("set frame-rate %.2f",mFrameRate);
         *decoder = new Decoder(
                 notify, mSource, mPID, mRenderer, mSurface, mCCDecoder);
         mRenderer->setHasMedia(audio);
