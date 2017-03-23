@@ -251,10 +251,9 @@ status_t AmFFmpegSource::init(
             rationalFramerate = &(stream->r_frame_rate);
         }
         if (rationalFramerate != NULL) {
-            uint64_t framerate = rationalFramerate->num;
-            framerate <<= 16;  // convert to Q16 value.
-            framerate /= rationalFramerate->den;
-            mMeta->setInt32(kKeyFrameRateQ16, static_cast<int32_t>(framerate));
+            float framerate = (rationalFramerate->num*1.0)/rationalFramerate->den;
+            mMeta->setFloat('frRa', framerate);
+            ALOGI("set frame-rate %.2f   \n", framerate);
         }
         if (stream->codec->extradata_size > 0) {
             mMeta->setData(kKeyExtraData, 0, (char*)stream->codec->extradata, stream->codec->extradata_size);
@@ -671,6 +670,7 @@ void AmFFmpegExtractor::init() {
         bool shouldAdd = streamValid && ((codec->codec_type == AVMEDIA_TYPE_AUDIO)
                                             || (codec->codec_type == AVMEDIA_TYPE_VIDEO)
                                             || (codec->codec_type == AVMEDIA_TYPE_SUBTITLE));
+
         const char *mimeType =
                 convertCodecIdToMimeType(mFFmpegContext->streams[i]->codec);
         if (shouldAdd && NULL != mimeType) {
