@@ -63,6 +63,7 @@ struct AmFFmpegSource : public MediaSource {
     AmFFmpegSource(
             const sp<AmFFmpegExtractor> &extractor,
             AVStream *stream,
+            AVProgram *program,
             AVInputFormat *inputFormat,
             sp<AmPTSPopulator> &ptsPopulator,
             bool seekable,
@@ -87,6 +88,7 @@ private:
     sp<MetaData> mMeta;
     sp<AmPTSPopulator> mPTSPopulator;
     AVStream *mStream;
+    AVProgram *mProgram;
 
     Mutex mPacketQueueLock;
     List<AVPacket *> mPacketQueue;
@@ -126,6 +128,7 @@ private:
 AmFFmpegSource::AmFFmpegSource(
         const sp<AmFFmpegExtractor> &extractor,
         AVStream *stream,
+        AVProgram *program,
         AVInputFormat *inputFormat,
         sp<AmPTSPopulator> &ptsPopulator,
         bool seekable,
@@ -137,6 +140,7 @@ AmFFmpegSource::AmFFmpegSource(
       mStartRead(false),
       mGroup(NULL),
       mStream(stream),
+      mProgram(program),
       mMime(NULL),
       mStartTimeUs(startTimeUs),
       mTimeBase(0),
@@ -265,8 +269,17 @@ status_t AmFFmpegSource::init(
                 av_dict_get(stream->metadata, "rotate", NULL, 0);
         if (lang != NULL && lang->value != NULL) {
             int rotate = atoi(lang->value);
-            ALOGE("=rotate %d", rotate);
+            ALOGD("rotate %d", rotate);
             mMeta->setInt32(kKeyRotation, rotate);
+        }
+        if (mProgram) {
+            lang = av_dict_get(mProgram->metadata, "service_name", NULL, 0);
+            if (lang != NULL && lang->value != NULL) {
+                ALOGD("service_name %s", lang->value);
+                char pname[16];
+                strcpy(pname, lang->value);
+                mMeta->setCString(kKeyProgramName, pname);
+            }
         }
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
@@ -668,8 +681,9 @@ void AmFFmpegExtractor::init() {
                     mFFmpegContext->start_time) {
                 startTimeUs = mFFmpegContext->start_time;
             }
+            AVProgram *program = av_find_program_from_stream(mFFmpegContext, NULL, mFFmpegContext->streams[i]->index);
             mSources.editTop().mSource =
-                    new AmFFmpegSource(this, mFFmpegContext->streams[i],
+                    new AmFFmpegSource(this, mFFmpegContext->streams[i], program,
                             mInputFormat, mPTSPopulator, seekable, startTimeUs);
             mStreamIdxToSourceIdx.add(mSources.size() - 1);
         } else {

@@ -221,6 +221,7 @@ AmNuPlayer::AmNuPlayer(pid_t pid)
     if (property_get("media.hls.wait-seconds", value, NULL)) {
         mWaitSeconds = atoi(value);
     }
+    memset(&mStreamInfo, 0, sizeof(mStreamInfo));
 }
 
 AmNuPlayer::~AmNuPlayer() {
@@ -584,9 +585,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 int32_t codecid,width,height,bitrate;
                 int64_t duration;
                 vinfo->index       = i;
-                if (format->findInt32("codec-id", &codecid)) {
-                    vinfo->id = codecid;
-                }
+                vinfo->id = i;
                 if (format->findInt32("width", &width)) {
                     vinfo->width = width;
                 }
@@ -609,6 +608,14 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 mStreamInfo.stream_info.total_video_num++;
                 if (i == mSource->getSelectedTrack(MEDIA_TRACK_TYPE_VIDEO)) {
                     cur_video_index = i;
+                }
+                AString name;
+                if (format->findString("program-name", &name)) {
+                    ALOGV("program-name %s",name.c_str());
+                    int num = mStreamInfo.ts_programe_info.programe_num;
+                    mStreamInfo.ts_programe_info.ts_programe_detail[num].video_pid = i;
+                    strcpy(mStreamInfo.ts_programe_info.ts_programe_detail[num].programe_name, name.c_str());
+                    mStreamInfo.ts_programe_info.programe_num++;
                 }
             } else if (mime.startsWith("audio/")) {
                 ainfo = (maudio_info_t *)malloc(sizeof(maudio_info_t));
@@ -706,7 +713,14 @@ status_t AmNuPlayer::getMediaInfo(Parcel* reply){
 
     /*build subtitle info*/
     reply->writeInt32(0);
-    reply->writeInt32(0);
+    reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
+    for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
+        reply->writeInt32(mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid);
+        reply->writeString16(String16(mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name));
+        ALOGI("--programe i:%d, id:%d programe_name:%s\n", i,
+                                mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid,
+                                mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name);
+    }
     reply->setDataPosition(datapos);
     return OK;
 }

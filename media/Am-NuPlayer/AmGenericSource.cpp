@@ -1032,6 +1032,11 @@ sp<AMessage> AmNuPlayer::GenericSource::getTrackInfo(size_t trackIndex) const {
         format->setInt32("auto", !!isAutoselect);
         format->setInt32("default", !!isDefault);
         format->setInt32("forced", !!isForced);
+    } else if(trackType == MEDIA_TRACK_TYPE_VIDEO) {
+        const char *programName;
+        if (meta->findCString(kKeyProgramName, &programName)) {
+            format->setString("program-name", programName);
+        }
     }
 
     return format;
