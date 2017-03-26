@@ -238,6 +238,11 @@ private:
     sp<ALooper> mLooper;
     sp<ALooper> mBufferingMonitorLooper;
 
+    int mLastDuration;
+    bool mIsAmlSubtitle;
+    bool mSubStartPtsUpdate;
+    bool mSubTypeUpdate;
+
     void resetDataSource();
 
     status_t initFromDataSource();
@@ -290,6 +295,11 @@ private:
 
     void queueDiscontinuityIfNeeded(
             bool seeking, bool formatChange, media_track_type trackType, Track *track);
+
+    void sendToSubtitleService(MediaBuffer *mbuf);
+    void setSubType(int type);
+    void setSubStartPts(int64_t pts);
+    void setSubTotal(int total);
 
     DISALLOW_EVIL_CONSTRUCTORS(GenericSource);
 };

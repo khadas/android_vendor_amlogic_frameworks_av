@@ -39,6 +39,8 @@
 #include "avc_utils.h"
 #include "AmATSParser.h"
 
+#include "AmSocketClient.h"
+
 #define ES_AUDIO_DUMP_PATH    "/data/tmp/nuplayer_audio_es.bit"
 #define ES_VIDEO_DUMP_PATH    "/data/tmp/nuplayer_video_es.bit"
 
@@ -595,6 +597,8 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer(
     buffer->setRange(offset, size);
     buffer->meta()->clear();
     buffer->meta()->setInt64("timeUs", timeUs);
+
+    setPcrscr(timeUs);
 
     bool eos = flags & MediaCodec::BUFFER_FLAG_EOS;
     // we do not expect CODECCONFIG or SYNCFRAME for decoder

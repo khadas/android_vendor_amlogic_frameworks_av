@@ -665,13 +665,14 @@ player_type  AmSuperPlayer::Str2PlayerType(const char *str)
 
 const char *  AmSuperPlayer::PlayerType2Str(player_type type)
 {
-	switch(type){
-		case     NU_PLAYER: 	return "NU_PLAYER";
-		case     AMLOGIC_PLAYER: 		return "AMLOGIC_PLAYER";
-		case     AMSUPER_PLAYER: 		return "AMSUPER_PLAYER";
-		case     TEST_PLAYER: 			return "TEST_PLAYER";
-		default:						return "UNKNOWN_PLAYER";
-	}
+    switch (type) {
+        case NU_PLAYER: return "NU_PLAYER";
+        case AMLOGIC_PLAYER: return "AMLOGIC_PLAYER";
+        case AMSUPER_PLAYER: return "AMSUPER_PLAYER";
+        case TEST_PLAYER: return "TEST_PLAYER";
+        case AMNUPLAYER: return "AMNU_PLAYER";
+        default: return "UNKNOWN_PLAYER";
+    }
 }
 
 int AmSuperPlayer::match_codecs(const char *filefmtstr,const char *fmtsetting)

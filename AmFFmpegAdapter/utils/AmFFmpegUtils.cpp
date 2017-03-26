@@ -113,6 +113,24 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_TEXT_3GPP, AV_CODEC_ID_MOV_TEXT },
     { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_COOK },
     { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_FLAC },
+
+    //add for subtitle
+    { "subtitle/dvd",           AV_CODEC_ID_DVD_SUBTITLE },
+    { "subtitle/dvb",           AV_CODEC_ID_DVB_SUBTITLE },
+    { "subtitle/text",          AV_CODEC_ID_TEXT },
+    { "subtitle/xsub",          AV_CODEC_ID_XSUB },
+    { "subtitle/ssa",           AV_CODEC_ID_SSA },
+    { "subtitle/pgs",           AV_CODEC_ID_HDMV_PGS_SUBTITLE },
+    { "subtitle/teletext",      AV_CODEC_ID_DVB_TELETEXT },
+    { "subtitle/srt",           AV_CODEC_ID_SRT },
+    { "subtitle/microdvd",      AV_CODEC_ID_MICRODVD },
+    { "subtitle/eia608",        AV_CODEC_ID_EIA_608 },
+    { "subtitle/jacosub",       AV_CODEC_ID_JACOSUB },
+    { "subtitle/sami",          AV_CODEC_ID_SAMI },
+    { "subtitle/realtext",      AV_CODEC_ID_REALTEXT },
+    { "subtitle/subviewer",     AV_CODEC_ID_SUBVIEWER },
+    { "subtitle/subrip",        AV_CODEC_ID_SUBRIP },
+    { "subtitle/webvtt",        AV_CODEC_ID_WEBVTT },
 };
 
 static const size_t kNumEntries = NELEM(kKeyMap);

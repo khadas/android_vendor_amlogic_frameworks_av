@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "NU-GenericSource"
 
 #include "AmGenericSource.h"
@@ -39,6 +39,10 @@
 #include "../../libstagefright/include/HTTPBase.h"
 #include "AmUDPSource.h"
 
+#include "AmSocketClient.h"
+#include <media/stagefright/AmMetaDataExt.h>
+#include <inttypes.h>
+
 namespace android {
 
 static int64_t kLowWaterMarkUs = 2000000ll;  // 2secs
@@ -46,6 +50,18 @@ static int64_t kHighWaterMarkUs = 5000000ll;  // 5secs
 static int64_t kHighWaterMarkRebufferUs = 15000000ll;  // 15secs
 static const ssize_t kLowWaterMarkBytes = 40000;
 static const ssize_t kHighWaterMarkBytes = 200000;
+
+#define UNIT_FREQ   96000
+#define PTS_FREQ    90000
+#define str2ms(s) (((s[1]-0x30)*3600*10 \
+                +(s[2]-0x30)*3600 \
+                +(s[4]-0x30)*60*10 \
+                +(s[5]-0x30)*60 \
+                +(s[7]-0x30)*10 \
+                +(s[8]-0x30))*1000 \
+                +(s[10]-0x30)*100 \
+                +(s[11]-0x30)*10 \
+                +(s[12]-0x30))
 
 AmNuPlayer::GenericSource::GenericSource(
         const sp<AMessage> &notify,
@@ -68,14 +84,17 @@ AmNuPlayer::GenericSource::GenericSource(
       mFd(-1),
       mDrmManagerClient(NULL),
       mBitrate(-1ll),
-      mPendingReadBufferTypes(0) {
+      mPendingReadBufferTypes(0),
+      mIsAmlSubtitle(false),
+      mSubStartPtsUpdate(false),
+      mSubTypeUpdate(false) {
     mBufferingMonitor = new BufferingMonitor(notify);
     resetDataSource();
     DataSource::RegisterDefaultSniffers();
 }
 
 void AmNuPlayer::GenericSource::resetDataSource() {
-    for (int i = 0;i < mSources.size();i++)
+    for (int i = 0;i < (int)mSources.size();i++)
         mSources.itemAt(i)->pause();
     while (!mSources.empty()) {
         mSources.erase(mSources.begin());
@@ -155,6 +174,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
     float confidence;
     sp<AMessage> dummy;
     bool isWidevineStreaming = false;
+    int subTotal = 0;
     ALOGI(">>>[%s %d]", __FUNCTION__, __LINE__);
 
     CHECK(mDataSource != NULL);
@@ -240,6 +260,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
 
         const char *mime;
         CHECK(meta->findCString(kKeyMIMEType, &mime));
+        //ALOGI("[initFromDataSource]mime[%d]:%s\n", i, mime);
 
         // Do the string compare immediately with "mime",
         // we can't assume "mime" would stay valid after another
@@ -283,6 +304,8 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                     msg->post();
                 }
             }
+        } else if (!strncasecmp(mime, "subtitle/", 9) || !strncasecmp(mime, "text/", 5)) {
+            subTotal++;
         }
 
         mSources.push(track);
@@ -307,6 +330,8 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
     }
 
     mBitrate = totalBitrate;
+
+    setSubTotal(subTotal);
 
     return OK;
 }
@@ -387,6 +412,14 @@ void AmNuPlayer::GenericSource::prepareAsync() {
 
     sp<AMessage> msg = new AMessage(kWhatPrepareAsync, this);
     msg->post();
+
+    //add for subtitle
+    setSubTotal(-1);
+    setSubStartPts(-1);
+    setSubType(-1);
+    socketSend((char *)"exit\n", 5);
+    socketDisconnect();
+    socketConnect();
 }
 
 void AmNuPlayer::GenericSource::onPrepareAsync() {
@@ -821,10 +854,12 @@ void AmNuPlayer::GenericSource::sendTextData(
     sp<ABuffer> buffer;
     status_t dequeueStatus = packets->dequeueAccessUnit(&buffer);
     if (dequeueStatus == OK) {
-        sp<AMessage> notify = dupNotify();
-        notify->setInt32("what", what);
-        notify->setBuffer("buffer", buffer);
-        notify->post();
+        if (!mIsAmlSubtitle) {
+            sp<AMessage> notify = dupNotify();
+            notify->setInt32("what", what);
+            notify->setBuffer("buffer", buffer);
+            notify->post();
+        }
 
         const int64_t delayUs = nextSubTimeUs - subTimeUs;
         msg->post(delayUs < 0 ? 0 : delayUs);
@@ -1010,6 +1045,8 @@ sp<AMessage> AmNuPlayer::GenericSource::getTrackInfo(size_t trackIndex) const {
         trackType = MEDIA_TRACK_TYPE_VIDEO;
     } else if (!strncasecmp(mime, "audio/", 6)) {
         trackType = MEDIA_TRACK_TYPE_AUDIO;
+    } else if (!strncasecmp(mime, "subtitle/", 9)) {
+        trackType = MEDIA_TRACK_TYPE_SUBTITLE;
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_TEXT_3GPP)) {
         trackType = MEDIA_TRACK_TYPE_TIMEDTEXT;
     } else {
@@ -1156,8 +1193,13 @@ status_t AmNuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select
     sp<MetaData> meta = source->getFormat();
     const char *mime;
     CHECK(meta->findCString(kKeyMIMEType, &mime));
-    if (!strncasecmp(mime, "text/", 5)) {
-        bool isSubtitle = strcasecmp(mime, MEDIA_MIMETYPE_TEXT_3GPP);
+    mIsAmlSubtitle = !strncasecmp(mime, "subtitle/", 9);
+    if (mIsAmlSubtitle || !strncasecmp(mime, "text/", 5)) {
+        mSubTypeUpdate = false;
+    }
+
+    if (!strncasecmp(mime, "text/", 5) || mIsAmlSubtitle) {
+        bool isSubtitle = strcasecmp(mime, MEDIA_MIMETYPE_TEXT_3GPP) || mIsAmlSubtitle;
         Track *track = isSubtitle ? &mSubtitleTrack : &mTimedTextTrack;
         if (track->mSource != NULL && track->mIndex == trackIndex) {
             return OK;
@@ -1176,6 +1218,10 @@ status_t AmNuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select
 
         }
 
+        if (mIsAmlSubtitle) {
+            socketSend((char *)"reset\n", 6);
+        }
+
         if (isSubtitle) {
             mFetchSubtitleDataGeneration++;
         } else {
@@ -1191,9 +1237,11 @@ status_t AmNuPlayer::GenericSource::doSelectTrack(size_t trackIndex, bool select
             msg->post();
         }
 
-        sp<AMessage> msg2 = new AMessage(kWhatSendGlobalTimedTextData, this);
-        msg2->setInt32("generation", mFetchTimedTextDataGeneration);
-        msg2->post();
+        if (!mIsAmlSubtitle) {
+            sp<AMessage> msg2 = new AMessage(kWhatSendGlobalTimedTextData, this);
+            msg2->setInt32("generation", mFetchTimedTextDataGeneration);
+            msg2->post();
+        }
 
         if (mTimedTextTrack.mSource != NULL
                 && !mTimedTextTrack.mPackets->hasBufferAvailable(&eosResult)) {
@@ -1265,6 +1313,11 @@ status_t AmNuPlayer::GenericSource::doSeek(int64_t seekTimeUs) {
     if (mAudioTrack.mSource != NULL) {
         readBuffer(MEDIA_TRACK_TYPE_AUDIO, seekTimeUs);
         mAudioLastDequeueTimeUs = seekTimeUs;
+    }
+
+    if (mSubtitleTrack.mSource != NULL && mIsAmlSubtitle) {
+        socketSend((char *)"reset\n", 6);
+        readBuffer(MEDIA_TRACK_TYPE_SUBTITLE, seekTimeUs);
     }
 
     setDrmPlaybackStatusIfNeeded(Playback::START, seekTimeUs / 1000);
@@ -1398,6 +1451,174 @@ void AmNuPlayer::GenericSource::onReadBuffer(sp<AMessage> msg) {
     }
 }
 
+void AmNuPlayer::GenericSource::setSubTotal(int total) {
+    char buf[8] = {0x53, 0x54, 0x4F, 0x54};//STOT
+    buf[4] = (total >> 24) & 0xff;
+    buf[5] = (total >> 16) & 0xff;
+    buf[6] = (total >> 8) & 0xff;
+    buf[7] = total & 0xff;
+    socketSend(buf, 8);
+}
+
+void AmNuPlayer::GenericSource::setSubStartPts(int64_t pts) {
+    if (!mSubStartPtsUpdate && pts >= 0) {
+        mSubStartPtsUpdate = true;
+
+        char ptsStr[16] = "";
+        sprintf(ptsStr, "%" PRId64, pts);
+        writeSysfs("/sys/class/subtitle/startpts", ptsStr);
+        char buf[8] = {0x53, 0x50, 0x54, 0x53};//SPTS
+        buf[4] = (pts >> 24) & 0xff;
+        buf[5] = (pts >> 16) & 0xff;
+        buf[6] = (pts >> 8) & 0xff;
+        buf[7] = pts & 0xff;
+        socketSend(buf, 8);
+    }
+}
+
+void AmNuPlayer::GenericSource::setSubType(int type) {
+    if (!mSubTypeUpdate) {
+        mSubTypeUpdate = true;
+
+        char buf[8] = {0x53, 0x54, 0x59, 0x50};//STYP
+        buf[4] = (type >> 24) & 0xff;
+        buf[5] = (type >> 16) & 0xff;
+        buf[6] = (type >> 8) & 0xff;
+        buf[7] = type & 0xff;
+        socketSend(buf, 8);
+    }
+}
+
+void AmNuPlayer::GenericSource::sendToSubtitleService(MediaBuffer *mbuf) {
+    if (mbuf == NULL) {
+        ALOGE("[sendToSubtitleService]mbuf == NULL !!!\n");
+        return;
+    }
+
+    int32_t streamTimeBaseNum;
+    int32_t streamTimeBaseDen;
+    int64_t streamStartTime;
+    int32_t streamCodecID;
+    int32_t streamCodecTag;
+    int32_t pktSize;
+    int64_t pktPts;
+    int64_t pktDts;
+    int32_t pktDuration;
+    int64_t pktConvergenceDuration;
+
+    mbuf->meta_data()->findInt32(kKeyStreamTimeBaseNum, &streamTimeBaseNum);
+    mbuf->meta_data()->findInt32(kKeyStreamTimeBaseDen, &streamTimeBaseDen);
+    mbuf->meta_data()->findInt64(kKeyStreamStartTime, &streamStartTime);
+    mbuf->meta_data()->findInt32(kKeyStreamCodecID, &streamCodecID);
+    mbuf->meta_data()->findInt32(kKeyStreamCodecTag, &streamCodecTag);
+    mbuf->meta_data()->findInt32(kKeyPktSize, &pktSize);
+    mbuf->meta_data()->findInt64(kKeyPktPts, &pktPts);
+    mbuf->meta_data()->findInt64(kKeyPktDts, &pktDts);
+    mbuf->meta_data()->findInt32(kKeyPktDuration, &pktDuration);
+    mbuf->meta_data()->findInt64(kKeyPktConvergenceDuration, &pktConvergenceDuration);
+
+    //ALOGI("[sendToSubtitleService]packet->size:%d, packet->pts:%" PRId64 "\n", pktSize, pktPts);
+
+    unsigned char sub_header[20] = {0x41, 0x4d, 0x4c, 0x55, 0x77, 0};
+    unsigned int sub_type;
+    float duration = 0;
+    int64_t sub_pts = 0;
+    int64_t start_time = 0;
+    int data_size = pktSize;
+    if (data_size <= 0) {
+        ALOGE("[sendToSubtitleService]not enough data.data_size:%d\n", data_size);
+        return;
+    }
+
+    if (streamTimeBaseNum && (0 != streamTimeBaseDen)) {
+        duration = PTS_FREQ * ((float)streamTimeBaseNum / streamTimeBaseDen);
+        start_time = streamStartTime * streamTimeBaseNum * PTS_FREQ / streamTimeBaseDen;
+        mLastDuration = 0;
+    } else {
+        start_time = streamStartTime * PTS_FREQ;
+    }
+
+    /* get pkt pts */
+    if (0 != pktPts) {
+        sub_pts = pktPts * duration;
+        if (sub_pts < start_time) {
+            sub_pts = sub_pts * mLastDuration;
+        }
+    } else if (0 != pktDts) {
+        sub_pts = pktDts * duration * mLastDuration;
+        mLastDuration = pktDuration;
+    } else {
+        sub_pts = 0;
+    }
+
+    sub_type = streamCodecID;
+    if (sub_type == CODEC_ID_DVD_SUBTITLE) {
+        setSubType(0);
+    } else if (sub_type == CODEC_ID_HDMV_PGS_SUBTITLE) {
+        setSubType(1);
+    } else if (sub_type == CODEC_ID_XSUB) {
+        setSubType(2);
+    } else if (sub_type == CODEC_ID_TEXT
+        || sub_type == CODEC_ID_SSA) {
+        setSubType(3);
+    } else if (sub_type == CODEC_ID_DVB_SUBTITLE) {
+        setSubType(5);
+    } else if (sub_type == 0x17005) {
+        setSubType(7);//SUBTITLE_TMD_TXT
+    } else {
+        setSubType(4);
+    }
+
+    ALOGE("[sendToSubtitleService]sub_type:0x%x, data_size:%d, sub_pts:\n", sub_type, data_size, sub_pts);
+
+    if (sub_type == 0x17000) {
+        sub_type = 0x1700a;
+    }
+    else if (sub_type == 0x17002) {
+        mLastDuration = (unsigned)pktConvergenceDuration * 90;
+    }
+    else if (sub_type == 0x17003) {
+        char *buf = (char *)mbuf->data();
+        sub_pts = str2ms(buf) * 90;
+
+        // add flag for xsub to indicate alpha
+        unsigned int codec_tag = streamCodecTag;
+        if (codec_tag == MKTAG('D','X','S','A')) {
+            sub_header[4] = sub_header[4] | 0x01;
+        }
+    }
+
+    sub_header[5] = (sub_type >> 16) & 0xff;
+    sub_header[6] = (sub_type >> 8) & 0xff;
+    sub_header[7] = sub_type & 0xff;
+    sub_header[8] = (data_size >> 24) & 0xff;
+    sub_header[9] = (data_size >> 16) & 0xff;
+    sub_header[10] = (data_size >> 8) & 0xff;
+    sub_header[11] = data_size & 0xff;
+    sub_header[12] = (sub_pts >> 24) & 0xff;
+    sub_header[13] = (sub_pts >> 16) & 0xff;
+    sub_header[14] = (sub_pts >> 8) & 0xff;
+    sub_header[15] = sub_pts & 0xff;
+    sub_header[16] = (mLastDuration >> 24) & 0xff;
+    sub_header[17] = (mLastDuration >> 16) & 0xff;
+    sub_header[18] = (mLastDuration >> 8) & 0xff;
+    sub_header[19] = mLastDuration & 0xff;
+
+    /*//ALOGE("[writeSubtitlePacket]data_size:%d, sub_pts:%" PRId64 "\n", data_size, sub_pts);
+    ALOGE("[writeSubtitlePacket]data_size:%d, mbuf->size():%d\n", data_size, mbuf->size());
+    if (mbuf->size() >= 8)
+    for (int m = 0; m < 8; m++) {
+        ALOGE("[writeSubtitlePacket]mbuf->data()[%d]:%d\n", m, mbuf->data()[m]);
+    }*/
+
+    int size = 20 + data_size;
+    char * data = (char *)malloc(size);
+    memcpy(data, sub_header, 20);
+    memcpy(data + 20, (char *)mbuf->data(), data_size);
+    socketSend(data, size);
+    free(data);
+}
+
 void AmNuPlayer::GenericSource::readBuffer(
         media_track_type trackType, int64_t seekTimeUs, int64_t *actualTimeUs, bool formatChange) {
     // Do not read data if Widevine source is stopped
@@ -1487,9 +1708,17 @@ void AmNuPlayer::GenericSource::readBuffer(
             } else if (trackType == MEDIA_TRACK_TYPE_VIDEO) {
                 mVideoTimeUs = timeUs;
                 mBufferingMonitor->updateQueuedTime(false /* isAudio */, timeUs);
+
+                int64_t pktVPts;
+                mbuf->meta_data()->findInt64(kKeyPktFirstVPts, &pktVPts);
+                setSubStartPts(pktVPts);
             }
 
             queueDiscontinuityIfNeeded(seeking, formatChange, trackType, track);
+
+            if ((trackType == MEDIA_TRACK_TYPE_SUBTITLE && mIsAmlSubtitle) /*|| trackType == MEDIA_TRACK_TYPE_TIMEDTEXT*/) {//timed text show by google default
+                sendToSubtitleService(mbuf);
+            }
 
             sp<ABuffer> buffer = mediaBufferToABuffer(
                     mbuf, trackType, seekTimeUs,

@@ -3,6 +3,7 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:=                       \
         AmGenericSource.cpp               \
+        AmSocketClient.cpp                \
         AmHTTPLiveSource.cpp              \
         AmNuPlayer.cpp                    \
         AmNuPlayerCCDecoder.cpp           \
@@ -27,7 +28,9 @@ LOCAL_C_INCLUDES := \
     $(TOP)/external/curl/include                                  \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include \
-    $(TOP)/vendor/amlogic/external/ffmpeg/
+    $(TOP)/vendor/amlogic/external/ffmpeg/ \
+    $(TOP)/frameworks/av/amlogic/include \
+    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol \
 
 
 LOCAL_SHARED_LIBRARIES := \
@@ -42,7 +45,8 @@ LOCAL_SHARED_LIBRARIES := \
         libutils \
         libamffmpeg \
         libcurl \
-        libamavutils
+        libamavutils \
+        libsystemcontrolservice
 
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_rtsp \

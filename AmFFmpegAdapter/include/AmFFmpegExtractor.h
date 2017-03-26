@@ -93,6 +93,8 @@ private:
     Vector<uint32_t> mStreamIdxToSourceIdx;
     // End of protected variables by mLock.
 
+    int64_t mFirstVpts;
+
     virtual ~AmFFmpegExtractor();
     void init();
 

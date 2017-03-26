@@ -74,7 +74,8 @@ void AmAnotherPacketSource::setFormat(const sp<MetaData> &meta) {
     } else  if (!strncasecmp("video/", mime, 6)) {
         mIsVideo = true;
     } else {
-        CHECK(!strncasecmp("text/", mime, 5) || !strncasecmp("application/", mime, 12));
+        CHECK(!strncasecmp("text/", mime, 5) || !strncasecmp("application/", mime, 12)
+            || !strncasecmp("subtitle/", mime, 9));
     }
 }
 
