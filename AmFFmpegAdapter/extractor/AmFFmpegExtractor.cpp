@@ -419,16 +419,23 @@ status_t AmFFmpegSource::read(
                     || mInputFormat == av_find_input_format("mpegts"))) {
             skipTimedTextSeek = true;
         }
-        if (options && options->getSeekTo(&seekTimeUs, &seekMode)) {
-            if (seekTimeUs > 0 && !skipTimedTextSeek) {
-                int64_t seekTimeMs = seekTimeUs / 1000;
-                while (packet->pts < seekTimeMs) {
-                    packet = dequeuePacket();
-                    while (packet == NULL) {
-                        if (ERROR_END_OF_STREAM == extractor->feedMore()) {
-                            return ERROR_END_OF_STREAM;
-                        }
+
+        if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+            if (options && options->getSeekTo(&seekTimeUs, &seekMode)) {
+                //ALOGI("[read]packet->pts:%" PRId64 ", seekTimeUs:%" PRId64 ", seekTimeMs:%" PRId64 "\n", packet->pts, seekTimeUs, (seekTimeUs / 1000));
+                if (seekTimeUs > 0 && !skipTimedTextSeek) {
+                    int64_t seekTimeMs = seekTimeUs / 1000;
+                    int64_t curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
+                    while (/*packet->pts*/curTimeMs < seekTimeMs) {
+                        //ALOGI("[read]curTimeMs:%" PRId64 ",packet->pts : %" PRId64 ", seekTimeMs:%" PRId64 "\n", curTimeMs, packet->size, seekTimeMs);
                         packet = dequeuePacket();
+                        while (packet == NULL) {
+                            if (ERROR_END_OF_STREAM == extractor->feedMore()) {
+                                return ERROR_END_OF_STREAM;
+                            }
+                            packet = dequeuePacket();
+                        }
+                        curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
                     }
                 }
             }
@@ -519,7 +526,33 @@ status_t AmFFmpegSource::read(
         }
     }
 
+    if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+        //add for inner subtitle
+        buffer->meta_data()->setInt32(kKeyStreamTimeBaseNum, mStream->time_base.num);
+        buffer->meta_data()->setInt32(kKeyStreamTimeBaseDen, mStream->time_base.den);
+        buffer->meta_data()->setInt64(kKeyStreamStartTime, mStream->start_time);
+        buffer->meta_data()->setInt32(kKeyStreamCodecID, mStream->codec->codec_id);
+        buffer->meta_data()->setInt32(kKeyStreamCodecTag, mStream->codec->codec_tag);
+        buffer->meta_data()->setInt32(kKeyPktSize, packet->size);
+        buffer->meta_data()->setInt64(kKeyPktPts, packet->pts);
+        buffer->meta_data()->setInt64(kKeyPktDts, packet->dts);
+        buffer->meta_data()->setInt32(kKeyPktDuration, packet->duration);
+        buffer->meta_data()->setInt64(kKeyPktConvergenceDuration, packet->convergence_duration);
+    }
+
+    if (mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+        if (packet->size > 0
+            && packet->pts >= 0
+            && packet->pts != AV_NOPTS_VALUE
+            && extractor->mFirstVpts < 0) {
+            //ALOGI("[read]extractor->mFirstVpts:%" PRId64 "\n", extractor->mFirstVpts);
+            extractor->mFirstVpts = packet->pts;
+            buffer->meta_data()->setInt64(kKeyPktFirstVPts, extractor->mFirstVpts);
+        }
+    }
+
     *out = buffer;
+
     av_free_packet(packet);
     delete packet;
     return OK;
@@ -579,7 +612,8 @@ AmFFmpegExtractor::AmFFmpegExtractor(const sp<DataSource> &source)
     : mDataSource(source),
       mInputFormat(NULL),
       mPTSPopulator(NULL),
-      mFFmpegContext(NULL) {
+      mFFmpegContext(NULL),
+      mFirstVpts(-1) {
       ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     init();
 }
@@ -714,7 +748,6 @@ status_t AmFFmpegExtractor::feedMore() {
 
             //parse and store SEI for cc subtitle
             mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
-
             mSources[sourceIdx].mSource->queuePacket(packet);
         } else {
             delete packet;
