@@ -1,5 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 
+include $(TOP)/hardware/amlogic/media/media_base_config.mk
 #
 # libmedia_amlogic.so
 #
@@ -116,11 +117,9 @@ ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
     LOCAL_C_INCLUDES += \
         $(AMPLAYER_APK_DIR)/amplayer/player/include     \
         $(AMPLAYER_APK_DIR)/amplayer/control/include    \
-        $(AMPLAYER_APK_DIR)/amadec/include              \
-        $(AMPLAYER_APK_DIR)/amcodec/include             \
-        $(AMPLAYER_APK_DIR)/amavutils/include           \
-        $(AMPLAYER_APK_DIR)/amvdec/include           \
-        $(AMPLAYER_APK_DIR)/amffmpeg/
+        $(AMPLAYER_APK_DIR)/amffmpeg/\
+		$(AMCODEC_NEED_INCLUDE)\
+		$(AMVDEC_PATH)/include
 
    LOCAL_SHARED_LIBRARIES += libui
    LOCAL_SHARED_LIBRARIES += libamplayer libamavutils libamvdec

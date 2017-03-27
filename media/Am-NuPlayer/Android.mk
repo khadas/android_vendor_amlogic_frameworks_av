@@ -1,5 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
+include $(TOP)/hardware/amlogic/media/media_base_config.mk
 
 LOCAL_SRC_FILES:=                       \
         AmGenericSource.cpp               \
@@ -27,11 +28,9 @@ LOCAL_C_INCLUDES := \
 	$(TOP)/frameworks/native/include/media/openmax                \
     $(TOP)/external/curl/include                                  \
     $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/amavutils/include \
-    $(TOP)/vendor/amlogic/external/ffmpeg/ \
-    $(TOP)/frameworks/av/amlogic/include \
-    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol \
-
+    $(AMAVUTILS_PATH)/include \
+    $(TOP)/vendor/amlogic/external/ffmpeg/\
+    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
@@ -58,7 +57,7 @@ LOCAL_STATIC_LIBRARIES := \
         libcurl_common
 
 LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in FFmpeg.
-
+include  $(TOP)/frameworks/av/amlogic/config.mk
 LOCAL_MODULE:= libamnuplayer
 
 LOCAL_MODULE_TAGS := eng
