@@ -367,6 +367,7 @@ unsigned AmATSParser::Program::checkStreamType(unsigned type) {
         case STREAMTYPE_H264:
         case STREAMTYPE_H265:
         case STREAMTYPE_PCM_AUDIO:
+        case STREAMTYPE_DTS:
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         case STREAMTYPE_DDP_AC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:
@@ -376,6 +377,7 @@ unsigned AmATSParser::Program::checkStreamType(unsigned type) {
             return STREAMTYPE_PES_PRIVATE_DATA;
     }
 }
+#define MKTAG(a,b,c,d) ((d) | ((c) << 8) | ((b) << 16) | ((a) << 24))
 
 status_t AmATSParser::Program::parseProgramMap(ABitReader *br) {
     unsigned table_id = br->getBits(8);
@@ -447,16 +449,29 @@ status_t AmATSParser::Program::parseProgramMap(ABitReader *br) {
 #else
         unsigned info_bytes_remaining = ES_info_length;
         while (info_bytes_remaining >= 2) {
-            MY_LOGV("      tag = 0x%02x", br->getBits(8));
+            int tag = br->getBits(8);
+            MY_LOGV("      tag = 0x%02x", tag);
 
             unsigned descLength = br->getBits(8);
-            ALOGV("      len = %u", descLength);
+            MY_LOGV("      len = %u", descLength);
 
             if (info_bytes_remaining < descLength) {
                 ALOGI("line:%d",__LINE__);
                 return ERROR_MALFORMED;
             }
-            br->skipBits(descLength * 8);
+            uint32_t codec_tag;
+            //br->skipBits(descLength * 8);
+            if (tag == 0x05 && descLength == 4 && streamType == STREAMTYPE_PES_PRIVATE_DATA) {
+                codec_tag = br->getBits(descLength * 8);
+                if (codec_tag == MKTAG('D','T','S','H') || MKTAG('d','t','s','+') || MKTAG('D', 'T', 'S', '1')
+                    || MKTAG('D', 'T', 'S', '2') || MKTAG('D', 'T', 'S', '3')){
+                    streamType = STREAMTYPE_DTS;
+                } else if (codec_tag == MKTAG('A','C','-','3')) {
+                    streamType =  STREAMTYPE_DDP_AC3_AUDIO;
+                }
+            } else
+                br->skipBits(descLength * 8);
+
 
             info_bytes_remaining -= descLength + 2;
         }
@@ -691,6 +706,10 @@ AmATSParser::Stream::Stream(
             mQueue = new AmElementaryStreamQueue(
                     AmElementaryStreamQueue::METADATA);
             break;
+        case STREAMTYPE_DTS:
+            mQueue = new AmElementaryStreamQueue(
+                    AmElementaryStreamQueue::DTS);
+            break;
 
         default:
             break;
@@ -824,6 +843,7 @@ bool AmATSParser::Stream::isAudio() const {
         case STREAMTYPE_MPEG2_AUDIO:
         case STREAMTYPE_MPEG2_AUDIO_ADTS:
         case STREAMTYPE_PCM_AUDIO:
+        case STREAMTYPE_DTS:
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         case STREAMTYPE_DDP_AC3_AUDIO:
         case STREAMTYPE_DDP_EC3_AUDIO:

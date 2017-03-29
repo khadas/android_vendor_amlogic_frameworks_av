@@ -839,7 +839,9 @@ status_t AmM3UParser::parseStreamInf(
                 *meta = new AMessage;
             }
             (*meta)->setInt32("bandwidth", x);
-        } else if (!strcasecmp("codecs", key.c_str())) {
+        }
+#if 0
+        else if (!strcasecmp("codecs", key.c_str())) {
             if (!isQuotedString(val)) {
                 ALOGE("Expected quoted string for %s attribute, "
                       "got '%s' instead.",
@@ -854,7 +856,9 @@ status_t AmM3UParser::parseStreamInf(
                 *meta = new AMessage;
             }
             (*meta)->setString(key.c_str(), codecs.c_str());
-        } else if (!strcasecmp("resolution", key.c_str())) {
+        }
+#endif
+        else if (!strcasecmp("resolution", key.c_str())) {
             const char *s = val.c_str();
             char *end;
             unsigned long width = strtoul(s, &end, 10);

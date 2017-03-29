@@ -130,6 +130,7 @@ struct AmATSParser : public RefBase {
         STREAMTYPE_METADATA             = 0x15,
         STREAMTYPE_H264                 = 0x1b,
         STREAMTYPE_H265                 = 0x24,
+        STREAMTYPE_DTS                  = 0x7b,
         STREAMTYPE_PCM_AUDIO            = 0x83,
 #if defined(DOLBY_UDC) && defined(DOLBY_UDC_STREAMING_HLS)
         STREAMTYPE_DDP_AC3_AUDIO        = 0x81,

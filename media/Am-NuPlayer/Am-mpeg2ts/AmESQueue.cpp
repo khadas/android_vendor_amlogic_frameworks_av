@@ -319,7 +319,7 @@ status_t AmElementaryStreamQueue::appendData(
                 if (IsSeeminglyValidDTSAudioHeader(&ptr[i], size - i)) {
                     mMode = DTS;
                     mStreamType = 1;
-                    ALOGI("We got DTS type here!");
+                    ALOGI("We got DTS type here! i = %zu",i);
                     break;
                 }
             }
@@ -357,6 +357,7 @@ status_t AmElementaryStreamQueue::appendData(
         }
 
         if (mMode == UNKNOWN_MODE) {
+            ALOGI("appendData::UNKNOWN_MODE");
             return UNKNOWN_ERROR;
         }
 
