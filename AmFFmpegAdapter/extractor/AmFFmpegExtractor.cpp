@@ -281,6 +281,10 @@ status_t AmFFmpegSource::init(
                 mMeta->setCString(kKeyProgramName, pname);
             }
         }
+        if (stream->codec->codec_tag == MKTAG('M', 'V', 'C', ' ')) {
+            ALOGD("is h264 mvc");
+            mMeta->setInt32(kKeyIsMVC, true);
+        }
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
             // Add ISO-14496-12 atom header (BigEndian size + FOURCC tx3g),
