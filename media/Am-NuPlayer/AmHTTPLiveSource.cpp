@@ -134,8 +134,7 @@ status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {
 
 status_t AmNuPlayer::HTTPLiveSource::dequeueAccessUnit(
         bool audio, sp<ABuffer> *accessUnit) {
-    if (mBuffering)
-        return -EWOULDBLOCK;
+
     return mLiveSession->dequeueAccessUnit(
             audio ? AmLiveSession::STREAMTYPE_AUDIO
                   : AmLiveSession::STREAMTYPE_VIDEO,

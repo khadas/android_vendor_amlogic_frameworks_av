@@ -167,6 +167,7 @@ AmPlaylistFetcher::AmPlaylistFetcher(
       mFetcherID(id),
       mStreamTypeMask(0),
       mStartTimeUs(-1ll),
+      mSeekedTimeUs(-1ll),
       mSegmentStartTimeUs(-1ll),
       mDiscontinuitySeq(-1ll),
       mStartTimeUsRelative(false),
@@ -1037,9 +1038,10 @@ bool AmPlaylistFetcher::initDownloadState(
                 // use mStartTimeUs (client supplied timestamp) to determine both start segment
                 // and relative position inside a segment
                 mSeqNumber = getSeqNumberForTime(mStartTimeUs);
-                mStartTimeUs -= getSegmentStartTimeUs(mSeqNumber);
+                    mSeekedTimeUs = getSegmentStartTimeUs(mSeqNumber);
+                mStartTimeUs -= mSeekedTimeUs;
+
                 //Starting from the ts head
-                //mStartTimeUs = 0ll;
             }
             mStartTimeUsRelative = true;
             FLOGI("Initial sequence number for time %lld is %d from (%d .. %d)",
@@ -1936,8 +1938,6 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
         sp<MetaData> format  = source->getFormat();
         bool isAvc = format != NULL && format->findCString(kKeyMIMEType, &mime)
                 && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_AVC);
-        bool isHevc= format != NULL && format->findCString(kKeyMIMEType, &mime)
-                && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_HEVC);
         sp<ABuffer> accessUnit;
         status_t finalResult;
         while (source->hasBufferAvailable(&finalResult)
@@ -1949,8 +1949,8 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
             if (mEnableFrameRate && mSession->getFrameRate() < 0.0 && type == AmATSParser::VIDEO && mVecTimeUs.size() < kFrameNum) {
                 mVecTimeUs.push(timeUs);
             }
-
-            if (mStartup && !isHevc) {
+#if 0
+            if (mStartup) {
                 bool startTimeReached = isStartTimeReached(timeUs);
 
                 if (!startTimeReached || (isAvc && !mIDRFound)) {
@@ -1977,7 +1977,7 @@ status_t AmPlaylistFetcher::queueAccessUnits() {
                     }
                 }
             }
-
+#endif
             if (mStartTimeUsNotify != NULL) {
                 uint32_t streamMask = 0;
                 mStartTimeUsNotify->findInt32("streamMask", (int32_t *) &streamMask);
@@ -2294,6 +2294,7 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnits(
 
         meta->setInt32(kKeyIsADTS, true);
         packetSource->setFormat(meta);
+        ALOGI("[ID3] found AAC codec config ");
     }
 
     int64_t numSamples = 0ll;
@@ -2337,6 +2338,7 @@ status_t AmPlaylistFetcher::extractAndQueueAccessUnits(
                     continue;
                 };
             }
+            ALOGI("ID3[%d]",__LINE__);
             return ERROR_MALFORMED;
         }
 
@@ -2414,6 +2416,10 @@ void AmPlaylistFetcher::updateTargetDuration() {
     msg->setInt32("what", kWhatTargetDurationUpdate);
     msg->setInt64("targetDurationUs", mPlaylist->getTargetDuration());
     msg->post();
+}
+
+int64_t AmPlaylistFetcher::getSeekedTimeUs() const {
+    return mSeekedTimeUs;
 }
 
 }  // namespace android

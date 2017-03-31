@@ -59,7 +59,7 @@ const int64_t AmLiveSession::kResumeThresholdUs = 100000ll;
 // Buffer Prepare/Ready/Underflow Marks
 const int64_t AmLiveSession::kReadyMarkUs = 2000000ll;
 const int64_t AmLiveSession::kPrepareMarkUs = 300000ll;  // 300ms
-const int64_t AmLiveSession::kUnderflowMarkUs = 800000ll;
+const int64_t AmLiveSession::kUnderflowMarkUs = 80000ll;
 
 struct AmLiveSession::BandwidthEstimator : public RefBase {
     BandwidthEstimator();
@@ -362,6 +362,25 @@ AmLiveSession::~AmLiveSession() {
     curl_global_cleanup();
 }
 
+int64_t AmLiveSession::getSegmentStartTimeUsAfterSeek(StreamType type) {
+    int64_t minStartTimeUs = -1, tempTimeUs = -1;
+    for (size_t i = 0; i < mFetcherInfos.size(); i++) {
+        uint32_t streamMask = mFetcherInfos.valueAt(i).mFetcher->getStreamTypeMask();
+        if (streamMask & STREAMTYPE_SUBTITLES) {
+            continue;
+        }
+        if (type & streamMask) {
+            tempTimeUs = mFetcherInfos.valueAt(i).mFetcher->getSeekedTimeUs();
+            if (minStartTimeUs < 0) {
+                minStartTimeUs = tempTimeUs;
+            } else {
+                minStartTimeUs = minStartTimeUs <= tempTimeUs ? minStartTimeUs : tempTimeUs;
+            }
+        }
+    }
+    return minStartTimeUs;
+}
+
 int64_t AmLiveSession::calculateMediaTimeUs(
         int64_t firstTimeUs, int64_t timeUs, int32_t discontinuitySeq) {
     if (timeUs >= firstTimeUs) {
@@ -403,7 +422,11 @@ status_t AmLiveSession::dequeueAccessUnit(
             return finalResult;
         }
     }
-
+    if (mSeeked) {
+        mLastSeekTimeUs = getSegmentStartTimeUsAfterSeek(stream);
+        ALOGI(" mLastSeekTimeUs %lld",(long long)mLastSeekTimeUs);
+        mSeeked = false;
+    }
     // Let the client dequeue as long as we have buffers available
     // Do not make pause/resume decisions here.
 

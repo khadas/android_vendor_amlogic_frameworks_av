@@ -357,6 +357,9 @@ private:
     void postPrepared(status_t err);
     void postError(status_t err);
 
+
+    int64_t getSegmentStartTimeUsAfterSeek(StreamType type);
+
     DISALLOW_EVIL_CONSTRUCTORS(AmLiveSession);
 };
 

@@ -86,6 +86,7 @@ struct AmPlaylistFetcher : public AHandler {
     uint32_t getStreamTypeMask() const {
         return mStreamTypeMask;
     }
+    int64_t getSeekedTimeUs() const;//add to modify seek
 
 protected:
     virtual ~AmPlaylistFetcher();
@@ -135,6 +136,7 @@ private:
 
     uint32_t mStreamTypeMask;
     int64_t mStartTimeUs;
+    int64_t mSeekedTimeUs;
 
     // Start time relative to the beginning of the first segment in the initial
     // playlist. It's value is initialized to a non-negative value only when we are
