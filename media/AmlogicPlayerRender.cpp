@@ -21,7 +21,7 @@
 #include <fcntl.h>
 #include <ion/ion.h>
 #include <sys/mman.h>
-
+#include <gralloc_usage_ext.h>
 #define ALIGN(x, a) (((x)+(a)-1)&~((a)-1))
 //#define  TRACE()    LOGV("[%s::%d]\n",__FUNCTION__,__LINE__)
 #define  TRACE()
