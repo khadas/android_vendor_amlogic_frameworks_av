@@ -229,6 +229,19 @@ AmNuPlayer::~AmNuPlayer() {
         amsysfs_set_sysfs_int("/sys/class/video/video_seek_flag", 0);
         amsysfs_set_sysfs_int("/sys/class/ionvideo/ionvideo_seek_flag", 0);
     }
+    for (int i = 0; i < mStreamInfo.stream_info.total_video_num; i++) {
+        if (mStreamInfo.video_info[i] != NULL) {
+            free(mStreamInfo.video_info[i]);
+            mStreamInfo.video_info[i] = NULL;
+        }
+    }
+
+    for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i++) {
+        if (mStreamInfo.audio_info[i] != NULL) {
+            free(mStreamInfo.audio_info[i]);
+            mStreamInfo.audio_info[i] = NULL;
+        }
+    }
 }
 
 // static
@@ -661,6 +674,16 @@ status_t AmNuPlayer::updateMediaInfo(void) {
 }
 
 status_t AmNuPlayer::getMediaInfo(Parcel* reply){
+    sp<AMessage> msg = new AMessage(kWhatGetMediaInfo, this);
+    msg->setPointer("reply", reply);
+
+    sp<AMessage> response;
+    status_t err = msg->postAndAwaitResponse(&response);
+    return err;
+}
+
+
+status_t AmNuPlayer::doGetMediaInfo(Parcel* reply){
     //Mutex::Autolock autoLock(mLock);
     ALOGI("AmNuPlayer::getMediaInfo");
     int datapos=reply->dataPosition();
@@ -1876,6 +1899,21 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
         case kWhatClosedCaptionNotify:
         {
             onClosedCaptionNotify(msg);
+            break;
+        }
+
+        case kWhatGetMediaInfo:
+        {
+            sp<AReplyToken> replyID;
+            CHECK(msg->senderAwaitsResponse(&replyID));
+
+            Parcel* reply;
+            CHECK(msg->findPointer("reply", (void**)&reply));
+
+            doGetMediaInfo(reply);
+
+            sp<AMessage> response = new AMessage;
+            response->postReply(replyID);
             break;
         }
 

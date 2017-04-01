@@ -90,6 +90,7 @@ struct AmNuPlayer : public AHandler {
     status_t getParameter(int key, Parcel *reply);
     int getintfromString8(String8 &s, const char*pre);
     status_t getMediaInfo(Parcel* reply);
+    status_t doGetMediaInfo(Parcel* reply);
     status_t updateMediaInfo(void);
     //aformat_t audioTypeConvert(enum CodecID id);
     char *mStrCurrentAudioCodec;
@@ -157,6 +158,7 @@ private:
         kWhatGetTrackInfo               = 'gTrI',
         kWhatGetSelectedTrack           = 'gSel',
         kWhatSelectTrack                = 'selT',
+        kWhatGetMediaInfo               = 'gMed',
     };
 
     wp<AmNuPlayerDriver> mDriver;
