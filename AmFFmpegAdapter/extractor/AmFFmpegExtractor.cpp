@@ -487,7 +487,7 @@ status_t AmFFmpegSource::read(
 	if(AV_NOPTS_VALUE == packet->pts) {
         packet->pts = mLastValidPts;
         packet->dts = mLastValidDts;
-        ALOGE("meet invalid pts, set last pts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
+        ALOGV("meet invalid pts, set last pts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
     } else {
         mLastValidPts = packet->pts;
         mLastValidDts = packet->dts;
