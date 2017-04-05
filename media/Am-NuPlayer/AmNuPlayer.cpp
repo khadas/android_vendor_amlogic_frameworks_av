@@ -584,6 +584,10 @@ status_t AmNuPlayer::updateMediaInfo(void) {
         mStreamInfo.stream_info.cur_audio_index = cur_audio_index;
         mStreamInfo.stream_info.cur_sub_index   = -1;
     }else {
+        int64_t duration = 0;
+        if (OK == mSource->getDuration(&duration)) {
+            mStreamInfo.stream_info.duration = duration / 1000000; //us to sec
+        }
         int track_num = mSource->getTrackCount();
         for (size_t i = 0; i < track_num; i++) {
             sp<AMessage> format = mSource->getTrackInfo(i);
