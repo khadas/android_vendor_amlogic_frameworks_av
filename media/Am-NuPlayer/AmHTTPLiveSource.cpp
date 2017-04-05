@@ -66,8 +66,9 @@ AmNuPlayer::HTTPLiveSource::HTTPLiveSource(
 }
 
 AmNuPlayer::HTTPLiveSource::~HTTPLiveSource() {
+    ALOGI("~HTTPLiveSource");
     if (mLiveSession != NULL) {
-        mLiveSession->disconnect();
+        //mLiveSession->disconnect();
 
         mLiveLooper->unregisterHandler(mLiveSession->id());
         mLiveLooper->unregisterHandler(id());
@@ -126,6 +127,10 @@ sp<AMessage> AmNuPlayer::HTTPLiveSource::getFormat(bool audio) {
     }
 
     return format;
+}
+
+void AmNuPlayer::HTTPLiveSource::disconnect() {
+    mLiveSession->disconnect();
 }
 
 status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {

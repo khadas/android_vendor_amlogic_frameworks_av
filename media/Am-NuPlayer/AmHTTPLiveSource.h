@@ -39,6 +39,7 @@ struct AmNuPlayer::HTTPLiveSource : public AmNuPlayer::Source {
 
     virtual status_t dequeueAccessUnit(bool audio, sp<ABuffer> *accessUnit);
     virtual sp<AMessage> getFormat(bool audio);
+    virtual void disconnect();
 
     virtual status_t feedMoreTSData();
     virtual status_t getDuration(int64_t *durationUs);

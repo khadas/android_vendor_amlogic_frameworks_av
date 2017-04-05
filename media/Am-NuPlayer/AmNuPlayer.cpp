@@ -2719,9 +2719,9 @@ void AmNuPlayer::performReset() {
     if (mSource != NULL) {
         thread_interrupt();//add
         mSource->stop();
-
         Mutex::Autolock autoLock(mSourceLock);
         mSource.clear();
+
         thread_uninterrupt();
     }
 

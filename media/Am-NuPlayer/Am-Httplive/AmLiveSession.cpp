@@ -1185,7 +1185,7 @@ void AmLiveSession::onMasterPlaylistFetched(const sp<AMessage> &msg) {
 }
 
 void AmLiveSession::finishDisconnect() {
-    ALOGV("finishDisconnect");
+    ALOGI("finishDisconnect");
 
     // No reconfiguration is currently pending, make sure none will trigger
     // during disconnection either.
