@@ -1464,9 +1464,9 @@ void AmNuPlayer::GenericSource::setSubStartPts(int64_t pts) {
     if (!mSubStartPtsUpdate && pts >= 0) {
         mSubStartPtsUpdate = true;
 
-        char ptsStr[16] = "";
+        /*char ptsStr[16] = "";
         sprintf(ptsStr, "%" PRId64, pts);
-        writeSysfs("/sys/class/subtitle/startpts", ptsStr);
+        writeSysfs("/sys/class/subtitle/startpts", ptsStr);*/
         char buf[8] = {0x53, 0x50, 0x54, 0x53};//SPTS
         buf[4] = (pts >> 24) & 0xff;
         buf[5] = (pts >> 16) & 0xff;

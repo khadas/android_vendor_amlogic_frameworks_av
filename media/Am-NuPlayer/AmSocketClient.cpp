@@ -69,7 +69,7 @@ void* socketSendThread(void* arg) {
     int leftLen = sc->size;
     char *sendBuf = sc->buf;
     char recvBuf[32] = {0};
-    //ALOGI("[socketSendThread]size[%d]\n", sc->size);
+    //ALOGI("[socketSendThread]size[%d], sendBuf:%s\n", sc->size, sc->buf);
 
     do {
         //prepare send length
@@ -136,6 +136,15 @@ void socketDisconnect() {
         close(mSockFd);
         mSockFd = -1;
     }
+}
+
+void sendTime(int64_t timeUs) {
+    char buf[8] = {0x53, 0x52, 0x44, 0x54};//SRDT //subtitle render time
+    buf[4] = (timeUs >> 24) & 0xff;
+    buf[5] = (timeUs >> 16) & 0xff;
+    buf[6] = (timeUs >> 8) & 0xff;
+    buf[7] = timeUs & 0xff;
+    socketSend(buf, 8);
 }
 
 namespace android {

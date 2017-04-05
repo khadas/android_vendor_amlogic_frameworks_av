@@ -8,6 +8,7 @@ int socketConnect();
 void socketSend(char *buf, int size);
 int socketRecv(char *buf, int size);
 void socketDisconnect();
+void sendTime(int64_t timeUs);
 
 namespace android {
 

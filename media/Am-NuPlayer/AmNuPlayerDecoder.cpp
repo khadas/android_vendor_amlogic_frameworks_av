@@ -598,7 +598,7 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer(
     buffer->meta()->clear();
     buffer->meta()->setInt64("timeUs", timeUs);
 
-    setPcrscr(timeUs);
+    sendTime(timeUs);
 
     bool eos = flags & MediaCodec::BUFFER_FLAG_EOS;
     // we do not expect CODECCONFIG or SYNCFRAME for decoder
