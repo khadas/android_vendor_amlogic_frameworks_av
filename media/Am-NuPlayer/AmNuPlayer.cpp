@@ -789,8 +789,10 @@ status_t AmNuPlayer::getParameter(int key, Parcel *reply){
         }
     }else if (KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO == key) {
         getMediaInfo(reply);
+    }else if (key == KEY_PARAMETER_AML_PLAYER_TYPE_STR) {
+        reply->writeString16(String16("AMNU_PLAYER"));
     }else {
-        ALOGI("unsupport setParameter value!=%d\n", key);
+        ALOGI("unsupport getParameter value!=%d\n", key);
     }
     return  OK;
 }
