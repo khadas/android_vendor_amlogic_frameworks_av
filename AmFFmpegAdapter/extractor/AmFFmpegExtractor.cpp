@@ -276,8 +276,9 @@ status_t AmFFmpegSource::init(
             lang = av_dict_get(mProgram->metadata, "service_name", NULL, 0);
             if (lang != NULL && lang->value != NULL) {
                 ALOGD("service_name %s", lang->value);
-                char pname[16];
-                strcpy(pname, lang->value);
+                const int name_len = 64;
+                char pname[name_len];
+                strncpy(pname, lang->value, name_len - 1);
                 mMeta->setCString(kKeyProgramName, pname);
             }
         }
