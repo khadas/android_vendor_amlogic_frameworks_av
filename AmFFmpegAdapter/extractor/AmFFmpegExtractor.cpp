@@ -85,6 +85,8 @@ struct AmFFmpegSource : public MediaSource {
     sp<StreamFormatter> mFormatter;
 
 private:
+    Mutex mLock;
+
     sp<AmFFmpegExtractor> mExtractor;
     sp<MetaData> mMeta;
     sp<AmPTSPopulator> mPTSPopulator;
@@ -365,6 +367,8 @@ status_t AmFFmpegSource::init(
 }
 
 status_t AmFFmpegSource::start(MetaData *params) {
+    Mutex::Autolock autoLock(mLock);
+
     CHECK(!mStarted);
 
     resetBufferGroup(kDefaultFrameBufferSize);
@@ -376,6 +380,8 @@ status_t AmFFmpegSource::start(MetaData *params) {
 }
 
 status_t AmFFmpegSource::stop() {
+    Mutex::Autolock autoLock(mLock);
+
     ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     if (!mStarted)
         return OK;
@@ -388,16 +394,22 @@ status_t AmFFmpegSource::stop() {
 }
 
 status_t AmFFmpegSource::pause(){
+    Mutex::Autolock autoLock(mLock);
+
     mExtractor->release(this);
     return OK;
 }
 
 sp<MetaData> AmFFmpegSource::getFormat() {
+    Mutex::Autolock autoLock(mLock);
+
     return mMeta;
 }
 
 status_t AmFFmpegSource::read(
         MediaBuffer **out, const ReadOptions *options) {
+    Mutex::Autolock autoLock(mLock);
+
     ALOGV("%s %d", __FUNCTION__, __LINE__);
     *out = NULL;
 
@@ -478,6 +490,7 @@ status_t AmFFmpegSource::read(
     MediaBuffer *buffer = NULL;
     status_t ret = mGroup->acquire_buffer(&buffer);
     if (ret != OK) {
+        ALOGE("Failed to acquire buffer.");
         return ret;
     }
 
