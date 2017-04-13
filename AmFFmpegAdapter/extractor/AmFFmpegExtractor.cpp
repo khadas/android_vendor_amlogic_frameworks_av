@@ -36,6 +36,7 @@ extern "C" {
 #include <media/stagefright/Utils.h>
 #include <media/stagefright/foundation/ABase.h>
 #include <media/stagefright/foundation/ADebug.h>
+#include <media/stagefright/foundation/ColorUtils.h>
 #include <media/stagefright/foundation/hexdump.h>
 #include <media/stagefright/AmMediaDefsExt.h>
 #include <media/stagefright/AmMetaDataExt.h>
@@ -285,6 +286,33 @@ status_t AmFFmpegSource::init(
         if (stream->codec->codec_tag == MKTAG('M', 'V', 'C', ' ')) {
             ALOGD("is h264 mvc");
             mMeta->setInt32(kKeyIsMVC, true);
+        }
+
+        if (stream->codec->has_hdr_metadata) {
+            HDRStaticInfo info, nullInfo; // nullInfo is a fully unspecified static info
+            memset(&info, 0, sizeof(info));
+            memset(&nullInfo, 0, sizeof(nullInfo));
+
+            AVHDRMetadata* hdr = &stream->codec->hdr_metadata;
+
+            info.sType1.mMaxContentLightLevel = hdr->max_cll;
+            info.sType1.mMaxFrameAverageLightLevel = hdr->max_pall;
+            info.sType1.mMaxDisplayLuminance = hdr->max_luminance;
+            info.sType1.mMinDisplayLuminance = hdr->min_luminance;
+            info.sType1.mW.x = hdr->white_point[0];
+            info.sType1.mW.y = hdr->white_point[1];
+            info.sType1.mR.x = hdr->display_primaries[0][0];
+            info.sType1.mR.y = hdr->display_primaries[0][1];
+            info.sType1.mG.x = hdr->display_primaries[1][0];
+            info.sType1.mG.y = hdr->display_primaries[1][1];
+            info.sType1.mB.x = hdr->display_primaries[2][0];
+            info.sType1.mB.y = hdr->display_primaries[2][1];
+
+            // Only advertise static info if at least one of the groups have been specified.
+            if (memcmp(&info, &nullInfo, sizeof(info)) != 0) {
+                info.mID = HDRStaticInfo::kType1;
+                mMeta->setData(kKeyHdrStaticInfo, 'hdrS', &info, sizeof(info));
+            }
         }
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
