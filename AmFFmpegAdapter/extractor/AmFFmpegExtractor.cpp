@@ -274,6 +274,10 @@ status_t AmFFmpegSource::init(
             int rotate = atoi(lang->value);
             ALOGD("rotate %d", rotate);
             mMeta->setInt32(kKeyRotation, rotate);
+            if (rotate != 0) {
+                ALOGD("set 4k osd"); // the 4k video with rotate use osd
+                mMeta->setInt32(kKey4kOSD, 1);
+            }
         }
         if (mProgram) {
             lang = av_dict_get(mProgram->metadata, "service_name", NULL, 0);
