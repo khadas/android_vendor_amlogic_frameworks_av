@@ -35,6 +35,7 @@
 #include <media/stagefright/MediaErrors.h>
 
 #include <gui/Surface.h>
+#include <Amavutils.h>
 
 #include "avc_utils.h"
 #include "AmATSParser.h"
@@ -307,6 +308,18 @@ void AmNuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
         // Codec will try to connect to the surface, which is where
         // any error signaling will occur.
         ALOGW_IF(err != OK, "failed to disconnect from surface: %d", err);
+    }
+
+     CHECK(format->findString("mime", &mime));
+     if (mIsAudio) {
+          int user_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+          if (user_raw_enable && (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  || !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
+              !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))){
+              ALOGI("user_raw_enable:%d,mime:%s",user_raw_enable,mime.c_str());
+              format->setInt32("audio_extendformat",1);
+          } else {
+              format->setInt32("audio_extendformat",0);
+          }
     }
     err = mCodec->configure(
             format, mSurface, NULL /* crypto */, 0 /* flags */);
@@ -665,6 +678,14 @@ void AmNuPlayer::Decoder::handleOutputFormatChange(const sp<AMessage> &format) {
             flags = AUDIO_OUTPUT_FLAG_NONE;
         }
 
+        AString mime;
+        int user_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        CHECK(mInputFormat->findString("mime", &mime));
+        if (user_raw_enable && (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  || !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
+          !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))) {
+          ALOGI("set mime:%s",mime.c_str());
+          format->setString("mime",mime.c_str());
+        }
         status_t err = mRenderer->openAudioSink(
                 format, false /* offloadOnly */, hasVideo, flags, NULL /* isOffloaed */);
         if (err != OK) {
