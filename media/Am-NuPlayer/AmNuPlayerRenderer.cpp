@@ -843,7 +843,8 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
     size_t sizeCopied = 0;
     bool firstEntry = true;
-
+    int frame_mul = 1;
+    int pts_div = 1;
     while (sizeCopied < size && !mAudioQueue.empty() && !mQueueInitial) {
         if (entry == NULL) {
             entry = &*mAudioQueue.begin();
@@ -864,14 +865,15 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
         }
 
         size_t copy = entry->mBuffer->size() - entry->mOffset;
-        //ALOGI("entry->mBuffer->size():%d,entry->mOffset:%d,sizeCopied:%d,size:%d",entry->mBuffer->size(),entry->mOffset,sizeCopied,size);
         size_t sizeRemaining = size - sizeCopied;
         if (copy > sizeRemaining) {
             copy = sizeRemaining;
         }
-        unsigned char *pbuf = entry->mBuffer->data() /*+ entry->mOffset*/;
+        //use for audio passthrough
         int outlen_raw = 0,outlen_pcm = 0;
-        if (copy > 8 ) {
+        if (copy > 8 && mCurrentPcmInfo.mFormat != AUDIO_FORMAT_PCM_16_BIT) {
+            unsigned char *pbuf = entry->mBuffer->data() /*+ entry->mOffset*/;
+            frame_mul = 4;
             memcpy(&outlen_pcm,pbuf,4);
             memcpy(&outlen_raw,pbuf+4+outlen_pcm,4);
             //ALOGI("copy:%d,outlen_pcm:%d,outlen_raw:%d",copy,outlen_pcm,outlen_raw);
@@ -880,7 +882,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
                        entry->mBuffer->data() + entry->mOffset+8+outlen_pcm,
                        outlen_raw);
                 copy = outlen_raw ;
-           } else {
+            } else {
                if (outlen_raw - entry->mOffset >= copy) {
                   memcpy((char *)buffer + sizeCopied,
                         entry->mBuffer->data() + entry->mOffset+8+outlen_pcm,
@@ -892,21 +894,31 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
                         outlen_raw - entry->mOffset);
                   copy = outlen_raw - entry->mOffset;
                }
-           }
-        }
+            }
 
-        entry->mOffset += copy;
-        if ((entry->mOffset + outlen_pcm  + 8) == entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
-            entry->mNotifyConsumed->post();
-            mAudioQueue.erase(mAudioQueue.begin());
-            entry = NULL;
-        }
+            entry->mOffset += copy;
+            if ((entry->mOffset + outlen_pcm  + 8) == entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
+                entry->mNotifyConsumed->post();
+                mAudioQueue.erase(mAudioQueue.begin());
+                entry = NULL;
+            }
+        }else {
+           memcpy((char *)buffer + sizeCopied,
+           entry->mBuffer->data() + entry->mOffset,
+           copy);
+           entry->mOffset += copy;
+           if (entry->mOffset == entry->mBuffer->size()) {
+               entry->mNotifyConsumed->post();
+               mAudioQueue.erase(mAudioQueue.begin());
+               entry = NULL;
+           }
+
+       }
         sizeCopied += copy;
 
         notifyIfMediaRenderingStarted_l();
 
     }
-    int pts_div = 1;
     if ( mCurrentPcmInfo.mFormat == AUDIO_FORMAT_E_AC3 )
         pts_div = 4;
     if (mAudioFirstAnchorTimeMediaUs >= 0) {
@@ -921,11 +933,12 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     // there is no EVENT_STREAM_END notification. The frames written gives
     // an estimate on the pending played out duration.
     if (!offloadingAudio()) {
-        mNumFramesWritten += sizeCopied / mAudioSink->frameSize();
+        //add by lianlian.zhu
+        //as audiotrack directoutput framesize is 1 ,and audio sync should use pcm framesize 4.
+        mNumFramesWritten += sizeCopied /  (frame_mul * mAudioSink->frameSize());
     }
 
     if (hasEOS) {
-        (new AMessage(kWhatStopAudioSink, this))->post();
         // As there is currently no EVENT_STREAM_END callback notification for
         // non-offloaded audio tracks, we need to post the EOS ourselves.
         if (!offloadingAudio()) {
@@ -937,6 +950,9 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
                     "mNumFramesWritten:%u  finalResult:%d  postEOSDelay:%lld",
                     mNumFramesWritten, entry->mFinalResult, (long long)postEOSDelayUs);
             notifyEOS(true /* audio */, entry->mFinalResult, postEOSDelayUs);
+            //if kWhatStopAudioSink is at the head of notifyEOS, mAudioSink->getPlayedOutDurationUs will be zero
+            //and getPendingAudioPlayoutDurationUs will return writtenAudioDurationUs.
+            (new AMessage(kWhatStopAudioSink, this))->post();
         }
     }
     return sizeCopied;
@@ -1766,6 +1782,7 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
     if (audio) {
         {
             Mutex::Autolock autoLock(mLock);
+            entry = NULL;
             flushQueue(&mAudioQueue);
 
             ++mAudioDrainGeneration;
@@ -2149,7 +2166,7 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
         AString mime;
         CHECK(format->findString("mime", &mime));
         if (strcasecmp(MEDIA_MIMETYPE_AUDIO_RAW, mime.c_str())) {
-             pcmFlags |= AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO;
+             pcmFlags |= (AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO | AUDIO_OUTPUT_FLAG_DIRECT);
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str()))
                  aformat = AUDIO_FORMAT_DTS;
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()))
