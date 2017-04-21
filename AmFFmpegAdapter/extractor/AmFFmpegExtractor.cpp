@@ -451,12 +451,17 @@ status_t AmFFmpegSource::read(
     mStartRead = true;
 
     if(packet == NULL) {
+        int64_t nowUs = ALooper::GetNowUs();
         packet = dequeuePacket();
         while (packet == NULL) {
             if (ERROR_END_OF_STREAM == extractor->feedMore()) {
                 return ERROR_END_OF_STREAM;
             }
             packet = dequeuePacket();
+            if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE
+                && (int)(ALooper::GetNowUs() - nowUs) >= 500) {//500us time out
+                return MEDIA_ERROR_BASE;
+            }
         }
 
         // seek to current position for timed text change track(cts test)
