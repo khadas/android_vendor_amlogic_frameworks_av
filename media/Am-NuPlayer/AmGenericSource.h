@@ -243,6 +243,8 @@ private:
     bool mSubStartPtsUpdate;
     bool mSubTypeUpdate;
 
+    bool mIsUdp;
+
     void resetDataSource();
 
     status_t initFromDataSource();

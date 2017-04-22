@@ -6,6 +6,7 @@ LOCAL_SRC_FILES:=                 \
         AmAnotherPacketSource.cpp   \
         AmATSParser.cpp             \
         AmESQueue.cpp               \
+		AmMPEG2TSExtractor.cpp		\
 
 LOCAL_C_INCLUDES:= \
 	$(TOP)/frameworks/av/media/libstagefright \

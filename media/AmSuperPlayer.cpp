@@ -781,6 +781,7 @@ player_type AmSuperPlayer::SuperGetPlayerType(char *type,int videos,int audios)
         || !strncasecmp("https://", muri, 8)
         || !(strncasecmp("bluray:", muri, 7))
         || !(strncasecmp("rtsp://", muri, 7))
+        || !(strncasecmp("udp:", muri, 4))
         || !(strncasecmp("rtp://", muri, 6)));
     LOGI(" url = %s",muri);
 

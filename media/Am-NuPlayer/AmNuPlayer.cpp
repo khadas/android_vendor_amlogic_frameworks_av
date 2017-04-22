@@ -2854,6 +2854,7 @@ void AmNuPlayer::onSourceNotify(const sp<AMessage> &msg) {
                 if (mSource->getDuration(&durationUs) == OK) {
                     driver->notifyDuration(durationUs);
                 }
+                ALOGI("notifyPrepareCompleted");
                 driver->notifyPrepareCompleted(err);
             }
 

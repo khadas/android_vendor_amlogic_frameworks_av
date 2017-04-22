@@ -1164,7 +1164,6 @@ status_t AmATSParser::Stream::flush(SyncEvent *event) {
     if (mBuffer == NULL || mBuffer->size() == 0) {
         return OK;
     }
-
     ALOGV("flushing stream 0x%04x size = %zu", mElementaryPID, mBuffer->size());
 
     ABitReader br(mBuffer->data(), mBuffer->size());
@@ -1195,7 +1194,6 @@ void AmATSParser::Stream::onPayloadData(
     }
 
     status_t err = mQueue->appendData(data, size, timeUs);
-
     if (mEOSReached) {
         mQueue->signalEOS();
     }
@@ -1211,15 +1209,15 @@ void AmATSParser::Stream::onPayloadData(
             sp<MetaData> meta = mQueue->getFormat();
 
             if (meta != NULL) {
-                ALOGV("Stream PID 0x%08x of type 0x%02x now has data.",
+                ALOGI("Stream PID 0x%08x of type 0x%02x now has data.",
                      mElementaryPID, mStreamType);
 
-                const char *mime;
-                if (meta->findCString(kKeyMIMEType, &mime)
-                        && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_AVC)
-                        && !IsIDR(accessUnit)) {
-                    continue;
-                }
+                //const char *mime;
+                //if (meta->findCString(kKeyMIMEType, &mime)
+                //        && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_AVC)
+                //        && !IsIDR(accessUnit)) {
+                //    continue;
+                //}
                 mSource = new AmAnotherPacketSource(meta);
                 mSource->queueAccessUnit(accessUnit);
             }
@@ -1614,6 +1612,7 @@ status_t AmATSParser::parseTS(ABitReader *br, SyncEvent *event) {
 
     unsigned payload_unit_start_indicator = br->getBits(1);
     ALOGV("payload_unit_start_indicator = %u", payload_unit_start_indicator);
+
 
     MY_LOGV("transport_priority = %u", br->getBits(1));
 

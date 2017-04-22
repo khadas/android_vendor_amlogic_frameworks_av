@@ -64,7 +64,6 @@ void AmElementaryStreamQueue::clear(bool clearFormat) {
     if (clearFormat) {
         mFormat.clear();
     }
-
     mEOSReached = false;
 }
 
@@ -308,6 +307,7 @@ status_t AmElementaryStreamQueue::appendData(
         ALOGE("appending data after EOS");
         return ERROR_MALFORMED;
     }
+
     if (mBuffer == NULL || mBuffer->size() == 0) {
 
         // this mode is audio in most time,
@@ -634,7 +634,6 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnit() {
         if (mRangeInfos.empty()) {
             return NULL;
         }
-
         RangeInfo info = *mRangeInfos.begin();
         mRangeInfos.erase(mRangeInfos.begin());
 
@@ -1128,7 +1127,6 @@ int64_t AmElementaryStreamQueue::fetchTimestamp(size_t size) {
             size = 0;
         } else {
             size -= info->mLength;
-
             mRangeInfos.erase(mRangeInfos.begin());
             info = NULL;
         }
@@ -1224,6 +1222,77 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH265() {
     return NULL;
 }
 
+status_t getNextNALUnit_264(
+        const uint8_t **_data, size_t *_size,
+        const uint8_t **nalStart, size_t *nalSize,
+        bool startCodeFollows) {
+    const uint8_t *data = *_data;
+    size_t size = *_size;
+
+    *nalStart = NULL;
+    *nalSize = 0;
+
+    if (size < 3) {
+        return -EAGAIN;
+    }
+
+    size_t offset = 0;
+
+    // A valid startcode consists of at least two 0x00 bytes followed by 0x01.
+    for (; offset + 2 < size; ++offset) {
+        if (data[offset + 2] == 0x01 && data[offset] == 0x00
+                && data[offset + 1] == 0x00) {
+            break;
+        }
+    }
+    if (offset + 2 >= size) {
+        *_data = &data[offset];
+        *_size = 2;
+        return -EAGAIN;
+    }
+    offset += 3;
+
+    size_t startOffset = offset;
+
+    for (;;) {
+        while (offset < size && data[offset] != 0x01) {
+            ++offset;
+        }
+
+        if (offset == size) {
+            if (startCodeFollows) {
+                offset = size + 2;
+                break;
+            }
+
+            return -EAGAIN;
+        }
+
+        if (data[offset - 1] == 0x00 && data[offset - 2] == 0x00) {
+            break;
+        }
+
+        ++offset;
+    }
+
+    size_t endOffset = offset - 2;
+    //while (endOffset > startOffset + 1 && data[endOffset - 1] == 0x00) {
+    //    --endOffset;
+    //}
+
+    *nalStart = &data[startOffset];
+    *nalSize = endOffset - startOffset;
+
+    if (offset + 2 < size) {
+        *_data = &data[offset - 2];
+        *_size = size - offset + 2;
+    } else {
+        *_data = NULL;
+        *_size = 0;
+    }
+
+    return OK;
+}
 
 sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
     const uint8_t *data = mBuffer->data();
@@ -1239,7 +1308,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
     size_t nalSize;
     bool foundSlice = false;
     bool foundIDR = false;
-    while ((err = getNextNALUnit(&data, &size, &nalStart, &nalSize)) == OK) {
+    while ((err = getNextNALUnit_264(&data, &size, &nalStart, &nalSize, true)) == OK) {
         if (nalSize == 0) continue;
 
         unsigned nalType = nalStart[0] & 0x1f;

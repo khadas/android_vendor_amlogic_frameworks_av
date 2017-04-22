@@ -42,7 +42,7 @@
 #include "AmSocketClient.h"
 #include <media/stagefright/AmMetaDataExt.h>
 #include <inttypes.h>
-
+#include "AmMPEG2TSExtractor.h"
 namespace android {
 
 static int64_t kLowWaterMarkUs = 2000000ll;  // 2secs
@@ -91,6 +91,7 @@ AmNuPlayer::GenericSource::GenericSource(
     mBufferingMonitor = new BufferingMonitor(notify);
     resetDataSource();
     DataSource::RegisterDefaultSniffers();
+    mIsUdp = false;
 }
 
 void AmNuPlayer::GenericSource::resetDataSource() {
@@ -207,7 +208,12 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         }
         extractor = mWVMExtractor;
     } else {
-        extractor = MediaExtractor::Create(mDataSource,
+#if 1
+        if (!mUri.empty() && !strncasecmp("udp:", mUri.c_str(), 4))
+            extractor = new AmMPEG2TSExtractor(mDataSource);
+        else
+#endif
+            extractor = MediaExtractor::Create(mDataSource,
                 mimeType.isEmpty() ? "amnu+" : mimeType.string());
     }
     ALOGI(">>>MediaExtractor::Create [%s %d]", __FUNCTION__, __LINE__);
@@ -431,6 +437,7 @@ void AmNuPlayer::GenericSource::onPrepareAsync() {
         mIsSecure = false;
         ALOGI("patch:%s",mUri.c_str());
         if (!mUri.empty() && !strncasecmp("udp:", mUri.c_str(), 4)) {
+            mIsUdp = true;
             mIsWidevine = false;
             mDataSource = new AmUDPSource(mUri.c_str());
             ALOGI("create a AmUDPSource");
@@ -547,6 +554,7 @@ void AmNuPlayer::GenericSource::finishPrepareAsync() {
         mBufferingMonitor->ensureCacheIsFetching();
         mBufferingMonitor->restartPollBuffering();
     } else {
+        ALOGI("notifyPrepared %d",__LINE__);
         notifyPrepared();
     }
 }
@@ -959,6 +967,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
                     audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
             return -EWOULDBLOCK;
         }
+        ALOGE("hasBufferAvailable return %d",finalResult);
         return finalResult;
     }
 
@@ -966,7 +975,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
 
     // start pulling in more buffers if we only have one (or no) buffer left
     // so that decoder has less chance of being starved
-    if (track->mPackets->getAvailableBufferCount(&finalResult) < 2) {
+    if (track->mPackets->getAvailableBufferCount(&finalResult) < 4) {
         postReadBuffer(audio? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
     }
 
@@ -979,6 +988,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
             mTimedTextTrack.mPackets->clear();
             mFetchTimedTextDataGeneration++;
         }
+        ALOGE("dequeueAccessUnit return %d",result);
         return result;
     }
 
@@ -991,7 +1001,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
     } else {
         mVideoLastDequeueTimeUs = timeUs;
     }
-
+    //ALOGI("dequeueAccessUnit %s timeUs %lld",audio?"audio":"video",timeUs);
     if (mSubtitleTrack.mSource != NULL
             && !mSubtitleTrack.mPackets->hasBufferAvailable(&eosResult)) {
         sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
@@ -1675,7 +1685,7 @@ void AmNuPlayer::GenericSource::readBuffer(
         options.setNonBlocking();
     }
 
-    bool couldReadMultiple = (!mIsWidevine && trackType == MEDIA_TRACK_TYPE_AUDIO);
+    bool couldReadMultiple = (!mIsWidevine && trackType == MEDIA_TRACK_TYPE_AUDIO && !mIsUdp);
     for (size_t numBuffers = 0; numBuffers < maxBuffers; ) {
         Vector<MediaBuffer *> mediaBuffers;
         status_t err = NO_ERROR;
@@ -1747,6 +1757,7 @@ void AmNuPlayer::GenericSource::readBuffer(
 #endif
         } else if (err != OK) {
             queueDiscontinuityIfNeeded(seeking, formatChange, trackType, track);
+            ALOGI("err %d",err);
             track->mPackets->signalEOS(err);
             break;
         }
@@ -1926,7 +1937,7 @@ void AmNuPlayer::GenericSource::BufferingMonitor::startBufferingIfNecessary_l() 
 
 void AmNuPlayer::GenericSource::BufferingMonitor::stopBufferingIfNecessary_l() {
     if (mPrepareBuffering) {
-        ALOGD("stopBufferingIfNecessary_l, mBuffering=%d", mBuffering);
+        ALOGI("stopBufferingIfNecessary_l, mBuffering=%d", mBuffering);
 
         mPrepareBuffering = false;
 

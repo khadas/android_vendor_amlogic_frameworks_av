@@ -24,6 +24,8 @@
 
 #include <string.h>
 #include <sys/select.h>
+#include <errno.h>
+
 
 namespace android {
 #define KSOCKETRECVBUFSIZE 256 * 1024
@@ -77,12 +79,26 @@ void *AmUDPSource::circular_buffer_task( void *arg){
     AmUDPSource *source = (AmUDPSource *)arg;
     ALOGI("start [%s %d]", __FUNCTION__, __LINE__);
     int udpsize = -1;
+    fd_set rfds;
+    int ret;
+    struct timeval tv;
     while (1) {
         int len;
 
         if (source->request_exit) {
             ALOGE( "[%s:%d]Eixt\n",__FUNCTION__,__LINE__);
             goto end;
+        }
+        FD_ZERO(&rfds);
+        FD_SET(source->mUdpFd, &rfds);
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+        ret = select(source->mUdpFd + 1, &rfds, NULL, NULL, &tv);
+        if (ret < 0) {
+           if (errno == EINTR)
+               continue;
+           ALOGE( "[%d]error select ",__LINE__);
+            break;
         }
         sp<ABuffer> buffer = new ABuffer(udpsize > 0 ? udpsize : UDP_MAX_PKT_SIZE);
         len = recv(source->mUdpFd, buffer->data(), buffer->size(), 0);
@@ -260,7 +276,7 @@ ssize_t AmUDPSource::readAt(off64_t offset, void *data, size_t size){
             goto end;
         }
         QueueEntry entry = *mBufQueue.begin();
-        if (mTotalBufferssize - entry.mBufferSize > 7*4096*188) {//if buffsize > 7*4096*188 will drop an half of buf
+        if (0 && mTotalBufferssize - entry.mBufferSize > 7*4096*188) {//if buffsize > 7*4096*188 will drop an half of buf
             UDP_LOGE("drop some data %lld",(mTotalBufferssize - entry.mBufferSize)/2);
             while (1) {
                 entry = *mBufQueue.begin();
