@@ -933,7 +933,6 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     // there is no EVENT_STREAM_END notification. The frames written gives
     // an estimate on the pending played out duration.
     if (!offloadingAudio()) {
-        //add by lianlian.zhu
         //as audiotrack directoutput framesize is 1 ,and audio sync should use pcm framesize 4.
         mNumFramesWritten += sizeCopied /  (frame_mul * mAudioSink->frameSize());
     }
@@ -2166,7 +2165,11 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
         AString mime;
         CHECK(format->findString("mime", &mime));
         if (strcasecmp(MEDIA_MIMETYPE_AUDIO_RAW, mime.c_str())) {
-             pcmFlags |= (AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO | AUDIO_OUTPUT_FLAG_DIRECT);
+            pcmFlags |= (AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO | AUDIO_OUTPUT_FLAG_DIRECT);
+
+            //for high samprate ma stream, raw output raw samplerate will be half
+            if (sampleRate == 96000 || sampleRate == 88200)
+                 sampleRate = sampleRate / 2;
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str()))
                  aformat = AUDIO_FORMAT_DTS;
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()))
