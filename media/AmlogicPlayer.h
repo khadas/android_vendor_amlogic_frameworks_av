@@ -157,7 +157,7 @@ private:
     static int64_t      vp_seek(URLContext *h, int64_t pos, int whence);
     static int          vp_close(URLContext *h);
     static int          vp_get_file_handle(URLContext *h);
-    status_t getTrackInfo(Parcel* reply) const;
+    status_t getTrackInfo(Parcel* reply);
     status_t getMediaInfo(Parcel* reply) const;
     status_t selectPid(int video_pid) const;
     status_t selectTrack(int index, bool select)const;
@@ -287,6 +287,7 @@ private:
 
     bool mAuto3DDetected;
     int64_t mSeekPos;
+    int mTrackMap[100];    // For select track
     Parcel* mParcel;
 };
 

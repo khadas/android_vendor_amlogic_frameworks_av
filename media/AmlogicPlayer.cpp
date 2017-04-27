@@ -57,10 +57,10 @@
 extern int android_datasource_init(void);
 
 
-static inline bool casestr_is_endof(const char *str,const char *tag)
+static inline bool casestr_is_endof(const char *str, const char *tag)
 {
-	int slen=strlen(str);
-	int taglen=strlen(tag);
+    int slen = strlen(str);
+    int taglen = strlen(tag);
     return (slen >= taglen && !strcasecmp(tag, &str[slen - taglen]));
 }
 
@@ -172,14 +172,13 @@ AmlogicPlayer::AmlogicPlayer() :
     mDelayUpdateTime = 0;
     isTryDRM = false;
     mNeedResetOnResume = 0;
-	if (PropGetFloat("media.amplayer.stopbuftime")){
-		mStopFeedingBuf_ms = PropGetFloat("media.amplayer.stopbuftime") * 1000;
-	}
-	else {
-		mStopFeedingBuf_ms = 1200;
-	}
-	LOGV("mStopFeedingBuf_ms = %d\n", mStopFeedingBuf_ms);
-	if (mStopFeedingBuf_ms < 0) {	
+    if (PropGetFloat("media.amplayer.stopbuftime")) {
+        mStopFeedingBuf_ms = PropGetFloat("media.amplayer.stopbuftime") * 1000;
+    } else {
+        mStopFeedingBuf_ms = 1200;
+    }
+    LOGV("mStopFeedingBuf_ms = %d\n", mStopFeedingBuf_ms);
+    if (mStopFeedingBuf_ms < 0) {
         mStopFeedingBuf_ms = 1200; //set default
     }
     mHWaudiobufsize = 384 * 1024;
@@ -199,9 +198,10 @@ AmlogicPlayer::AmlogicPlayer() :
     mListener = this;
     mSubSource = NULL;
     enableOSDVideo = false;
-	drop_tiny_seek_ms=PropGetFloat("media.amplayer.droptinyseek.ms",-1);
-	if(drop_tiny_seek_ms<0)
-		drop_tiny_seek_ms=100;
+    drop_tiny_seek_ms = PropGetFloat("media.amplayer.droptinyseek.ms", -1);
+    if (drop_tiny_seek_ms < 0) {
+        drop_tiny_seek_ms = 100;
+    }
     mFFStatus = false;
     mSupportSeek = -1;
     mSeekdone = false;
@@ -213,17 +213,18 @@ AmlogicPlayer::AmlogicPlayer() :
     mRightVolume = 1;
     mSetVolumeFlag = 0;
     mLatestPauseState = false;
-    	    
+
     bufferTime = 0;
-    mDelaySendBufferingInfo_s = (int)PropGetFloat("media.amplayer.delaybuffering.s",0.0);
-    DtshdApreTotal=0;
-    DtsHdStreamType=0;
-    DtsHdMulAssetHint=0;
-    DtsHdHpsHint=0;
+    mDelaySendBufferingInfo_s = (int)PropGetFloat("media.amplayer.delaybuffering.s", 0.0);
+    DtshdApreTotal = 0;
+    DtsHdStreamType = 0;
+    DtsHdMulAssetHint = 0;
+    DtsHdHpsHint = 0;
     mParcel = NULL;
-    AudioDualMonoNeed=0;
-    AudioDualMonoSetOK=0;
+    AudioDualMonoNeed = 0;
+    AudioDualMonoSetOK = 0;
     mPlaybackSettings = AUDIO_PLAYBACK_RATE_DEFAULT;
+    memset(mTrackMap, -1, sizeof(mTrackMap));
 }
 
 int HistoryMgt(const char * path, int r0w1, int mTime)
@@ -314,9 +315,9 @@ int IsTheSameVfmPathDefault(char * path)
 
     fd = open("sys/class/vfm/map", O_RDONLY);
     if (fd >= 0) {
-        memset(valstr,0,MAX_VFM_MAP_LEN);
+        memset(valstr, 0, MAX_VFM_MAP_LEN);
         read(fd, valstr, MAX_VFM_MAP_LEN);
-        valstr[MAX_VFM_MAP_LEN-1] = '\0';
+        valstr[MAX_VFM_MAP_LEN - 1] = '\0';
         close(fd);
     } else {
         LOGE("unable to open file %s,err: %s", path, strerror(errno));
@@ -327,7 +328,7 @@ int IsTheSameVfmPathDefault(char * path)
     start_p = strstr(valstr, "default {");
     end_p = strstr(start_p, "}");
 
-    len = end_p-start_p+1;
+    len = end_p - start_p + 1;
 
     strncpy(default_map, start_p, len);
     LOGI("default_map path [%s]\n", default_map);
@@ -344,8 +345,7 @@ int IsTheSameVfmPathDefault(char * path)
                 return -1;
             }
             LOGI("[%s:%d]both prop_list and node_list is null\n", __FUNCTION__, __LINE__);
-        }
-        else {
+        } else {
             if (isNodeEmpty) {
                 LOGE("[%s:%d] node_list is null but prop_list is not null\n", __FUNCTION__, __LINE__);
                 return -1;
@@ -358,12 +358,11 @@ int IsTheSameVfmPathDefault(char * path)
             if (prop.name != node.name) {
                 LOGE("prop_list [%s] is different with node_list[%s]\n", prop.name.string(), node.name.string());
                 return -1;
-            }
-            else {
+            } else {
                 LOGI("prop_list [%s] is same with node_list[%s]\n", prop.name.string(), node.name.string());
             }
         }
-    }while (!isPropEmpty && !isNodeEmpty);
+    } while (!isPropEmpty && !isNodeEmpty);
     LOGI("prop_list path is same with node_list\n");
     return 1;
 }
@@ -386,8 +385,9 @@ void CheckTVPEnable()
         SecLibHandle = dlopen("libsecmem.so", RTLD_NOW);
         if (SecLibHandle) {
             TVPRelease = (DTVPRelease)dlsym(SecLibHandle, "Secure_ReleaseResource");
-            if (TVPRelease)
+            if (TVPRelease) {
                 TVPRelease();
+            }
         }
         set_sys_int(DISABLE_VIDEO, 1);
         free_cma_buffer();
@@ -431,8 +431,7 @@ status_t AmlogicPlayer::BasicInit()
         int ret = 1;
         if (property_get("media.decoder.vfm.defmap", value, NULL) > 0) {
             ret = IsTheSameVfmPathDefault(value);
-            if(ret < 0)
-            {
+            if (ret < 0) {
                 LOGI("get def maping [%s]\n", value);
                 strcpy(newsetting, "add default ");
                 strcat(newsetting, value);
@@ -543,13 +542,17 @@ int set_sys_int(const char *path, int val)
     LOGV("set fs%s=%d failed\n", path, val);
     return -1;
 }
-bool IsManifestUrl( const char* url) {
-    return IS_END_OF(url,"/manifest");
+bool IsManifestUrl(const char* url)
+{
+    return IS_END_OF(url, "/manifest");
 }
-bool IsVrVmUrl( const char* url) {
-     if ( !strncasecmp ( url, "vrwc",4 )||!strncasecmp ( url, "vstb", 4 ) ) ////Verimatrix link, vrwc:viewright web client ; vstb:viewright stb for iptv
-         return true;
-     else return false;
+bool IsVrVmUrl(const char* url)
+{
+    if (!strncasecmp(url, "vrwc", 4) || !strncasecmp(url, "vstb", 4)) {    ////Verimatrix link, vrwc:viewright web client ; vstb:viewright stb for iptv
+        return true;
+    } else {
+        return false;
+    }
 }
 
 
@@ -647,7 +650,7 @@ AmlogicPlayer::~AmlogicPlayer()
 }
 
 status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
-    const char *uri, const KeyedVector<String8, String8> *headers)
+                                      const char *uri, const KeyedVector<String8, String8> *headers)
 {
     LOGV("setDataSource");
 
@@ -666,21 +669,21 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
     if (strncmp(uri, "http", strlen("http")) == 0 ||
         strncmp(uri, "shttp", strlen("shttp")) == 0 ||
         strncmp(uri, "https", strlen("https")) == 0 ||
-        IsVrVmUrl(uri) ) {
+        IsVrVmUrl(uri)) {
         isHTTPSource = true;
     }
 
     bool isNormalHLS = false;
-    if(isHTTPSource && IS_M3U8_URL(uri)) {
+    if (isHTTPSource && IS_M3U8_URL(uri)) {
         isNormalHLS = true;
     }
     mHTTPService = httpService;
 
     if (PropIsEnable("media.amplayer.useandroidhttp") &&  !strncmp(uri, "http://", strlen("http://"))) {
-        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
+        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService, uri, headers);
         return setdatasource(mSouceProtocol->GetPathString(), -1, 0, 0x7ffffffffffffffLL, NULL);
     } else if (!strncmp(uri, "widevine://", strlen("widevine://")) && !isNormalHLS) {
-        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
+        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService, uri, headers);
         if (mSouceProtocol.get() != NULL) {
             mPlay_ctl.auto_buffing_enable = 1;
             isTryDRM = true;
@@ -690,7 +693,7 @@ status_t AmlogicPlayer::setDataSource(const sp<IMediaHTTPService> &httpService,
                (!strncmp(uri, "file://", strlen("file://")) || (strstr(uri, "//") == NULL)))/*local file used android datasource
                                                                        no "//",I think it is local source.*/
     {
-        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService,uri, headers);
+        mSouceProtocol = AmlogicPlayerDataSouceProtocol::CreateFromUrl(mHTTPService, uri, headers);
         if (mSouceProtocol.get() != NULL) {
             return setdatasource(mSouceProtocol->GetPathString(), -1, 0, 0x7ffffffffffffffLL, NULL);
         }
@@ -892,8 +895,7 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
             int ret = 1;
             if (property_get("media.decoder.vfm.drmmap", value, NULL) > 0) {
                 ret = IsTheSameVfmPathDefault(value);
-                if (ret < 0)
-                {
+                if (ret < 0) {
                     LOGE("reset DRM maping [%s]\n", value);
                     strcpy(newsetting, "add default ");
                     strcat(newsetting, value);
@@ -944,15 +946,15 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
         UpdateBufLevel(pbufinfo);
     }
     break;
-    case PLAYER_EVENTS_VIDEO_SIZE_CHANGED:
-    {
-        if(PropIsEnable("media.amplayer.vs.change.msg.on", 1) && !isSmoothStreaming){
+    case PLAYER_EVENTS_VIDEO_SIZE_CHANGED: {
+        if (PropIsEnable("media.amplayer.vs.change.msg.on", 1) && !isSmoothStreaming) {
             mWidth = ext1;
             mHeight = ext2;
-            if(mAspect_ratio_num>mAspect_ratio_den)
-                mWidth=mWidth*mAspect_ratio_num/mAspect_ratio_den;
-            else
-                mHeight=mHeight*mAspect_ratio_den/mAspect_ratio_num;
+            if (mAspect_ratio_num > mAspect_ratio_den) {
+                mWidth = mWidth * mAspect_ratio_num / mAspect_ratio_den;
+            } else {
+                mHeight = mHeight * mAspect_ratio_den / mAspect_ratio_num;
+            }
             if (video_rotation_degree == 1 || video_rotation_degree == 3) {
                 sendEvent(MEDIA_SET_VIDEO_SIZE, mHeight, mWidth);    // 90du,or 270du
             } else {
@@ -961,8 +963,7 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
         }
     }
     break;
-    case PLAYER_EVENTS_SUBTITLE_DATA:
-    {
+    case PLAYER_EVENTS_SUBTITLE_DATA: {
         AVSubtitleData * sub = (AVSubtitleData *)ext1;
         Parcel in;
         in.writeInt32(sub->sub_trackIndex);
@@ -980,31 +981,33 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
         LOGD("PLAYER_EVENTS_BLURAY_INFO");
         bluray_info_t *info = (bluray_info_t *)ext1;
         switch (info->info) {
-            case BLURAY_STREAM_PATH: {
-                if (mParcel != NULL)
-                    delete mParcel;
-                mParcel = new Parcel();
-                mParcel->freeData();
-                mParcel->writeString16(String16(info->stream_path));
-                mParcel->writeInt32(info->stream_info_num);
-                for (int i = 0; i < info->stream_info_num; i++) {
-                    mParcel->writeInt32(info->stream_info[i].type);
-                    mParcel->writeString16(String16(info->stream_info[i].lang));
-                }
-                mParcel->writeInt32(info->chapter_num);
-                for (int i = 0; i < info->chapter_num; i++) {
-                    mParcel->writeInt32(info->chapter_info[i].start);
-                    mParcel->writeInt32(info->chapter_info[i].duration);
-                }
-
-                if (mParcel->dataSize() > 0)
-                    sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, mParcel);
-                else
-                    sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, NULL);
-                break;
+        case BLURAY_STREAM_PATH: {
+            if (mParcel != NULL) {
+                delete mParcel;
             }
-            default:
-                break;
+            mParcel = new Parcel();
+            mParcel->freeData();
+            mParcel->writeString16(String16(info->stream_path));
+            mParcel->writeInt32(info->stream_info_num);
+            for (int i = 0; i < info->stream_info_num; i++) {
+                mParcel->writeInt32(info->stream_info[i].type);
+                mParcel->writeString16(String16(info->stream_info[i].lang));
+            }
+            mParcel->writeInt32(info->chapter_num);
+            for (int i = 0; i < info->chapter_num; i++) {
+                mParcel->writeInt32(info->chapter_info[i].start);
+                mParcel->writeInt32(info->chapter_info[i].duration);
+            }
+
+            if (mParcel->dataSize() > 0) {
+                sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, mParcel);
+            } else {
+                sendEvent(MEDIA_BLURAY_INFO, MEDIA_INFO_AMLOGIC_BLURAY_STREAM_PATH, 0, NULL);
+            }
+            break;
+        }
+        default:
+            break;
         }
         break;
     }
@@ -1017,101 +1020,111 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
 
 
 #define DTSM6_EXCHANGE_INFO_NODE "/sys/class/amaudio/debug"
-static void dtsm6_get_exchange_info(int *streamtype,int *APreCnt,int *APreSel,int *ApreAssetSel,int32_t *ApresAssetsArray,int *MulAssetHint,int *HPs_hint)
+static void dtsm6_get_exchange_info(int *streamtype, int *APreCnt, int *APreSel, int *ApreAssetSel, int32_t *ApresAssetsArray, int *MulAssetHint, int *HPs_hint)
 {
-    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
-    int bytes=0,i;
-    if (fd >= 0)
-    {
-        uint8_t ubuf8[256]={0};
-        bytes=read(fd,ubuf8,256);
+    int fd = open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes = 0, i;
+    if (fd >= 0) {
+        uint8_t ubuf8[256] = {0};
+        bytes = read(fd, ubuf8, 256);
 
-        if (streamtype != NULL ) {
-            uint8_t *pStreamType=(uint8_t *)strstr((const char*)ubuf8,"StreamType");
+        if (streamtype != NULL) {
+            uint8_t *pStreamType = (uint8_t *)strstr((const char*)ubuf8, "StreamType");
             if (pStreamType != NULL) {
-               pStreamType+=10;
-               *streamtype=atoi((const char*)pStreamType);
+                pStreamType += 10;
+                *streamtype = atoi((const char*)pStreamType);
             }
         }
 
         if (APreCnt != NULL) {
-            uint8_t *pApreCnt=(uint8_t *)strstr((const char*)ubuf8,"ApreCnt");
+            uint8_t *pApreCnt = (uint8_t *)strstr((const char*)ubuf8, "ApreCnt");
             if (pApreCnt != NULL) {
-               pApreCnt+=7;
-               *APreCnt=atoi((const char*)pApreCnt);
+                pApreCnt += 7;
+                *APreCnt = atoi((const char*)pApreCnt);
             }
         }
 
         if (APreSel != NULL) {
-            uint8_t *pApreSel=(uint8_t *)strstr((const char*)ubuf8,"ApreSel");
+            uint8_t *pApreSel = (uint8_t *)strstr((const char*)ubuf8, "ApreSel");
             if (pApreSel != NULL) {
-               pApreSel+=7;
-               *APreSel=atoi((const char*)pApreSel);
+                pApreSel += 7;
+                *APreSel = atoi((const char*)pApreSel);
             }
         }
 
         if (ApreAssetSel != NULL) {
-            uint8_t *pApreAssetSel=(uint8_t *)strstr((const char*)ubuf8,"ApreAssetSel");
+            uint8_t *pApreAssetSel = (uint8_t *)strstr((const char*)ubuf8, "ApreAssetSel");
             if (pApreAssetSel != NULL) {
-                pApreAssetSel+=12;
-                *ApreAssetSel=atoi((const char*)pApreAssetSel);
+                pApreAssetSel += 12;
+                *ApreAssetSel = atoi((const char*)pApreAssetSel);
             }
         }
 
         if (ApresAssetsArray != NULL && APreCnt != NULL) {
-            uint8_t *pApresAssetsArray=(uint8_t *)strstr((const char*)ubuf8,"ApresAssetsArray");
+            uint8_t *pApresAssetsArray = (uint8_t *)strstr((const char*)ubuf8, "ApresAssetsArray");
             if (pApresAssetsArray != NULL) {
-               pApresAssetsArray+=16;
-               for (i=0;i<*APreCnt;i++) {
-                 ApresAssetsArray[i]=pApresAssetsArray[i];
-                 LOGI("[%s %d]ApresAssetsArray[%d]/%d",__FUNCTION__,__LINE__,i,ApresAssetsArray[i]);
-               }
+                pApresAssetsArray += 16;
+                for (i = 0; i < *APreCnt; i++) {
+                    ApresAssetsArray[i] = pApresAssetsArray[i];
+                    LOGI("[%s %d]ApresAssetsArray[%d]/%d", __FUNCTION__, __LINE__, i, ApresAssetsArray[i]);
+                }
             }
         }
         if (MulAssetHint != NULL) {
-            uint8_t *pMulAssetHint=(uint8_t *)strstr((const char*)ubuf8,"MulAssetHint");
+            uint8_t *pMulAssetHint = (uint8_t *)strstr((const char*)ubuf8, "MulAssetHint");
             if (pMulAssetHint != NULL) {
-               pMulAssetHint+=12;
-               *MulAssetHint=atoi((const char*)pMulAssetHint);
+                pMulAssetHint += 12;
+                *MulAssetHint = atoi((const char*)pMulAssetHint);
             }
         }
-        if (HPs_hint != NULL)
-        {
-            uint8_t *phps_hint=(uint8_t *)strstr((const char*)ubuf8,"HPSHint");
+        if (HPs_hint != NULL) {
+            uint8_t *phps_hint = (uint8_t *)strstr((const char*)ubuf8, "HPSHint");
             if (phps_hint != NULL) {
-               phps_hint += 7;
-               *HPs_hint=atoi((const char*)phps_hint);
+                phps_hint += 7;
+                *HPs_hint = atoi((const char*)phps_hint);
             }
         }
         close(fd);
-    }else{
-        LOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
-       if (streamtype != NULL)  *streamtype=0;
-       if (APreCnt != NULL)     *APreCnt=0;
-       if (APreSel != NULL)     *APreSel=0;
-       if (ApreAssetSel != NULL)*ApreAssetSel=0;
-       if (HPs_hint != NULL)    *HPs_hint=0;
-       if (ApresAssetsArray != NULL && APreCnt != NULL) memset(ApresAssetsArray,0,*APreCnt);
+    } else {
+        LOGI("[%s %d]open %s failed!\n", __FUNCTION__, __LINE__, DTSM6_EXCHANGE_INFO_NODE);
+        if (streamtype != NULL) {
+            *streamtype = 0;
+        }
+        if (APreCnt != NULL) {
+            *APreCnt = 0;
+        }
+        if (APreSel != NULL) {
+            *APreSel = 0;
+        }
+        if (ApreAssetSel != NULL) {
+            *ApreAssetSel = 0;
+        }
+        if (HPs_hint != NULL) {
+            *HPs_hint = 0;
+        }
+        if (ApresAssetsArray != NULL && APreCnt != NULL) {
+            memset(ApresAssetsArray, 0, *APreCnt);
+        }
     }
 }
 
-static void dtsm6_set_exchange_info(int *APreSel,int *ApreAssetSel)
+static void dtsm6_set_exchange_info(int *APreSel, int *ApreAssetSel)
 {
-    int fd=open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
-    int bytes,pos=0;
+    int fd = open(DTSM6_EXCHANGE_INFO_NODE,  O_RDWR | O_TRUNC, 0644);
+    int bytes, pos = 0;
     if (fd >= 0) {
-       char ubuf8[128]={0};
-       if (APreSel != NULL) {
-           bytes=sprintf(ubuf8,"dtsm6_apre_sel_set%d",*APreSel);
-           write(fd, ubuf8, bytes);
-       }
-       if (ApreAssetSel != NULL) {
-           bytes=sprintf(ubuf8,"dtsm6_apre_assets_sel_set%d",*ApreAssetSel);
-           write(fd, ubuf8, bytes);
-       }
-       close(fd);
-    }else{
-       LOGI("[%s %d]open %s failed!\n",__FUNCTION__,__LINE__,DTSM6_EXCHANGE_INFO_NODE);
+        char ubuf8[128] = {0};
+        if (APreSel != NULL) {
+            bytes = sprintf(ubuf8, "dtsm6_apre_sel_set%d", *APreSel);
+            write(fd, ubuf8, bytes);
+        }
+        if (ApreAssetSel != NULL) {
+            bytes = sprintf(ubuf8, "dtsm6_apre_assets_sel_set%d", *ApreAssetSel);
+            write(fd, ubuf8, bytes);
+        }
+        close(fd);
+    } else {
+        LOGI("[%s %d]open %s failed!\n", __FUNCTION__, __LINE__, DTSM6_EXCHANGE_INFO_NODE);
     }
 }
 int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
@@ -1138,30 +1151,31 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         } else if (info->error_no == PLAYER_UNSUPPORT_ACODEC || info->error_no == PLAYER_UNSUPPORT_AUDIO) {
             LOGW("player audio not supported\n");
             sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_AUDIO_NOT_SUPPORT);
-	     if(!mhasVideo)
-	         sendEvent(MEDIA_PREPARED);				
+            if (!mhasVideo) {
+                sendEvent(MEDIA_PREPARED);
+            }
         }
     } else if (info->status == PLAYER_BUFFERING) {
         if (mDuration > 0) {
             sendEvent(MEDIA_BUFFERING_UPDATE, mPlayTime * 100 / mDuration);
         }
         if (bufferTime <= 0) {
-            bufferTime = ALooper::GetNowUs()/1000;
+            bufferTime = ALooper::GetNowUs() / 1000;
         }
         if (!mInbuffering) {
-             //mInbuffering = true;
-             if (!mLowLevelBufMode) {
-             if(mDelaySendBufferingInfo_s > 0 ){
-                 if (ALooper::GetNowUs()/1000 - bufferTime > mDelaySendBufferingInfo_s * 1000) {
+            //mInbuffering = true;
+            if (!mLowLevelBufMode) {
+                if (mDelaySendBufferingInfo_s > 0) {
+                    if (ALooper::GetNowUs() / 1000 - bufferTime > mDelaySendBufferingInfo_s * 1000) {
+                        mInbuffering = true;
+                        sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
+                    }
+                } else {
                     mInbuffering = true;
                     sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
-                 }
-             }else{
-                 mInbuffering = true;
-                 sendEvent(MEDIA_INFO, MEDIA_INFO_BUFFERING_START);
-                 }
-             }
-         }
+                }
+            }
+        }
     } else if (info->status == PLAYER_INITOK) {
         updateMediaInfo();
         if (info->full_time_ms != -1) {
@@ -1196,7 +1210,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             mLastPlayTimeUpdateUS = ALooper::GetNowUs();
         }
         mEnded = true;
-        mPaused=true;
+        mPaused = true;
     } else if (info->status == PLAYER_EXIT) {
         LOGV("Player status:%s, playback exit", player_status2str(info->status));
         mRunning = false;
@@ -1211,7 +1225,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
                 sendEvent(MEDIA_PLAYBACK_COMPLETE);
             }
         }
-        mPaused=true;
+        mPaused = true;
         mEnded = true;
         if (isHDCPFailed == true) {
             set_sys_int(DISABLE_VIDEO, 2);
@@ -1225,8 +1239,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             int ret = 1;
             if (property_get("media.decoder.vfm.defmap", value, NULL) > 0) {
                 ret = IsTheSameVfmPathDefault(value);
-                if (ret < 0)
-                {
+                if (ret < 0) {
                     LOGE("reset DRM maping [%s]\n", value);
                     strcpy(newsetting, "add default ");
                     strcat(newsetting, value);
@@ -1276,10 +1289,10 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         } else if (info->full_time != -1) {
             mDuration = info->full_time * 1000;
         }
-        
+
         mPlayTime = info->current_ms;
         mLastPlayTimeUpdateUS = ALooper::GetNowUs();
-        
+
         if (info->current_pts != 0xffffffff) {
             mStreamTime = info->current_pts / 90; /*pts(90000hz)->ms*/
             mLastStreamTimeUpdateUS = ALooper::GetNowUs();
@@ -1291,7 +1304,7 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
             LOGV("Playing percent on percent=%d,bufed time=%dS,Duration=%dS\n", percent, info->bufed_time, mDuration / 1000);
         } else if (streaminfo_valied && mDuration > 0 && info->bufed_pos > 0 && mStreamInfo.stream_info.file_size > 0) {
 
-            percent = (info->bufed_pos *100 / (mStreamInfo.stream_info.file_size));
+            percent = (info->bufed_pos * 100 / (mStreamInfo.stream_info.file_size));
             LOGV("Playing percent on percent=%d,bufed pos=%" PRId64 ",Duration=%" PRId64 "\n", percent, info->bufed_pos, (mStreamInfo.stream_info.file_size));
         } else if (mDuration > 0 && streaminfo_valied && mStreamInfo.stream_info.file_size > 0) {
             percent += ((long long)4 * 1024 * 1024 * 100 * info->audio_bufferlevel / mStreamInfo.stream_info.file_size);
@@ -1307,21 +1320,20 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
         } else if (percent < 0) {
             percent = 0;
         }
-        
+
         if (info->status == PLAYER_SEARCHOK) {
             sendEvent(MEDIA_SEEK_COMPLETE);
-            if(mFFStatus)
-            {
+            if (mFFStatus) {
                 mFFStatus = false;
             }
         }
-        
+
         if (mDuration > 0 && !mLowLevelBufMode) {
             sendEvent(MEDIA_BUFFERING_UPDATE, percent);
         }
 
     }
-    if(info->status == PLAYER_START && mSetVolumeFlag == 1){
+    if (info->status == PLAYER_START && mSetVolumeFlag == 1) {
         audio_set_lrvolume(mPlayer_id, mLeftVolume, mRightVolume);
         mSetVolumeFlag = 0;
     }
@@ -1406,36 +1418,36 @@ status_t AmlogicPlayer::setdatasource(const char *path, int fd, int64_t offset, 
         if (file == NULL) {
             return NO_MEMORY;
         }
-        #ifdef LIVEPLAY_SEEK
+#ifdef LIVEPLAY_SEEK
         float tmp_pos = 0.0;
         mPlay_ctl.is_livemode = 0;
-        #endif
-		
-        if (strncmp(path, "http", strlen("http")) == 0&&!IsManifestUrl(path)) {
-            #ifdef LIVEPLAY_SEEK
+#endif
+
+        if (strncmp(path, "http", strlen("http")) == 0 && !IsManifestUrl(path)) {
+#ifdef LIVEPLAY_SEEK
             char *tmp = strstr(path, "starttime");
-            if(tmp) {
+            if (tmp) {
                 tmp += 10;
                 tmp_pos = atof(tmp);
             }
             tmp = strstr(path, "livemode=1");
-            if(tmp) {
+            if (tmp) {
                 mPlay_ctl.is_livemode = 1;
             }
-            #endif
-            if(IS_M3U8_URL(path)){
-               if (isUseExternalModule("vhls_mod") > 0) {
-                 num = sprintf(file, "vhls:s%s", path);
-               } else {
-                 num = sprintf(file, "list:s%s", path);
-               }
-               file[num] = '\0';
+#endif
+            if (IS_M3U8_URL(path)) {
+                if (isUseExternalModule("vhls_mod") > 0) {
+                    num = sprintf(file, "vhls:s%s", path);
+                } else {
+                    num = sprintf(file, "list:s%s", path);
+                }
+                file[num] = '\0';
             } else {
-               //http->shttp
-               num = sprintf(file, "s%s", path);
-               file[num] = '\0';
+                //http->shttp
+                num = sprintf(file, "s%s", path);
+                file[num] = '\0';
             }
-        }else{
+        } else {
             num = sprintf(file, "%s", path);
             file[num] = '\0';
         }
@@ -1445,11 +1457,11 @@ status_t AmlogicPlayer::setdatasource(const char *path, int fd, int64_t offset, 
         } else {
             mPlay_ctl.t_pos = -1;
         }
-        #ifdef LIVEPLAY_SEEK
-        if(tmp_pos > 0) {
-        	mPlay_ctl.t_pos = tmp_pos/1000.0;
+#ifdef LIVEPLAY_SEEK
+        if (tmp_pos > 0) {
+            mPlay_ctl.t_pos = tmp_pos / 1000.0;
         }
-        #endif
+#endif
         if (mPlay_ctl.headers) {
             free(mPlay_ctl.headers);
             mPlay_ctl.headers = NULL;
@@ -1482,7 +1494,7 @@ status_t AmlogicPlayer::setdatasource(const char *path, int fd, int64_t offset, 
             strncmp(path, "rtsp", strlen("rtsp")) == 0 ||
             strncmp(path, "mms", strlen("mms")) == 0 ||
             strncmp(path, "ftp", strlen("ftp")) == 0 ||
-            strncmp(path, "widevine", strlen("widevine")) == 0||
+            strncmp(path, "widevine", strlen("widevine")) == 0 ||
             IsVrVmUrl(path)) { /*if net work mode ,enable buffering*/
             mPlay_ctl.auto_buffing_enable = 1;
         }
@@ -1526,7 +1538,7 @@ status_t AmlogicPlayer::prepareAsync()
 {
     int check_is_playlist = -1;
     float level = PropGetFloat("media.amplayer.lpbufferlevel");
-    float buftime = PropGetFloat("media.amplayer.buffertime",5);
+    float buftime = PropGetFloat("media.amplayer.buffertime", 5);
     float delaybuffering = (int)PropGetFloat("media.amplayer.delaybuffering");
     LOGV("prepareAsync\n");
     if (!strncasecmp("tvin:", mPlay_ctl.file_name, 5)) {
@@ -1600,15 +1612,15 @@ status_t AmlogicPlayer::start()
             LOGV("HDCP authenticate failed, Disable Video");
         }
     }
-	
-    if (mPlayerRender.get() != NULL) {
-        LOGV("mPlayerRender->start\n");	
-        int ret = mPlayerRender->Start();
-		if (ret != OK) {
-			LOGE("mPlayerRender->start error\n");	
-			return ERROR_OPEN_FAILED;
 
-		}
+    if (mPlayerRender.get() != NULL) {
+        LOGV("mPlayerRender->start\n");
+        int ret = mPlayerRender->Start();
+        if (ret != OK) {
+            LOGE("mPlayerRender->start error\n");
+            return ERROR_OPEN_FAILED;
+
+        }
     }
 
     player_start_play(mPlayer_id);
@@ -1685,7 +1697,7 @@ status_t AmlogicPlayer::stop()
     mRunning = false;
     mLatestPauseState = true;
     player_stop(mPlayer_id);
-    mEnded= true;
+    mEnded = true;
     mShouldSendPlayComplete = false;
     mOffsetBacFlag = false;
     mOffsetBac = 0;
@@ -1726,7 +1738,7 @@ status_t AmlogicPlayer::seekTo(int position)
         sendEvent(MEDIA_SEEK_COMPLETE);
         return NO_ERROR;
     }
-    if(isSmoothStreaming&&mhasVideo==0&&mhasAudio==1) {
+    if (isSmoothStreaming && mhasVideo == 0 && mhasAudio == 1) {
         LOGI("NOTE:SmoothStreaming pure audio seek forbiddend!!\n");
         sendEvent(MEDIA_SEEK_COMPLETE);
         return NO_ERROR;
@@ -1752,7 +1764,7 @@ status_t AmlogicPlayer::seekTo(int position)
             mIgnoreMsg = false;
             LatestPlayerState = PLAYER_INITOK;
             mEnded = false;
-            if(mLatestPauseState == false) {
+            if (mLatestPauseState == false) {
                 mPaused = false;
             }
             if (mDecryptHandle != NULL) {
@@ -1799,9 +1811,9 @@ status_t AmlogicPlayer::pause()
         LOGI("NOTE:adif_aac pause not allowed reset DSP!!\n");
         flag = mStreamInfo.stream_info.adif_file_flag;
     }
-    if(isSmoothStreaming&&mhasVideo==0&&mhasAudio==1) {
+    if (isSmoothStreaming && mhasVideo == 0 && mhasAudio == 1) {
         LOGI("NOTE:SmoothStreaming pure audio pause not allowed reset DSP!!\n");
-        flag=isSmoothStreaming;
+        flag = isSmoothStreaming;
     }
     if (mhasVideo || flag) { /*video mode,and no video,no audio*/
         if (mDecryptHandle != NULL) {
@@ -1827,7 +1839,7 @@ status_t AmlogicPlayer::pause()
         mPlayerRender->Pause();
     }
     mPaused = true;
-    mLatestPauseState = true;    
+    mLatestPauseState = true;
     if (mhasAudio && mChangedCpuFreq) {
         SetCpuScalingOnAudio(1);
         mChangedCpuFreq = false;
@@ -1891,7 +1903,7 @@ status_t    AmlogicPlayer::setPlaybackSettings(const AudioPlaybackRate& rate)
     int retry = 10;
 retry:
     TRACE();
-    err = audio_set_playback_rate(mPlayer_id,&rate_local);
+    err = audio_set_playback_rate(mPlayer_id, &rate_local);
     if (err != OK && retry-- > 0) {
         usleep(50000);
         goto retry;
@@ -1910,7 +1922,8 @@ retry:
     }
     return err;
 }
-status_t AmlogicPlayer::getPlaybackSettings(AudioPlaybackRate *rate /* nonnull */) {
+status_t AmlogicPlayer::getPlaybackSettings(AudioPlaybackRate *rate /* nonnull */)
+{
     TRACE();
     /*TODO read the actual rate value from audio track */
     *rate = mPlaybackSettings;
@@ -2067,28 +2080,30 @@ status_t AmlogicPlayer::updateMediaInfo(void)
     }
     streaminfo_valied = true;
     const int buflen = 2048;
-    char tmp[buflen+4];
+    char tmp[buflen + 4];
     int boffset = 0;
 
     mhasVideo = mStreamInfo.stream_info.total_video_num > 0 ? mStreamInfo.stream_info.total_video_num : 0;
     if (mStreamInfo.stream_info.total_video_num > 0 &&
         mStreamInfo.stream_info.cur_video_index >= 0) {
         memset(tmp, 0, buflen);
-        ret=snprintf(tmp, buflen, "({");
-        boffset += ret>0?ret:0;
+        ret = snprintf(tmp, buflen, "({");
+        boffset += ret > 0 ? ret : 0;
         for (i = 0; i < mStreamInfo.stream_info.total_video_num; i ++) {
             if (mStreamInfo.video_info[i]) {
                 if (mStreamInfo.video_info[i]->index == mStreamInfo.stream_info.cur_video_index) {
                     mWidth = mStreamInfo.video_info[i]->width;
                     mHeight = mStreamInfo.video_info[i]->height;
-                    mAspect_ratio_num=mStreamInfo.video_info[i]->aspect_ratio_num;
-                    mAspect_ratio_den=mStreamInfo.video_info[i]->aspect_ratio_den;
-                    if(mAspect_ratio_num == 0 || mAspect_ratio_den==0)
-                        mAspect_ratio_num=mAspect_ratio_den=1;
-                    if(mAspect_ratio_num>mAspect_ratio_den)
-                        mWidth=mWidth*mAspect_ratio_num/mAspect_ratio_den;
-                    else
-                        mHeight=mHeight*mAspect_ratio_den/mAspect_ratio_num;
+                    mAspect_ratio_num = mStreamInfo.video_info[i]->aspect_ratio_num;
+                    mAspect_ratio_den = mStreamInfo.video_info[i]->aspect_ratio_den;
+                    if (mAspect_ratio_num == 0 || mAspect_ratio_den == 0) {
+                        mAspect_ratio_num = mAspect_ratio_den = 1;
+                    }
+                    if (mAspect_ratio_num > mAspect_ratio_den) {
+                        mWidth = mWidth * mAspect_ratio_num / mAspect_ratio_den;
+                    } else {
+                        mHeight = mHeight * mAspect_ratio_den / mAspect_ratio_num;
+                    }
                     video_rotation_degree = mStreamInfo.video_info[i]->video_rotation_degree;
                     LOGI("player current video info:w:%d,h:%d\n", mWidth, mHeight);
                     if (mStrCurrentVideoCodec) {
@@ -2099,21 +2114,21 @@ status_t AmlogicPlayer::updateMediaInfo(void)
                     LOGI("player current video info:codec:%s\n", mStrCurrentVideoCodec);
                 }
 
-                ret=snprintf(tmp + boffset, buflen-boffset, "vid:%d,vcodec:%s,bitrate:%d", mStreamInfo.video_info[i]->id,
-                         getStrVideoCodec(mStreamInfo.video_info[i]->format),
-                         mStreamInfo.video_info[i]->bit_rate > 0 ? mStreamInfo.video_info[i]->bit_rate : mStreamInfo.stream_info.bitrate);
-                boffset += ret>0?ret:0;
+                ret = snprintf(tmp + boffset, buflen - boffset, "vid:%d,vcodec:%s,bitrate:%d", mStreamInfo.video_info[i]->id,
+                               getStrVideoCodec(mStreamInfo.video_info[i]->format),
+                               mStreamInfo.video_info[i]->bit_rate > 0 ? mStreamInfo.video_info[i]->bit_rate : mStreamInfo.stream_info.bitrate);
+                boffset += ret > 0 ? ret : 0;
                 if (i < mStreamInfo.stream_info.total_video_num) {
 
-                    ret=snprintf(tmp + boffset, buflen-boffset, ";");
-                    boffset += ret>0?ret:0;
+                    ret = snprintf(tmp + boffset, buflen - boffset, ";");
+                    boffset += ret > 0 ? ret : 0;
                 }
 
             }
         }
 
-        ret=snprintf(tmp + boffset, buflen-boffset, "})");
-        boffset += ret>0?ret:0;
+        ret = snprintf(tmp + boffset, buflen - boffset, "})");
+        boffset += ret > 0 ? ret : 0;
         if (mVideoExtInfo) {
             free(mVideoExtInfo);
             mVideoExtInfo = NULL;
@@ -2130,14 +2145,13 @@ status_t AmlogicPlayer::updateMediaInfo(void)
     mhasAudio = mStreamInfo.stream_info.total_audio_num > 0 ? mStreamInfo.stream_info.total_audio_num : 0;
     if (mStreamInfo.stream_info.total_audio_num > 0) {
         memset(tmp, 0, buflen);
-        ret=snprintf(tmp, buflen-boffset, "({");
-        boffset += ret>0?ret:0;
-        for (i = 0; i < mStreamInfo.stream_info.total_audio_num  && boffset < buflen- 32 ; i ++) {
+        ret = snprintf(tmp, buflen - boffset, "({");
+        boffset += ret > 0 ? ret : 0;
+        for (i = 0; i < mStreamInfo.stream_info.total_audio_num  && boffset < buflen - 32 ; i ++) {
             if (mStreamInfo.audio_info[i]) {
-                if(mhasVideo) {
+                if (mhasVideo) {
                     audioIdxCheck = (mStreamInfo.stream_info.cur_audio_index >= 0 && mStreamInfo.audio_info[i]->index == mStreamInfo.stream_info.cur_audio_index);
-                }
-                else {
+                } else {
                     audioIdxCheck = (mStreamInfo.stream_info.cur_audio_index >= 0);
                 }
                 if (audioIdxCheck) {
@@ -2148,17 +2162,17 @@ status_t AmlogicPlayer::updateMediaInfo(void)
                     mStrCurrentAudioCodec = strdup(getStrAudioCodec(mStreamInfo.audio_info[i]->aformat));
                 }
 
-                ret=snprintf(tmp + boffset, buflen-boffset, "aid:%d,acodec:%s,bitrate:%d,samplerate:%d", mStreamInfo.audio_info[i]->id, getStrAudioCodec(mStreamInfo.audio_info[i]->aformat), mStreamInfo.audio_info[i]->bit_rate, mStreamInfo.audio_info[i]->sample_rate);
-                boffset += ret>0?ret:0;
+                ret = snprintf(tmp + boffset, buflen - boffset, "aid:%d,acodec:%s,bitrate:%d,samplerate:%d", mStreamInfo.audio_info[i]->id, getStrAudioCodec(mStreamInfo.audio_info[i]->aformat), mStreamInfo.audio_info[i]->bit_rate, mStreamInfo.audio_info[i]->sample_rate);
+                boffset += ret > 0 ? ret : 0;
                 if (i < mStreamInfo.stream_info.total_audio_num) {
 
-                    ret=snprintf(tmp + boffset, buflen-boffset, ";");
-					boffset += ret>0?ret:0;
+                    ret = snprintf(tmp + boffset, buflen - boffset, ";");
+                    boffset += ret > 0 ? ret : 0;
                 }
             }
         }
-        ret=snprintf(tmp + boffset, buflen-boffset, "})");
-		boffset += ret>0?ret:0;
+        ret = snprintf(tmp + boffset, buflen - boffset, "})");
+        boffset += ret > 0 ? ret : 0;
         if (mAudioExtInfo) {
             free(mAudioExtInfo);
             mAudioExtInfo = NULL;
@@ -2174,17 +2188,17 @@ status_t AmlogicPlayer::updateMediaInfo(void)
     mhasSub = mStreamInfo.stream_info.total_sub_num > 0 ? mStreamInfo.stream_info.total_sub_num : 0;
     if (mStreamInfo.stream_info.total_sub_num > 0) {
         memset(tmp, 0, buflen);
-        ret=snprintf(tmp, buflen-boffset, "({");
-		boffset += ret>0?ret:0;
+        ret = snprintf(tmp, buflen - boffset, "({");
+        boffset += ret > 0 ? ret : 0;
         for (i = 0; i < mStreamInfo.stream_info.total_sub_num; i ++) {
             if (mStreamInfo.sub_info[i] && mStreamInfo.sub_info[i]->internal_external == 0) {
 
-                ret=snprintf(tmp + boffset, buflen - boffset, "sid:%d,lang:%s", mStreamInfo.sub_info[i]->id, mStreamInfo.sub_info[i]->sub_language);
-                boffset += ret>0?ret:0;
-				if (i < mStreamInfo.stream_info.total_sub_num) {
+                ret = snprintf(tmp + boffset, buflen - boffset, "sid:%d,lang:%s", mStreamInfo.sub_info[i]->id, mStreamInfo.sub_info[i]->sub_language);
+                boffset += ret > 0 ? ret : 0;
+                if (i < mStreamInfo.stream_info.total_sub_num) {
 
-                    ret=snprintf(tmp + boffset, buflen - boffset, ";");
-					boffset += ret>0?ret:0;
+                    ret = snprintf(tmp + boffset, buflen - boffset, ";");
+                    boffset += ret > 0 ? ret : 0;
                 }
                 mInnerSubNum++;
                 //add inband sub, 3gpp support only,codec_id from ffmpeg
@@ -2207,8 +2221,8 @@ status_t AmlogicPlayer::updateMediaInfo(void)
             }
         }
 
-        ret=snprintf(tmp + boffset, buflen-boffset, "})");
-        boffset += ret>0?ret:0;
+        ret = snprintf(tmp + boffset, buflen - boffset, "})");
+        boffset += ret > 0 ? ret : 0;
         if (mSubExtInfo) {
             free(mSubExtInfo);
             mSubExtInfo = NULL;
@@ -2216,21 +2230,19 @@ status_t AmlogicPlayer::updateMediaInfo(void)
         if (strlen(tmp) > 0) {
             mSubExtInfo = strdup(tmp);
         }
-       LOGI("inner subtitle info:%s\n", mSubExtInfo);
+        LOGI("inner subtitle info:%s\n", mSubExtInfo);
     }
     return OK;
 }
-status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
+
+status_t AmlogicPlayer::getTrackInfo(Parcel* reply)
 {
     //Mutex::Autolock autoLock(mLock);
+    int mCurTrack = 0;
+    int streamVail = 0;
+    memset(mTrackMap, -1, sizeof(mTrackMap));
 
-    //size_t trackCount = mStreamInfo.stream_info.nb_streams-mStreamInfo.stream_info.total_sub_num;
-    size_t trackCount = mStreamInfo.stream_info.nb_streams;
-    size_t totalTrack = mStreamInfo.stream_info.total_video_num +
-                    mStreamInfo.stream_info.total_audio_num +
-                    mStreamInfo.stream_info.total_sub_num;
-    if (trackCount > totalTrack)
-        trackCount = totalTrack;
+    size_t trackCount = mStreamInfo.stream_info.total_audio_num + mStreamInfo.stream_info.total_video_num + mStreamInfo.stream_info.total_sub_num;
     //if (mTextDriver != NULL) {
     //    trackCount += mTextDriver->countExternalTracks();
     //}
@@ -2238,17 +2250,28 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
     //trackCount+=
     LOGE("track_count:%d \n", trackCount);
     reply->writeInt32(trackCount);
+    //**********************************
+    // Each Item including following INfo
+    // 1 fields
+    // 2 type - a-v-s
+    // 3 lang - und for now
+    //**********************************
     char *lang = "und";
+
     for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
-
-
+        streamVail = 0;
         if (mhasVideo) {
             for (int j = 0; j < mStreamInfo.stream_info.total_video_num; j++) {
                 if (i == mStreamInfo.video_info[j]->index) {
-                    reply->writeInt32(2); // 2 fields
+                    reply->writeInt32(2);
                     reply->writeInt32(MEDIA_TRACK_TYPE_VIDEO);
                     reply->writeString16(String16("video/"));
                     reply->writeString16(String16("und"));
+
+                    //reply->writeString16(String16(lang));
+                    streamVail = 1;
+                    mTrackMap[mCurTrack++] = i;
+                    LOGE("found video index:%d  id:%d  i:%d \n", mStreamInfo.video_info[j]->index, mStreamInfo.video_info[j]->id, i);
                     //continue;
                     break;
                 }
@@ -2256,16 +2279,21 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         }
         if (mhasAudio) {
             for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
-				char *p8tmp=NULL;
+                char *p8tmp = NULL;
                 if (i == mStreamInfo.audio_info[m]->index) {
-                    reply->writeInt32(2); // 2 fields
+                    reply->writeInt32(2);
                     reply->writeInt32(MEDIA_TRACK_TYPE_AUDIO);
                     reply->writeString16(String16("audio/"));
-                    if (strlen(mStreamInfo.audio_info[m]->language))
-                         p8tmp = mStreamInfo.audio_info[m]->language;
-                    else
-                         p8tmp = lang;
+
+                    streamVail = 1;
+                    if (strlen(mStreamInfo.audio_info[m]->language)) {
+                        p8tmp = mStreamInfo.audio_info[m]->language;
+                    } else {
+                        p8tmp = lang;
+                    }
                     reply->writeString16(String16(p8tmp));
+                    mTrackMap[mCurTrack++] = i;
+                    LOGE("found audio index:%d  id:%d  i:%d \n", mStreamInfo.audio_info[m]->index, mStreamInfo.audio_info[m]->id, i);
                     //continue;
                     break;
                 }
@@ -2274,17 +2302,20 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         //need to judge type, support 3gpp inband sub only
         if (mhasSub) {
             for (int m = 0; m < mStreamInfo.stream_info.total_sub_num; m++) {
-				char *p8tmp=NULL;
+                char *p8tmp = NULL;
                 if (i == mStreamInfo.sub_info[m]->index) {
-                    reply->writeInt32(2); // 2 fields
+                    reply->writeInt32(2);
                     reply->writeInt32(MEDIA_TRACK_TYPE_TIMEDTEXT);
-                    LOGE("we found 3gpp sub index:%d  id:%d  i:%d \n", mStreamInfo.sub_info[m]->index, mStreamInfo.sub_info[m]->id, i);
+                    streamVail = 1;
                     reply->writeString16(String16("text/"));
-                    if (strlen(mStreamInfo.sub_info[m]->sub_language))
-                       p8tmp = mStreamInfo.sub_info[m]->sub_language;
-                    else
-                       p8tmp = lang;
+                    if (strlen(mStreamInfo.sub_info[m]->sub_language)) {
+                        p8tmp = mStreamInfo.sub_info[m]->sub_language;
+                    } else {
+                        p8tmp = lang;
+                    }
                     reply->writeString16(String16(p8tmp));
+                    mTrackMap[mCurTrack++] = i;
+                    LOGE("we found  sub index:%d  id:%d  i:%d \n", mStreamInfo.sub_info[m]->index, mStreamInfo.sub_info[m]->id, i);
                     break;
                     //continue;
                 }
@@ -2292,9 +2323,13 @@ status_t AmlogicPlayer::getTrackInfo(Parcel* reply) const
         }
 
     }
+    if (streamVail != 1) {
+        reply->writeInt32(MEDIA_TRACK_TYPE_UNKNOWN);
+    }
     //if (mTextDriver != NULL) {
-        //mTextDriver->getExternalTrackInfo(reply);
+    //mTextDriver->getExternalTrackInfo(reply);
     //}
+
     return OK;
 }
 
@@ -2304,36 +2339,37 @@ int32_t AmlogicPlayer::getSelectedTrack(const Parcel& request) const
     int32_t type = request.readInt32();
     int32_t trackId = -1;
     switch (type) {
-        case MEDIA_TRACK_TYPE_VIDEO:
-            if (mhasVideo) {
-                for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
-                    for (int j = 0; j < mStreamInfo.stream_info.total_video_num; j++) {
-                        if (i == mStreamInfo.video_info[j]->index) {
-                            trackId = i;
-                            return trackId;
-                        }
+    case MEDIA_TRACK_TYPE_VIDEO:
+        if (mhasVideo) {
+            for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
+                for (int j = 0; j < mStreamInfo.stream_info.total_video_num; j++) {
+                    if (i == mStreamInfo.video_info[j]->index) {
+                        trackId = i;
+                        return trackId;
                     }
                 }
             }
-            break;
-        case MEDIA_TRACK_TYPE_AUDIO:
-            if (mhasAudio) {
-                for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
-                    for (int j = 0; j < mStreamInfo.stream_info.total_audio_num; j++) {
-                        if (i == mStreamInfo.audio_info[j]->index) {
-                            trackId = i;
-                            return trackId;
-                        }
+        }
+        break;
+    case MEDIA_TRACK_TYPE_AUDIO:
+        if (mhasAudio) {
+            for (int i = 0; i < mStreamInfo.stream_info.nb_streams; ++i) {
+                for (int j = 0; j < mStreamInfo.stream_info.total_audio_num; j++) {
+                    if (i == mStreamInfo.audio_info[j]->index) {
+                        trackId = i;
+                        return trackId;
                     }
                 }
             }
-            break;
-        case MEDIA_TRACK_TYPE_TIMEDTEXT:
-            //if (mhasSub && mTextDriver!= NULL) {
-            //    return mTextDriver->getSelectedTrack();
-            //}
-            break;
-        default:break;
+        }
+        break;
+    case MEDIA_TRACK_TYPE_TIMEDTEXT:
+        //if (mhasSub && mTextDriver!= NULL) {
+        //    return mTextDriver->getSelectedTrack();
+        //}
+        break;
+    default:
+        break;
     }
     return trackId;
 }
@@ -2415,18 +2451,17 @@ int AmlogicPlayer::getStreamingSelectedTrack(const Parcel& request) const
 void transferFileSize(int64_t size, char *filesize)
 {
     //LOGE("[transferFileSize] size:%" PRId64 "\n", size);
-    if(size <= 1024)
+    if (size <= 1024) {
         strcpy(filesize, "1KB");
-    else if(size <= 1024 * 1024) {
+    } else if (size <= 1024 * 1024) {
         size /= 1024;
         size += 1;
-        sprintf(filesize,"%d",size);
+        sprintf(filesize, "%d", size);
         strcat(filesize, "KB");
-    }
-    else if (size > 1024 * 1024) {
-        size /= 1024*1024;
+    } else if (size > 1024 * 1024) {
+        size /= 1024 * 1024;
         size += 1;
-        sprintf(filesize,"%d",size);
+        sprintf(filesize, "%d", size);
         strcat(filesize, "MB");
     }
     //LOGE("[transferFileSize] filesize:%s\n", filesize);
@@ -2445,16 +2480,16 @@ get media file details information
 
 2 video info
    video count
-   video1: index-id-format -width-height 
+   video1: index-id-format -width-height
    video2: index-id-format -width-height
    ...
-   
+
 3 audio info
-   audio count 
+   audio count
    audio1: index-id-format -channel - samplerate
    audio2: index-id-format -channel - samplerate
    ...
-   
+
 4 subtitle info
    subtitle count
    subtitle1: index-id-format-type-lan
@@ -2464,7 +2499,7 @@ get media file details information
 status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
 {
 
-    int datapos=reply->dataPosition();	
+    int datapos = reply->dataPosition();
 
 
     /*build stream info*/
@@ -2472,74 +2507,77 @@ status_t AmlogicPlayer::getMediaInfo(Parcel* reply) const
     const size_t SIZE = 256;
     char buffer[SIZE];
     char filesize[SIZE] = {0,};
-    if (mStreamInfo.stream_info.filename != NULL) 
+    if (mStreamInfo.stream_info.filename != NULL) {
         reply->writeString16(String16(mStreamInfo.stream_info.filename));
-    else
+    } else {
         reply->writeString16(String16("-1"));
-    if (mStreamInfo.stream_info.duration > 0) 
-        reply->writeInt32(mStreamInfo.stream_info.duration);    
-    else
+    }
+    if (mStreamInfo.stream_info.duration > 0) {
+        reply->writeInt32(mStreamInfo.stream_info.duration);
+    } else {
         reply->writeInt32(-1);
+    }
 
     if (mStreamInfo.stream_info.file_size > 0) {
         transferFileSize((int64_t)mStreamInfo.stream_info.file_size, filesize);
-        reply->writeString16(String16(filesize));   
-    }
-    else
+        reply->writeString16(String16(filesize));
+    } else {
         reply->writeString16(String16("-1"));
-      if (mStreamInfo.stream_info.bitrate > 0) 
-        reply->writeInt32(mStreamInfo.stream_info.bitrate);   
-    else
+    }
+    if (mStreamInfo.stream_info.bitrate > 0) {
+        reply->writeInt32(mStreamInfo.stream_info.bitrate);
+    } else {
         reply->writeInt32(-1);
+    }
     reply->writeInt32(mStreamInfo.stream_info.type);
-    ALOGV("--filename:%s duration:%d filesize:%" PRId64 " bitrate:%d \n", mStreamInfo.stream_info.filename, mStreamInfo.stream_info.duration,mStreamInfo.stream_info.file_size,mStreamInfo.stream_info.bitrate);
+    ALOGV("--filename:%s duration:%d filesize:%" PRId64 " bitrate:%d \n", mStreamInfo.stream_info.filename, mStreamInfo.stream_info.duration, mStreamInfo.stream_info.file_size, mStreamInfo.stream_info.bitrate);
     /*select info*/
     reply->writeInt32(mStreamInfo.stream_info.cur_video_index);
     reply->writeInt32(mStreamInfo.stream_info.cur_audio_index);
     reply->writeInt32(mStreamInfo.stream_info.cur_sub_index);
-    ALOGV("--cur video:%d cur audio:%d cur sub:%d \n",mStreamInfo.stream_info.cur_video_index,mStreamInfo.stream_info.cur_audio_index,mStreamInfo.stream_info.cur_sub_index);
+    ALOGV("--cur video:%d cur audio:%d cur sub:%d \n", mStreamInfo.stream_info.cur_video_index, mStreamInfo.stream_info.cur_audio_index, mStreamInfo.stream_info.cur_sub_index);
     /*build video info*/
-    reply->writeInt32(mStreamInfo.stream_info.total_video_num);    
-    for (int i = 0; i < mStreamInfo.stream_info.total_video_num; i ++) {        
+    reply->writeInt32(mStreamInfo.stream_info.total_video_num);
+    for (int i = 0; i < mStreamInfo.stream_info.total_video_num; i ++) {
         reply->writeInt32(mStreamInfo.video_info[i]->index);
         reply->writeInt32(mStreamInfo.video_info[i]->id);
         reply->writeString16(String16(player_value2str("vformat", mStreamInfo.video_info[i]->format)));
         reply->writeInt32(mStreamInfo.video_info[i]->width);
         reply->writeInt32(mStreamInfo.video_info[i]->height);
-        ALOGV("--video index:%d id:%d totlanum:%d width:%d height:%d \n",mStreamInfo.video_info[i]->index,mStreamInfo.video_info[i]->id,mStreamInfo.stream_info.total_video_num,mStreamInfo.video_info[i]->width,mStreamInfo.video_info[i]->height);
+        ALOGV("--video index:%d id:%d totlanum:%d width:%d height:%d \n", mStreamInfo.video_info[i]->index, mStreamInfo.video_info[i]->id, mStreamInfo.stream_info.total_video_num, mStreamInfo.video_info[i]->width, mStreamInfo.video_info[i]->height);
     }
 
     /*build audio info*/
-        reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
-        for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i ++) {        
-            reply->writeInt32(mStreamInfo.audio_info[i]->index);
-            reply->writeInt32(mStreamInfo.audio_info[i]->id);
-            //reply->writeString16(String16(player_value2str("aformat", mStreamInfo.audio_info[i]->aformat)));
-            reply->writeInt32(mStreamInfo.audio_info[i]->aformat);
-            reply->writeInt32(mStreamInfo.audio_info[i]->channel);
-            reply->writeInt32(mStreamInfo.audio_info[i]->sample_rate);
-            ALOGV("--audio index:%d id:%d totlanum:%d channel:%d samplerate:%d \n",mStreamInfo.audio_info[i]->index,mStreamInfo.audio_info[i]->id,mStreamInfo.stream_info.total_audio_num,mStreamInfo.audio_info[i]->channel,mStreamInfo.audio_info[i]->sample_rate);
-        }
-        
-     /*build subtitle info*/
-       reply->writeInt32(mStreamInfo.stream_info.total_sub_num);
-        for (int i = 0; i < mStreamInfo.stream_info.total_sub_num; i ++) {        
-            reply->writeInt32(mStreamInfo.sub_info[i]->index);
-            reply->writeInt32(mStreamInfo.sub_info[i]->id);
-            reply->writeInt32(mStreamInfo.sub_info[i]->sub_type);
-            //if (mStreamInfo.sub_info[i]->sub_language != NULL)
-                reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));
-        }
+    reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
+    for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i ++) {
+        reply->writeInt32(mStreamInfo.audio_info[i]->index);
+        reply->writeInt32(mStreamInfo.audio_info[i]->id);
+        //reply->writeString16(String16(player_value2str("aformat", mStreamInfo.audio_info[i]->aformat)));
+        reply->writeInt32(mStreamInfo.audio_info[i]->aformat);
+        reply->writeInt32(mStreamInfo.audio_info[i]->channel);
+        reply->writeInt32(mStreamInfo.audio_info[i]->sample_rate);
+        ALOGV("--audio index:%d id:%d totlanum:%d channel:%d samplerate:%d \n", mStreamInfo.audio_info[i]->index, mStreamInfo.audio_info[i]->id, mStreamInfo.stream_info.total_audio_num, mStreamInfo.audio_info[i]->channel, mStreamInfo.audio_info[i]->sample_rate);
+    }
 
-        reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
-        for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
-            reply->writeInt32(mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid);
-            //if (mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name != NULL)
-                reply->writeString16(String16(mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name));
-        }
+    /*build subtitle info*/
+    reply->writeInt32(mStreamInfo.stream_info.total_sub_num);
+    for (int i = 0; i < mStreamInfo.stream_info.total_sub_num; i ++) {
+        reply->writeInt32(mStreamInfo.sub_info[i]->index);
+        reply->writeInt32(mStreamInfo.sub_info[i]->id);
+        reply->writeInt32(mStreamInfo.sub_info[i]->sub_type);
+        //if (mStreamInfo.sub_info[i]->sub_language != NULL)
+        reply->writeString16(String16(mStreamInfo.sub_info[i]->sub_language));
+    }
 
-        reply->setDataPosition(datapos);
-       ALOGV("--file name:%s \n",reply->readCString());
+    reply->writeInt32(mStreamInfo.ts_programe_info.programe_num);
+    for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
+        reply->writeInt32(mStreamInfo.ts_programe_info.ts_programe_detail[i].video_pid);
+        //if (mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name != NULL)
+        reply->writeString16(String16(mStreamInfo.ts_programe_info.ts_programe_detail[i].programe_name));
+    }
+
+    reply->setDataPosition(datapos);
+    ALOGV("--file name:%s \n", reply->readCString());
     return OK;
 }
 
@@ -2572,8 +2610,9 @@ status_t AmlogicPlayer::selectPid(int video_pid) const
     if (mhasVideo && videoPidValid) {
         ALOGE("player_switch_program mPlayer_id:%d video_pid:%d audio_pid:%d", mPlayer_id);
         player_switch_program(mPlayer_id, video_pid, audio_pid);
-    } else
+    } else {
         return !OK;
+    }
 
     return OK;
 }
@@ -2581,6 +2620,10 @@ status_t AmlogicPlayer::selectPid(int video_pid) const
 status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only audio track and timed text track.
 {
     //Mutex::Autolock autoLock(mLock);
+    int mTrackIndex = mTrackMap[trackIndex];
+    if (mTrackIndex == -1) {
+        ALOGV("WARNING, track index :%d is not a valid internal track, MAYBE EXT SUB \n", trackIndex);
+    }
     ALOGV("selectTrack: trackIndex = %d and select=%d", trackIndex, select);
     if (mhasAudio) {
 #if 0
@@ -2590,13 +2633,13 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
         }
 #endif
         for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
-            if (trackIndex == mStreamInfo.audio_info[m]->index) {
+            if (mTrackIndex == mStreamInfo.audio_info[m]->index) {
                 if (mStreamInfo.audio_info[m]->id >= 0) {
-                    LOGI("switch audio track,id:%d,pid:%d\n", trackIndex, mStreamInfo.audio_info[m]->id);
+                    LOGI("switch audio track,id:%d,pid:%d\n", mTrackIndex, mStreamInfo.audio_info[m]->id);
                     if (select) {
-                        player_aid(mPlayer_id, mStreamInfo.audio_info[m]->id);
+                        player_aid(mPlayer_id, mStreamInfo.audio_info[m]->id, mTrackIndex);
                     } else {
-                        LOGE("Deselect an audio track (%d) is not supported", trackIndex);
+                        LOGE("Deselect an audio track (%d) is not supported", mTrackIndex);
                         return ERROR_UNSUPPORTED;
                     }
                     return OK;
@@ -2607,51 +2650,101 @@ status_t AmlogicPlayer::selectTrack(int trackIndex, bool select)const //only aud
     }
     //inband sub case
     if (mhasSub) {
+
+        //bool mUnTimedText = true;
+        //mUnTimedText = PropIsEnable("sys.timedtext.disable",true);
+
+        //ALOGD("%s, mUnTimedText=%d\n",__FUNCTION__,mUnTimedText);
+
+        //if(mUnTimedText){
+
         for (int m = 0; m < mStreamInfo.stream_info.total_sub_num; m++) {
-            if (trackIndex == mStreamInfo.sub_info[m]->index) {
+            if (mTrackIndex == mStreamInfo.sub_info[m]->index) {
                 if (mStreamInfo.sub_info[m]->id >= 0) {
-                    LOGE("switch audio track,id:%d,pid:%d\n", trackIndex, mStreamInfo.sub_info[m]->id);
+                    LOGE("switch audio track,id:%d,pid:%d\n", mTrackIndex, mStreamInfo.sub_info[m]->id);
                     SubSource *mSub = (SubSource *)mSubSource.get();
-                    /*
-                    if (select && mSub != NULL && mTextDriver != NULL) {
+                    if (select) {
                         mSub->sub_cur_id = m;
                         if (true == mRunning) {
                             player_sid(mPlayer_id, mStreamInfo.sub_info[m]->id);
                         }
-                        mTextDriver->selectTrack(trackIndex);
-                        if (true == mRunning) {
-                            mTextDriver->start();
-                        }
-                    } else if (mTextDriver != NULL){
+                        //mTextDriver->selectTrack(mTrackIndex);
+                        //if (true == mRunning) {
+                        //mTextDriver->start();
+                        //}
+                    } else {
                         status_t err;
-                        err = mTextDriver->unselectTrack(trackIndex);
-                        //mSub->sub_cur_id=-1;//no need to set
-                        return err;
-                    }*/
+                        //err = mTextDriver->unselectTrack(mTrackIndex);
+                        mSub->sub_cur_id = m;
+                        //return err;
+                    }
                     return OK;
                 }
             }
         }
+        /*
+        }else{
+            for (int m = 0; m < mStreamInfo.stream_info.total_sub_num; m++) {
+                if (mTrackIndex == mStreamInfo.sub_info[m]->index) {
+                    if (mStreamInfo.sub_info[m]->id >= 0) {
+                        LOGE("switch subtitle track,id:%d,pid:%d\n", mTrackIndex, mStreamInfo.sub_info[m]->id);
+                        AmSubSource *mSub = (AmSubSource *)mSubSource.get();
+                        if (select) {
+                            if (true == mRunning) {
+                                player_sid(mPlayer_id, mStreamInfo.sub_info[m]->id);
+                            }
 
+                            mTextDriver->selectTrack(mTrackIndex);
+
+                            if (true == mRunning) {
+                                mSub->initHandle(mPlayer_id);
+                                mTextDriver->start();
+                            }
+                            mSub->mSubCurId = mStreamInfo.sub_info[m]->id;
+
+                        } else {
+                            status_t err;
+                            err = mTextDriver->unselectTrack(mTrackIndex);
+                            //mSub->sub_cur_id=-1;//no need to set
+                            return err;
+                        }
+                        return OK;
+                    }
+                }
+            }
+        }
+        */
     }
-
     //outband case
     status_t err = OK;
     /*
-    if (select && mTextDriver != NULL) {
-        err = mTextDriver->selectTrack(trackIndex);
-        if (err == OK) {
-            if (true == mRunning) {
-                mTextDriver->start();
+    if (mTextDriver != NULL) {
+        if (select) {
+            char filename[512];
+            err = mTextDriver->selectTrack(trackIndex);
+            mTextDriver->getFileName(filename);
+
+            if (filename != NULL && strlen(filename)> 0) {
+                AmSubSource *sub_src = (AmSubSource *)mSubSource.get();
+                sub_src->setFileName(filename);
+                LOGE("out band subtitle, filename =%s !\n",filename);
             }
+            if (err == OK) {
+                if (true == mRunning) {
+                    mTextDriver->start();
+                }
+            }
+        } else {
+            err = mTextDriver->unselectTrack(trackIndex);
         }
-    } else if (mTextDriver != NULL) {
-        err = mTextDriver->unselectTrack(trackIndex);
+    } else {
+        LOGE("selectTrack mTextDriver:NULL\n");
     }
     */
 
     return err;
 }
+
 status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
 {
     if (NULL == reply) {
@@ -2695,7 +2788,7 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
     case INVOKE_ID_ADD_EXTERNAL_SOURCE_FD: {
         Mutex::Autolock autoLock(mLock);
         //if (mTextDriver == NULL) {
-            //mTextDriver = new TimedTextDriver(mListener,mHTTPService);
+        //mTextDriver = new TimedTextDriver(mListener,mHTTPService);
         //}
         int fd         = request.readFileDescriptor();
         off64_t offset = request.readInt64();
@@ -2726,33 +2819,33 @@ status_t    AmlogicPlayer::invoke(const Parcel& request, Parcel *reply)
             return selectTrack(index, false);
         }
     }
-	case INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE:{ 
-		int64_t buffed_size =  player_get_lpbufbuffedsize(mPlayer_id);
-		reply->writeInt32((int)buffed_size);
-		return OK;
-	}
-	case INVOKE_ID_NETWORK_GET_STREAMBUF_BUFFERED_SIZE:{
-		int64_t buffed_size =  player_get_streambufbuffedsize(mPlayer_id);	
-		reply->writeInt32((int)buffed_size);
-		return OK;
-	}
-	case INVOKE_ID_SET_TRACK_VOLUME:{
-		float left_volume = request.readFloat();
-		float right_volume = request.readFloat();
-		LOGV("Set left volume:%f, right volume = %f\n",left_volume,right_volume);
-		return setVolume(left_volume,right_volume);
-	}
-	case INVOKE_ID_GET_SELECTED_TRACK:{
-		int32_t trackId;
-		if (player_get_source_type(mPlayer_id) > 0) {
-		    trackId = getStreamingSelectedTrack(request);
-		} else {
-		    trackId = getSelectedTrack(request);
-		}
-		LOGI("get select track id:%d\n", trackId);
-		reply->writeInt32((int)trackId);
-		return OK;
-	}
+    case INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE: {
+        int64_t buffed_size =  player_get_lpbufbuffedsize(mPlayer_id);
+        reply->writeInt32((int)buffed_size);
+        return OK;
+    }
+    case INVOKE_ID_NETWORK_GET_STREAMBUF_BUFFERED_SIZE: {
+        int64_t buffed_size =  player_get_streambufbuffedsize(mPlayer_id);
+        reply->writeInt32((int)buffed_size);
+        return OK;
+    }
+    case INVOKE_ID_SET_TRACK_VOLUME: {
+        float left_volume = request.readFloat();
+        float right_volume = request.readFloat();
+        LOGV("Set left volume:%f, right volume = %f\n", left_volume, right_volume);
+        return setVolume(left_volume, right_volume);
+    }
+    case INVOKE_ID_GET_SELECTED_TRACK: {
+        int32_t trackId;
+        if (player_get_source_type(mPlayer_id) > 0) {
+            trackId = getStreamingSelectedTrack(request);
+        } else {
+            trackId = getSelectedTrack(request);
+        }
+        LOGI("get select track id:%d\n", trackId);
+        reply->writeInt32((int)trackId);
+        return OK;
+    }
     default: {
         return ERROR_UNSUPPORTED;
     }
@@ -2766,14 +2859,11 @@ status_t AmlogicPlayer::getMetadata(
     LOGV("getMetadata\n");
     Metadata metadata(records);
     //seekble set
-    if(mSupportSeek == 0)
-    {
-        metadata.appendBool(Metadata::kSeekBackwardAvailable,false);
-        metadata.appendBool(Metadata::kSeekForwardAvailable,false);
-        metadata.appendBool(Metadata::kSeekAvailable,false);
-    }
-    else
-    {
+    if (mSupportSeek == 0) {
+        metadata.appendBool(Metadata::kSeekBackwardAvailable, false);
+        metadata.appendBool(Metadata::kSeekForwardAvailable, false);
+        metadata.appendBool(Metadata::kSeekAvailable, false);
+    } else {
         metadata.appendBool(
             Metadata::kPauseAvailable, true);
         metadata.appendBool(
@@ -2822,33 +2912,35 @@ status_t AmlogicPlayer::getMetadata(
     return OK;
 }
 
-int AmlogicPlayer::match_name(const char *name,const char *machsetting)
+int AmlogicPlayer::match_name(const char *name, const char *machsetting)
 {
-        const char * psets=machsetting;
-        const char *psetend;
-        int psetlen=0;
-        char codecstr[64]="";
-		if(name==NULL || machsetting==NULL)
-			return 0;
-
-        while(psets && psets[0]!='\0'){
-                psetlen=0;
-                psetend=strchr(psets,',');
-                if(psetend!=NULL && psetend>psets && psetend-psets<64){
-                        psetlen=psetend-psets;
-                        memcpy(codecstr,psets,psetlen);
-                        codecstr[psetlen]='\0';
-                        psets=&psetend[1];//skip ";"
-                }else{
-                        strcpy(codecstr,psets);
-                        psets=NULL;
-                }
-                if(strlen(codecstr)>0){
-                        if(strstr(name,codecstr)!=NULL)
-                                return 1;
-                }
-        }
+    const char * psets = machsetting;
+    const char *psetend;
+    int psetlen = 0;
+    char codecstr[64] = "";
+    if (name == NULL || machsetting == NULL) {
         return 0;
+    }
+
+    while (psets && psets[0] != '\0') {
+        psetlen = 0;
+        psetend = strchr(psets, ',');
+        if (psetend != NULL && psetend > psets && psetend - psets < 64) {
+            psetlen = psetend - psets;
+            memcpy(codecstr, psets, psetlen);
+            codecstr[psetlen] = '\0';
+            psets = &psetend[1]; //skip ";"
+        } else {
+            strcpy(codecstr, psets);
+            psets = NULL;
+        }
+        if (strlen(codecstr) > 0) {
+            if (strstr(name, codecstr) != NULL) {
+                return 1;
+            }
+        }
+    }
+    return 0;
 }
 
 status_t AmlogicPlayer::initVideoSurface(void)
@@ -2867,19 +2959,17 @@ status_t AmlogicPlayer::initVideoSurface(void)
                     || strcasestr(CallingAPkName, ".oupeng.mobile") //opera modile,opera?
                     || strcasestr(CallingAPkName, "TunnyBrowser") //TunnyBrowser
                     || strcasestr(CallingAPkName, "phin.browser") //browser
-                    ) 
-                {
+                   ) {
                     needosdvideo = isHTTPSource ? 1 : 0;
-                }else if(strcasestr(CallingAPkName,"lamo:benchmarks")||/*for com.quicinc.vellamo:benchmarks need osd for high score*/
-                         strcasestr(CallingAPkName,"android.youtube")||//for android.youtube apk
-                         strcasestr(CallingAPkName,"android.browser")|| //for android.browser,4.4need it now apk
-                         strcasestr(CallingAPkName,".mobile.news.ww")||//for bbc news
-                         strcasestr(CallingAPkName,"roid.youtube.tv") || //for youtube tv apk
-                         strcasestr(CallingAPkName,"com.android.cts.verifier") //for com.android.cts.verifier
-                         )
-                {
-                    needosdvideo=1;
-                }else if(!needosdvideo){
+                } else if (strcasestr(CallingAPkName, "lamo:benchmarks") || /*for com.quicinc.vellamo:benchmarks need osd for high score*/
+                           strcasestr(CallingAPkName, "android.youtube") || //for android.youtube apk
+                           strcasestr(CallingAPkName, "android.browser") || //for android.browser,4.4need it now apk
+                           strcasestr(CallingAPkName, ".mobile.news.ww") || //for bbc news
+                           strcasestr(CallingAPkName, "roid.youtube.tv") || //for youtube tv apk
+                           strcasestr(CallingAPkName, "com.android.cts.verifier") //for com.android.cts.verifier
+                          ) {
+                    needosdvideo = 1;
+                } else if (!needosdvideo) {
                     int ret;
                     char value[PROPERTY_VALUE_MAX];
                     /*
@@ -2888,16 +2978,16 @@ status_t AmlogicPlayer::initVideoSurface(void)
                                    seprate it with ","
                                    maybe can ".chrome,.oupeng.mobile" for same as hard settings
                                    */
-                    ret=property_get("media.amplayer.v4osd.apkcomm",value,NULL);
-                    if(ret>0 && match_name(CallingAPkName,value)){
-                        needosdvideo=1;
-                        LOGI("enable osdvideo by v4osd settings=[%s]\n",value);
+                    ret = property_get("media.amplayer.v4osd.apkcomm", value, NULL);
+                    if (ret > 0 && match_name(CallingAPkName, value)) {
+                        needosdvideo = 1;
+                        LOGI("enable osdvideo by v4osd settings=[%s]\n", value);
                     }
                 }
             }
         }
         LOGI("AmlogicPlayerRender,needosdvideo=%d,isHTTPSource=%d", needosdvideo, isHTTPSource);
-        mPlayerRender = new AmlogicPlayerRender(mNativeWindow, needosdvideo|(isDvbTvinSource<<1));
+        mPlayerRender = new AmlogicPlayerRender(mNativeWindow, needosdvideo | (isDvbTvinSource << 1));
         mPlayerRender->setVideoScalingMode(mVideoScalingMode);
         mPlayerRender->onSizeChanged(curLayout, Rect(mWidth, mHeight));
         if (video_rotation_degree == 1 || video_rotation_degree == 3) {
@@ -2922,15 +3012,14 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
         if (bufferProducer->getConsumerName().contains("SurfaceTexture-") ||
             bufferProducer->getConsumerName().contains("_GLES")
             || ((bufferProducer->getConsumerName().contains("CapturedActivity")
-                || bufferProducer->getConsumerName().contains("PixelCopyVideoSourceActivity"))
+                 || bufferProducer->getConsumerName().contains("PixelCopyVideoSourceActivity"))
                 && bufferProducer->getConsumerName().contains(specApkName))) {
             enableOSDVideo = true;
         }
         tmpWindow = new Surface(bufferProducer);
     }
 
-    if (mPlayerRender.get() != NULL)
-    {
+    if (mPlayerRender.get() != NULL) {
         mPlayerRender->Pause();
         mPlayerRender->SwitchNativeWindow(tmpWindow);
         if (!isPlaying() && (tmpWindow == NULL)) {
@@ -2942,14 +3031,12 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
                 return ERROR_OPEN_FAILED;
             }
         }
-        if (false/*surfaceTexture.get() == NULL*/) 
-        {
+        if (false/*surfaceTexture.get() == NULL*/) {
             mNativeWindow.clear();
         } else {
             mNativeWindow = tmpWindow;
         }
-    }else
-    {
+    } else {
         if (true/*surfaceTexture.get() != NULL*/) { /*set new*/
             mNativeWindow = tmpWindow;
             if (mRunning && mhasVideo) { /*player has running*/
@@ -2958,7 +3045,7 @@ status_t AmlogicPlayer:: setVideoSurfaceTexture(const sp<IGraphicBufferProducer>
             }
         }
     }
-	return OK;
+    return OK;
 }
 
 #if 0
@@ -3044,19 +3131,18 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
     }
     //case KEY_PARAMETER_TIMED_TEXT_TRACK_INDEX:
     //  break;
-    case KEY_PARAMETER_AML_PLAYER_SET_DTS_ASSET:
-        {
-            int ApreID =0,ApreAssetSel;
-            const String16 uri16 = request.readString16();
-            String8 keyStr = String8(uri16);
-            LOGI("setParameter %d=[%s]\n", key, keyStr.string());
-            ApreID = getintfromString8(keyStr, "dtsApre:");
-            ApreAssetSel=getintfromString8(keyStr, "dtsAsset:");
-            if (ApreID >= 0 && ApreAssetSel >= 0) {
-                dtsm6_set_exchange_info(&ApreID,&ApreAssetSel);
-            }
+    case KEY_PARAMETER_AML_PLAYER_SET_DTS_ASSET: {
+        int ApreID = 0, ApreAssetSel;
+        const String16 uri16 = request.readString16();
+        String8 keyStr = String8(uri16);
+        LOGI("setParameter %d=[%s]\n", key, keyStr.string());
+        ApreID = getintfromString8(keyStr, "dtsApre:");
+        ApreAssetSel = getintfromString8(keyStr, "dtsAsset:");
+        if (ApreID >= 0 && ApreAssetSel >= 0) {
+            dtsm6_set_exchange_info(&ApreID, &ApreAssetSel);
         }
-        break;
+    }
+    break;
     case KEY_PARAMETER_AML_PLAYER_SWITCH_VIDEO_TRACK:
         if (mPlayer_id >= 0 && mPlay_ctl.novideo == 0) {
             int vid = -1;
@@ -3082,21 +3168,21 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
             String8 keyStr = String8(uri16);
             LOGI("setParameter %d=[%s]\n", key, keyStr.string());
             aid = getintfromString8(keyStr, "aid:");
-			for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
-	            if (aid == mStreamInfo.audio_info[m]->index) {
-	                if (mStreamInfo.audio_info[m]->id >= 0) {
-	                    LOGI("switch audio track,id:%d,pid:%d\n", aid, mStreamInfo.audio_info[m]->id);
-						player_aid(mPlayer_id, mStreamInfo.audio_info[m]->id);	                 
-	                    return OK;
-	                }
-	            }
-	        }
-		
+            for (int m = 0; m < mStreamInfo.stream_info.total_audio_num; m++) {
+                if (aid == mStreamInfo.audio_info[m]->index) {
+                    if (mStreamInfo.audio_info[m]->id >= 0) {
+                        LOGI("switch audio track,id:%d,pid:%d\n", aid, mStreamInfo.audio_info[m]->id);
+                        player_aid(mPlayer_id, mStreamInfo.audio_info[m]->id, aid);
+                        return OK;
+                    }
+                }
+            }
+
         }
         break;
-        //case KEY_PARAMETER_TIMED_TEXT_ADD_OUT_OF_BAND_SOURCE:
-        //_ADD_OUT_OF_BAND_SOURCE?
-        //  break;
+    //case KEY_PARAMETER_TIMED_TEXT_ADD_OUT_OF_BAND_SOURCE:
+    //_ADD_OUT_OF_BAND_SOURCE?
+    //  break;
     case KEY_PARAMETER_CACHE_STAT_COLLECT_FREQ_MS:
         //FREQ_MS?
         break;
@@ -3108,19 +3194,19 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
             LOGI("setParameter %d=[%s]\n", key, keyStr.string());
             if (!keyStr.compare(String8("lmono"))) {
                 audio_left_mono(mPlayer_id);
-                audio_lr_mix_set(mPlayer_id,0);
-                AudioDualMonoNeed=0;
+                audio_lr_mix_set(mPlayer_id, 0);
+                AudioDualMonoNeed = 0;
             } else if (!keyStr.compare(String8("rmono"))) {
                 audio_right_mono(mPlayer_id);
-                audio_lr_mix_set(mPlayer_id,0);
-                AudioDualMonoNeed=0;
+                audio_lr_mix_set(mPlayer_id, 0);
+                AudioDualMonoNeed = 0;
             } else if (!keyStr.compare(String8("stereo"))) {
                 audio_stereo(mPlayer_id);
-                audio_lr_mix_set(mPlayer_id,0);
-                AudioDualMonoNeed=0;
-            }else if(!keyStr.compare(String8("lrmix"))){
-                AudioDualMonoSetOK=!audio_lr_mix_set(mPlayer_id,1);
-                AudioDualMonoNeed =1;
+                audio_lr_mix_set(mPlayer_id, 0);
+                AudioDualMonoNeed = 0;
+            } else if (!keyStr.compare(String8("lrmix"))) {
+                AudioDualMonoSetOK = !audio_lr_mix_set(mPlayer_id, 1);
+                AudioDualMonoNeed = 1;
             }
         }
         break;
@@ -3185,12 +3271,12 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
     case KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX: {
         int isUseSoftDemux = request.readInt32();
         mPlay_ctl.is_ts_soft_demux = isUseSoftDemux;
-        }
-        break;
-    case KEY_PARAMETER_AML_PLAYER_FORCE_SCREEN_MODE:{
+    }
+    break;
+    case KEY_PARAMETER_AML_PLAYER_FORCE_SCREEN_MODE: {
         int mode = request.readInt32();
-        if(mode <0 ||mode >3) {
-            LOGI("invalid mode:%d(0-3)\n",mode);
+        if (mode < 0 || mode > 3) {
+            LOGI("invalid mode:%d(0-3)\n", mode);
             break;
         }
         int fd;
@@ -3206,12 +3292,13 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
             LOGE("unable to open file %s \n", SCREEN_MODE_SET_PATH);
         }
     }
-    case KEY_PARAMETER_AML_PLAYER_SET_DISPLAY_MODE:{
+    case KEY_PARAMETER_AML_PLAYER_SET_DISPLAY_MODE: {
         int mode = request.readInt32();
-        if(set_cur_dispmode(mode) == -1)
+        if (set_cur_dispmode(mode) == -1) {
             return 1;
-        else
-            return 0; // OK, it will change boolean value as true in android_media_MediaPlayer.cpp
+        } else {
+            return 0;    // OK, it will change boolean value as true in android_media_MediaPlayer.cpp
+        }
     }
     default:
         LOGI("unsupport setParameter value!=%d\n", key);
@@ -3238,26 +3325,23 @@ status_t    AmlogicPlayer::getParameter(int key, Parcel *reply)
         LOGI("Get amplayer streaming buffer info: %s\n", hwbuf);
         reply->writeCString(hwbuf);
         return 0;
-    }
-    else if(key ==KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO)
-    {
+    } else if (key == KEY_PARAMETER_AML_PLAYER_GET_MEDIA_INFO) {
         getMediaInfo(reply);
         return OK;
-    }
-    else if(key == KEY_PARAMETER_AML_PLAYER_GET_DTS_ASSET_TOTAL) {
-        if (mStrCurrentAudioCodec != NULL && !strncmp(mStrCurrentAudioCodec,"DTS",3)) {
-            int32_t ApresAssetsArray[32]={0};
-            dtsm6_get_exchange_info(NULL,&DtshdApreTotal,NULL,NULL,ApresAssetsArray,NULL,NULL);
+    } else if (key == KEY_PARAMETER_AML_PLAYER_GET_DTS_ASSET_TOTAL) {
+        if (mStrCurrentAudioCodec != NULL && !strncmp(mStrCurrentAudioCodec, "DTS", 3)) {
+            int32_t ApresAssetsArray[32] = {0};
+            dtsm6_get_exchange_info(NULL, &DtshdApreTotal, NULL, NULL, ApresAssetsArray, NULL, NULL);
             reply->writeInt32(DtshdApreTotal);
-            reply->writeInt32Array(32,ApresAssetsArray);
-        }else{
-            int32_t ApresAssetsArray[32]={0};
+            reply->writeInt32Array(32, ApresAssetsArray);
+        } else {
+            int32_t ApresAssetsArray[32] = {0};
             reply->writeInt32(0);
-            reply->writeInt32Array(32,ApresAssetsArray);
+            reply->writeInt32Array(32, ApresAssetsArray);
         }
         return OK;
     }
-    
+
     return OK;
 }
 
@@ -3276,16 +3360,16 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             mOffsetBacFlag = false;
         }
         *position = (int)(mStreamTime + (ALooper::GetNowUs() - mLastStreamTimeUpdateUS) / 1000); /*jast let uplevel know,we are playing,they don't care it.(netflix's bug/)*/
-    /* for CTS, round the timestamp  */
+        /* for CTS, round the timestamp  */
         if (mPlaybackSettings.mSpeed != 1.0f) {
-            *position = (*position+500)/1000*1000;
+            *position = (*position + 500) / 1000 * 1000;
         }
         ///*position+=mStreamTimeExtAddS*1000;
 
     } else {
         if (!mPaused && LatestPlayerState == PLAYER_RUNNING) {
             int64_t realposition;
-            #if 0
+#if 0
             if (mPlayTimeBac != mPlayTime) { //do not update position for mPlayTime no change, add by wxl
                 mPlayTimeBac = mPlayTime;
                 if (mPlayTime > mLastPlaytime || mSeekdone) {
@@ -3293,7 +3377,7 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
                     mLastPlaytime = mPlayTime;
                     mLastPosition = realposition;
                     mSeekdone = false;
-                }else{
+                } else {
                     realposition = mLastPosition + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
                     mLastPlaytime = mPlayTime;
                 }
@@ -3302,14 +3386,13 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
                 //*position=((realposition+500)/1000)*1000;/*del small  changes,<500ms*/
                 *position = realposition;
                 realpositionBac = realposition;
-            }
-            else {
+            } else {
                 if (mPlayTimeBac == 0 && mPlayTime == 0) {
                     realpositionBac = 0;
                 }
                 *position = realpositionBac;
             }
-            #endif
+#endif
             realposition = mPlayTime + (int64_t)(ALooper::GetNowUs() - mLastPlayTimeUpdateUS) / 1000;
             LOGI(" getCurrentPosition mPlayTime=%d,mLastPlayTimeUpdateUS=%" PRId64 "*1000,GetNowUs()=%" PRId64 "*1000,realposition=%" PRId64 "\n",
                  mPlayTime, mLastPlayTimeUpdateUS / 1000, ALooper::GetNowUs() / 1000, realposition);
@@ -3327,7 +3410,7 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
             *position = mPlayTime;
         }
     }
-    if (mDuration > 0 && LatestPlayerState == PLAYER_RUNNING && *position >= mDuration && mDelayUpdateTime!=2) {
+    if (mDuration > 0 && LatestPlayerState == PLAYER_RUNNING && *position >= mDuration && mDelayUpdateTime != 2) {
         LOGV("Maybe CurrentPosition exceed mDuration,just do minor adjustment(minus 100ms)\n");
         if (mDuration % 1000 > 100) {
             *position = mDuration - 100;
@@ -3340,42 +3423,41 @@ status_t AmlogicPlayer::getCurrentPosition(int* position)
     if (fastNotifyMode) {
         if (LatestPlayerState == PLAYER_STOPED || LatestPlayerState == PLAYER_INITOK) {//wxl add for 7.0cts 20161125
             *position = 0;
-        }
-        else if (LatestPlayerState == PLAYER_PAUSE) {
+        } else if (LatestPlayerState == PLAYER_PAUSE) {
             *position = (int)(mStreamTime + mOffsetBac);
         }
     }
 
-    if(mStrCurrentAudioCodec!=NULL &&!strncmp(mStrCurrentAudioCodec,"DTS",3)){
-        int stream_type=0;
-        int TotalApre=0;
-        int MulAssetHint=0;
-        int HPS_hint=0;
-        dtsm6_get_exchange_info(&stream_type,&TotalApre,NULL,NULL,NULL,&MulAssetHint,&HPS_hint);
-        if(TotalApre!=DtshdApreTotal && TotalApre>0 )
-        {
-            LOGI("[%s %d]TotalApre changed:%d-->%d\n",__FUNCTION__,__LINE__,DtshdApreTotal,TotalApre);
-            DtshdApreTotal=TotalApre;
+    if (mStrCurrentAudioCodec != NULL && !strncmp(mStrCurrentAudioCodec, "DTS", 3)) {
+        int stream_type = 0;
+        int TotalApre = 0;
+        int MulAssetHint = 0;
+        int HPS_hint = 0;
+        dtsm6_get_exchange_info(&stream_type, &TotalApre, NULL, NULL, NULL, &MulAssetHint, &HPS_hint);
+        if (TotalApre != DtshdApreTotal && TotalApre > 0) {
+            LOGI("[%s %d]TotalApre changed:%d-->%d\n", __FUNCTION__, __LINE__, DtshdApreTotal, TotalApre);
+            DtshdApreTotal = TotalApre;
             sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_ASSET);
         }
-        if(stream_type!=DtsHdStreamType)
-        {    LOGI("[%s %d]DtsHdStreamType changed:%d-->%d\n",__FUNCTION__,__LINE__,DtsHdStreamType,stream_type);
-             DtsHdStreamType=stream_type;
-             if(DtsHdStreamType==0x1)
+        if (stream_type != DtsHdStreamType) {
+            LOGI("[%s %d]DtsHdStreamType changed:%d-->%d\n", __FUNCTION__, __LINE__, DtsHdStreamType, stream_type);
+            DtsHdStreamType = stream_type;
+            if (DtsHdStreamType == 0x1) {
                 sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_EXPRESS);
-             else if(DtsHdStreamType==0x2)
+            } else if (DtsHdStreamType == 0x2) {
                 sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_HD_MASTER_AUDIO);
-           
+            }
+
         }
         if (DtsHdMulAssetHint != MulAssetHint && MulAssetHint) {//TOTO:xiangliang.wang
-            LOGI("[%s %d]MulAssetHint event send\n",__FUNCTION__,__LINE__);
+            LOGI("[%s %d]MulAssetHint event send\n", __FUNCTION__, __LINE__);
             sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_MULASSETHINT);
-            DtsHdMulAssetHint=MulAssetHint;
+            DtsHdMulAssetHint = MulAssetHint;
         }
 
         if (HPS_hint && DtsHdHpsHint == 0) {
-            sendEvent(MEDIA_INFO,MEDIA_INFO_AMLOGIC_SHOW_DTS_HPS_NOTSUPPORT);
-            DtsHdHpsHint=1;
+            sendEvent(MEDIA_INFO, MEDIA_INFO_AMLOGIC_SHOW_DTS_HPS_NOTSUPPORT);
+            DtsHdHpsHint = 1;
         }
     }
     LOGV("CurrentPosition=%dmS,mStreamTime=%d\n", *position, mStreamTime);
@@ -3530,7 +3612,7 @@ status_t  AmlogicPlayer::setVolume(float leftVolume, float rightVolume)
     mLeftVolume = leftVolume;
     mRightVolume = rightVolume;
     int ret = audio_set_lrvolume(mPlayer_id, leftVolume, rightVolume);
-    if(ret < 0){
+    if (ret < 0) {
         LOGV("Amadec is not ready now, after start, set volume once more!\n");
         mSetVolumeFlag = 1;
     }
@@ -3636,7 +3718,7 @@ status_t AmlogicPlayer::dump_subtitleinfo(int fd, media_info_t mStreamInfo)const
         snprintf(buffer, SIZE, " SubtitleSize[%" PRId64 "]", mStreamInfo.sub_info[i]->subtitle_size);
         result.append(buffer);
         //if (mStreamInfo.sub_info[i]->sub_language != NULL) {
-            snprintf(buffer, SIZE, " SubLanguage[%s]", mStreamInfo.sub_info[i]->sub_language);
+        snprintf(buffer, SIZE, " SubLanguage[%s]", mStreamInfo.sub_info[i]->sub_language);
         //}
         result.append(buffer);
         result.append("\n");
@@ -3720,7 +3802,7 @@ status_t AmlogicPlayer::dump(int fd, const Vector<String16> &args) const
 }
 
 
-/* 3D Part 
+/* 3D Part
  *
  * change disp mode,switch between 2d and 3d
  * param:
@@ -3755,10 +3837,10 @@ int AmlogicPlayer::set_cur_dispmode(int mode)
     const char *prop_3d = "mbx.video.mode.3d";
     const char *video_axis = "/sys/class/video/axis";
     const char *out_mode = "ubootenv.var.outputmode";
-    
+
     int output_mode = 0; // 720p default 0, 1 for 1080p, -1 other not support 3d
     int enable_3d = 0;
-    
+
     char value[PROPERTY_VALUE_MAX];
 
     /*
@@ -3775,55 +3857,56 @@ int AmlogicPlayer::set_cur_dispmode(int mode)
     }*/
     char is3DSupport[32] = {0};
     int ret = amsysfs_get_sysfs_str(mHDMI3DSupport, is3DSupport, 32);
-    if(ret < 0) {
+    if (ret < 0) {
         return -1;
-    }
-    else {
-        if(NULL == strstr(is3DSupport, "1"))
+    } else {
+        if (NULL == strstr(is3DSupport, "1")) {
             return -1;
+        }
     }
-    
+
     if (property_get(out_mode, value, NULL) > 0)
         if (strstr(value, "720p") != NULL) {
             output_mode = 0;
-        }
-        else if (strstr(value, "1080p") != NULL)
+        } else if (strstr(value, "1080p") != NULL) {
             output_mode = 1;
-        else
-            output_mode = -1; // no 3d support
-            
+        } else {
+            output_mode = -1;    // no 3d support
+        }
+
     LOGV("set display mode, output_mode:%d \n", output_mode);
-    if(mode > 0)
-    {
-        if(output_mode == 0)
-            amsysfs_set_sysfs_str(video_axis,"0 0 1279 719");
-        if(output_mode == 1)
-            amsysfs_set_sysfs_str(video_axis,"0 0 1919 1079");
-        if(output_mode == -1)
+    if (mode > 0) {
+        if (output_mode == 0) {
+            amsysfs_set_sysfs_str(video_axis, "0 0 1279 719");
+        }
+        if (output_mode == 1) {
+            amsysfs_set_sysfs_str(video_axis, "0 0 1919 1079");
+        }
+        if (output_mode == -1) {
             return -1;
+        }
     }
 
-    switch(mode)
-    {
-        case 0:
-            property_set(prop_3d,"0");
-            amsysfs_set_sysfs_str(mHDMIConfigFile, "3doff");
-            //SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
-            break;
-        case 1:
-            property_set(prop_3d,"1");
-            amsysfs_set_sysfs_str(mHDMIConfigFile, "3dlr");
-            //SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
-            LOGV("set display mode, set 3dlr \n");
-            break;
-        case 2:
-            property_set(prop_3d,"2");
-            amsysfs_set_sysfs_str(mHDMIConfigFile, "3dtb");
-            //SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
-            LOGV("set display mode, set 3dtb \n");
-            break;
-        default:
-            break;
+    switch (mode) {
+    case 0:
+        property_set(prop_3d, "0");
+        amsysfs_set_sysfs_str(mHDMIConfigFile, "3doff");
+        //SurfaceComposerClient::setDisplay2Stereoscopic(0,0);
+        break;
+    case 1:
+        property_set(prop_3d, "1");
+        amsysfs_set_sysfs_str(mHDMIConfigFile, "3dlr");
+        //SurfaceComposerClient::setDisplay2Stereoscopic(0,8);
+        LOGV("set display mode, set 3dlr \n");
+        break;
+    case 2:
+        property_set(prop_3d, "2");
+        amsysfs_set_sysfs_str(mHDMIConfigFile, "3dtb");
+        //SurfaceComposerClient::setDisplay2Stereoscopic(0,16);
+        LOGV("set display mode, set 3dtb \n");
+        break;
+    default:
+        break;
     }
     SurfaceComposerClient::openGlobalTransaction();
     SurfaceComposerClient::closeGlobalTransaction();
