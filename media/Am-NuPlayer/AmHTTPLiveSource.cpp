@@ -130,7 +130,8 @@ sp<AMessage> AmNuPlayer::HTTPLiveSource::getFormat(bool audio) {
 }
 
 void AmNuPlayer::HTTPLiveSource::disconnect() {
-    mLiveSession->disconnect();
+    if (mLiveSession != NULL)
+        mLiveSession->disconnect();
 }
 
 status_t AmNuPlayer::HTTPLiveSource::feedMoreTSData() {
