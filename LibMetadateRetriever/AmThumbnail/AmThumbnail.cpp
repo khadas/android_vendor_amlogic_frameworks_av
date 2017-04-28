@@ -332,6 +332,9 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
         goto err;
     }
 
+    if (mStream.pFormatCtx->pb) {
+        mStream.pFormatCtx->pb->mediascan_flag = 1;
+    }
     if (avformat_find_stream_info(mStream.pFormatCtx, NULL) < 0) {
         ALOGV("Coundn't find stream information !\n");
         goto err1;
@@ -341,7 +344,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
 {
     int i, j;
     AVStream *pStream;
-	av_dump_format(mStream.pFormatCtx, 0,filename, 0);
+    av_dump_format(AVFormatContext * ic,int index,const char * url,int is_output)(mStream.pFormatCtx, 0,filename, 0);
     ALOGV("*********************************************\n");
     for (i = 0; i < mStream.pFormatCtx->nb_streams; i ++) {
         pStream = mStream.pFormatCtx->streams[i];
