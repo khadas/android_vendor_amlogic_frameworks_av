@@ -4,6 +4,7 @@ include $(TOP)/hardware/amlogic/media/media_base_config.mk
 
 LOCAL_SRC_FILES:=                       \
         AmGenericSource.cpp               \
+        AmSubtitle.cpp                    \
         AmSocketClient.cpp                \
         AmHTTPLiveSource.cpp              \
         AmNuPlayer.cpp                    \

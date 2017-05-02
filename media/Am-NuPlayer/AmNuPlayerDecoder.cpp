@@ -40,7 +40,7 @@
 #include "avc_utils.h"
 #include "AmATSParser.h"
 
-#include "AmSocketClient.h"
+#include "AmSubtitle.h"
 
 #define ES_AUDIO_DUMP_PATH    "/data/tmp/nuplayer_audio_es.bit"
 #define ES_VIDEO_DUMP_PATH    "/data/tmp/nuplayer_video_es.bit"
@@ -611,8 +611,6 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer(
     buffer->meta()->clear();
     buffer->meta()->setInt64("timeUs", timeUs);
 
-    sendTime(timeUs);
-
     bool eos = flags & MediaCodec::BUFFER_FLAG_EOS;
     // we do not expect CODECCONFIG or SYNCFRAME for decoder
 
@@ -960,10 +958,10 @@ void AmNuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
     int32_t render;
     size_t bufferIx;
     int32_t eos;
+    int64_t timeUs;
     CHECK(msg->findSize("buffer-ix", &bufferIx));
 
     if (!mIsAudio) {
-        int64_t timeUs;
         sp<ABuffer> buffer = mOutputBuffers[bufferIx];
         buffer->meta()->findInt64("timeUs", &timeUs);
 
@@ -976,6 +974,14 @@ void AmNuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
         int64_t timestampNs;
         CHECK(msg->findInt64("timestampNs", &timestampNs));
         err = mCodec->renderOutputBufferAndRelease(bufferIx, timestampNs);
+
+        //send current time for subtitle checking show time
+        if (mSource != NULL && mSource->mAmSubtitle != NULL) {
+            int64_t curpcr = timeUs - (timestampNs - ALooper::GetNowUs())/1000;
+            if (curpcr > 0) {
+                mSource->mAmSubtitle->sendTime(curpcr);
+            }
+        }
     } else {
         mNumOutputFramesDropped += !mIsAudio;
         err = mCodec->releaseOutputBuffer(bufferIx);

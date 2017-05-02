@@ -25,6 +25,8 @@
 #include <media/mediaplayer.h>
 #include <utils/Vector.h>
 
+#include "AmSubtitle.h"
+
 namespace android {
 
 struct ABuffer;
@@ -126,6 +128,8 @@ struct AmNuPlayer::Source : public AHandler {
 
     virtual void setParentThreadId(android_thread_id_t) {
     }
+
+    AmSubtitle *mAmSubtitle;
 
 protected:
     virtual ~Source() {}
