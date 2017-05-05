@@ -1467,7 +1467,7 @@ void AmNuPlayer::GenericSource::readBuffer(
             if (mIsWidevine) {
                 maxBuffers = 8;
             } else {
-                maxBuffers = 16;//too mang bufs will read slowly
+                maxBuffers = 8;//16;//too mang bufs will read slowly
             }
             break;
         case MEDIA_TRACK_TYPE_SUBTITLE:
