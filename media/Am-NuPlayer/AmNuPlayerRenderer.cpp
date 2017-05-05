@@ -870,12 +870,17 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             copy = sizeRemaining;
         }
         //use for audio passthrough
-        int outlen_raw = 0,outlen_pcm = 0;
+        size_t outlen_raw = 0,outlen_pcm = 0;
+        size_t datalength = entry->mBuffer->size();
         if (copy > 8 && mCurrentPcmInfo.mFormat != AUDIO_FORMAT_PCM_16_BIT) {
             unsigned char *pbuf = entry->mBuffer->data() /*+ entry->mOffset*/;
             frame_mul = 4;
             memcpy(&outlen_pcm,pbuf,4);
-            memcpy(&outlen_raw,pbuf+4+outlen_pcm,4);
+            if (outlen_pcm + 8 <= datalength)
+                memcpy(&outlen_raw,pbuf+4+outlen_pcm,4);
+
+            if (outlen_raw >0 && (outlen_raw + outlen_pcm + 8 != datalength) )
+                ALOGI("packet data not right");
             //ALOGI("copy:%d,outlen_pcm:%d,outlen_raw:%d",copy,outlen_pcm,outlen_raw);
             if (copy >= outlen_raw &&  entry->mOffset == 0) {
                 memcpy((char *)buffer + sizeCopied,
@@ -897,7 +902,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             }
 
             entry->mOffset += copy;
-            if ((entry->mOffset + outlen_pcm  + 8) == entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
+            if ((entry->mOffset + outlen_pcm  + 8) >= entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
                 entry->mNotifyConsumed->post();
                 mAudioQueue.erase(mAudioQueue.begin());
                 entry = NULL;
