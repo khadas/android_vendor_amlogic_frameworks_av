@@ -18,6 +18,8 @@ LOCAL_SHARED_LIBRARIES :=       \
     libmedia \
     libmediaplayerservice       \
     libamffmpeg \
+    libamffmpegadapter \
+    libstagefright \
 
 LOCAL_STATIC_LIBRARIES :=       \
     libamthumbnail  \
@@ -26,6 +28,8 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/              \
     $(TOP)/frameworks/av/include/media \
     $(TOP)/vendor/amlogic/external/ffmpeg \
+	$(TOP)/vendor/amlogic/frameworks/av/AmFFmpegAdapter/include/ \
+	$(TOP)/frameworks/native/include/media/openmax \
     $(TOP)/external/icu/icu4c/source/common				\
     $(TOP)/external/icu/icu4c/source/i18n					\
 

@@ -43,7 +43,6 @@ public:
             const sp<IMediaHTTPService> &httpService,
             const char *url,
             const KeyedVector<String8, String8> *headers = NULL);
-    virtual status_t setDataSource(const char *url, const KeyedVector<String8, String8> *headers);
     virtual status_t setDataSource(int fd, int64_t offset, int64_t length);
     virtual status_t setDataSource(const sp<DataSource>& source);
     virtual VideoFrame *getFrameAtTime(int64_t timeUs, int option);
@@ -52,15 +51,17 @@ public:
 
 private:
     AmThumbnailInt* mClient;
-    char * mFileName;
+    sp<DataSource> mSource;
+
     bool mOpened;
     bool mParsedMetaData;
-    AmlogicPlayer_File  mAmlogicFile;
     KeyedVector<int, String8> mMetaData;
     MediaAlbumArt *mAlbumArt;
+    bool mIsSlowMedia;
 
     status_t setdatasource(const char* url, int fd, int64_t offset, int64_t length);
     void parseMetaData();
+    void clearMetadata();
 };
 
 }

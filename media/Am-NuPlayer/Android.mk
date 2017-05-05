@@ -43,7 +43,6 @@ LOCAL_SHARED_LIBRARIES := \
         libstagefright \
         libstagefright_foundation \
         libutils \
-        libamffmpeg \
         libcurl \
         libamavutils \
         libsystemcontrolservice

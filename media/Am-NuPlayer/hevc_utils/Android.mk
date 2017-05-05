@@ -11,7 +11,4 @@ LOCAL_C_INCLUDES:= \
 
 LOCAL_MODULE:= libhevcutils
 
-LOCAL_SHARED_LIBRARIES := \
-        libamffmpeg \
-
 include $(BUILD_STATIC_LIBRARY)
