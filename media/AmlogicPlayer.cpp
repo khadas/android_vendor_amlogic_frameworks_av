@@ -72,6 +72,7 @@ static inline bool casestr_is_endof(const char *str, const char *tag)
 #include "AmlogicPlayer.h"
 #include "Amvideoutils.h"
 #include "ammodule.h"
+#include "vfm_ctl.h"
 
 #ifndef FBIOPUT_OSD_SRCCOLORKEY
 #define  FBIOPUT_OSD_SRCCOLORKEY    0x46fb
@@ -295,7 +296,7 @@ static void Get_Vfm_Path(char * path, Vector<map_t> &list)
 
 int IsTheSameVfmPathDefault(char * path)
 {
-    int fd;
+    int fd,ret;
     char valstr[MAX_VFM_MAP_LEN] = {0};
     char default_map[MAX_VFM_MAP_LEN] = {0};
     char *start_p;
@@ -312,19 +313,9 @@ int IsTheSameVfmPathDefault(char * path)
     Vector<map_t> node_list;
 
     Get_Vfm_Path(path, prop_list);
-
-    fd = open("sys/class/vfm/map", O_RDONLY);
-    if (fd >= 0) {
-        memset(valstr, 0, MAX_VFM_MAP_LEN);
-        read(fd, valstr, MAX_VFM_MAP_LEN);
-        valstr[MAX_VFM_MAP_LEN - 1] = '\0';
-        close(fd);
-    } else {
-        LOGE("unable to open file %s,err: %s", path, strerror(errno));
-        sprintf(valstr, "%s", "fail");
+    ret = media_get_vfm_map(valstr,sizeof(valstr));
+    if (ret < 0)
         return -1;
-    }
-
     start_p = strstr(valstr, "default {");
     end_p = strstr(start_p, "}");
 
@@ -435,8 +426,8 @@ status_t AmlogicPlayer::BasicInit()
                 LOGI("get def maping [%s]\n", value);
                 strcpy(newsetting, "add default ");
                 strcat(newsetting, value);
-                amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
-                amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+                media_set_vfm_map("rm default");
+                media_set_vfm_map(newsetting);
             }
         }
         CheckTVPEnable();
@@ -516,35 +507,18 @@ status_t AmlogicPlayer::initCheck()
 
 int get_sysfs_int(const char *path)
 {
-    int fd;
-    int val = 0;
-    char  bcmd[16];
-    fd = open(path, O_RDONLY);
-    if (fd >= 0) {
-        read(fd, bcmd, sizeof(bcmd));
-        val = strtol(bcmd, NULL, 10);
-        close(fd);
-    }
-    return val;
+    return amsysfs_get_sysfs_int(path);
 }
 
 int set_sys_int(const char *path, int val)
 {
-    int fd;
-    char  bcmd[16];
-    fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
-    if (fd >= 0) {
-        sprintf(bcmd, "%d", val);
-        write(fd, bcmd, strlen(bcmd));
-        close(fd);
-        return 0;
-    }
-    LOGV("set fs%s=%d failed\n", path, val);
-    return -1;
+    return amsysfs_set_sysfs_int(path,val);
 }
+
 bool IsManifestUrl(const char* url)
 {
     return IS_END_OF(url, "/manifest");
+
 }
 bool IsVrVmUrl(const char* url)
 {
@@ -899,8 +873,9 @@ int AmlogicPlayer::NotifyHandle(int pid, int msg, unsigned long ext1, unsigned l
                     LOGE("reset DRM maping [%s]\n", value);
                     strcpy(newsetting, "add default ");
                     strcat(newsetting, value);
-                    amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
-                    amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+                    media_set_vfm_map("rm default");
+                    media_set_vfm_map(newsetting);
+
                 }
             }
         }
@@ -1243,8 +1218,8 @@ int AmlogicPlayer::UpdateProcess(int pid, player_info_t *info)
                     LOGE("reset DRM maping [%s]\n", value);
                     strcpy(newsetting, "add default ");
                     strcat(newsetting, value);
-                    amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
-                    amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+                    media_set_vfm_map("rm default");
+                    media_set_vfm_map(newsetting);
                 }
             }
         }

@@ -201,13 +201,13 @@ int  AmlogicPlayerRender::SwitchToOSDVideo(int enable)
     if (enable) {
         amsysfs_set_sysfs_str("/sys/module/ionvideo/parameters/freerun_mode", "0");
 	   	LOGI("enable osd video  rm default");
-		ret =  amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
+		ret = media_set_vfm_map("rm default");
         if (ret == -1) {
             LOGI("enable osd video  rm default failed");
             return ret;
         }
         LOGI("enable osd video  rm default %d", ret);
-        ret = amsysfs_set_sysfs_str("/sys/class/vfm/map", "add default decoder ionvideo");
+        ret = media_set_vfm_map("add default decoder ionvideo");
         LOGI("enable osd video ...%d", ret);
     } else {
         char value[PROPERTY_VALUE_MAX];
@@ -219,9 +219,9 @@ int  AmlogicPlayerRender::SwitchToOSDVideo(int enable)
         strcpy(newsetting, "add default ");
         strcat(newsetting, value);
         amsysfs_set_sysfs_str("/sys/module/ionvideo/parameters/freerun_mode", "1");
-        ret = amsysfs_set_sysfs_str("/sys/class/vfm/map", "rm default");
+        ret = media_set_vfm_map("rm default");
         LOGI("disable osd video  rm default= %d", ret);
-        ret = amsysfs_set_sysfs_str("/sys/class/vfm/map", newsetting);
+        ret = media_set_vfm_map(newsetting);
         LOGI("disable osd video ...%d", ret);
     }
 
