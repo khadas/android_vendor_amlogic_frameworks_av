@@ -34,6 +34,7 @@
 #include <media/stagefright/MediaDefs.h>
 
 #include <inttypes.h>
+#include <Amavutils.h>
 
 namespace android {
 
@@ -1299,7 +1300,11 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
         // discontinuity. If we have not drained an audio buffer that was
         // received after this buffer, repost in 10 msec. Otherwise repost
         // in 500 msec.
-        delayUs = realTimeUs - nowUs;
+        if (mAudioQueue.empty()) {
+            delayUs = 0;
+        }else {
+            delayUs = realTimeUs - nowUs;
+        }
         int64_t postDelayUs = -1;
         if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
             postDelayUs = 500000;
@@ -1348,8 +1353,13 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
 
     realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;
     int64_t twoVsyncsUs = 2 * (mVideoScheduler->getVsyncPeriod() / 1000);
+    if ( mAudioQueue.empty()) {
+       ALOGI("mAudioQueue empty ,delayUs 0");
+       delayUs = 0;
+    }else {
+        delayUs = realTimeUs - nowUs;
+    }
 
-    delayUs = realTimeUs - nowUs;
     PTS_LOGDD("realTimeUs=%" PRId64 ",system=%" PRId64 ",delay=%" PRId64 "\n",
         realTimeUs, nowUs, delayUs);
     entry.mBuffer->meta()->setInt64("RealTimeUs", realTimeUs);
@@ -2164,25 +2174,37 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
     if (!offloadOnly && !offloadingAudio()) {
         ALOGV("openAudioSink: open AudioSink in NON-offload mode");
         uint32_t pcmFlags = flags;
+        bool FS_88_96_enable = false;
         audio_format_t aformat = AUDIO_FORMAT_PCM_16_BIT;
         pcmFlags &= ~AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD;
 
         AString mime;
         CHECK(format->findString("mime", &mime));
-        if (strcasecmp(MEDIA_MIMETYPE_AUDIO_RAW, mime.c_str())) {
+        int digital_raw = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        int user_raw_enable = digital_raw && (
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()));
+        if ( user_raw_enable ) {
             pcmFlags |= (AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO | AUDIO_OUTPUT_FLAG_DIRECT);
-
-            //for high samprate ma stream, raw output raw samplerate will be half
-            if (sampleRate == 96000 || sampleRate == 88200)
-                 sampleRate = sampleRate / 2;
-            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str()))
-                 aformat = AUDIO_FORMAT_DTS;
-            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()))
+            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())) {
+                aformat = AUDIO_FORMAT_DTS;
+                //for high samprate ma stream, raw output raw samplerate will be half
+                if (sampleRate == 96000 || sampleRate == 88200)
+                     sampleRate = sampleRate / 2;
+            }
+            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
+                (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) && digital_raw == 1))
                  aformat = AUDIO_FORMAT_AC3;
-            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()))
+            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) && digital_raw == 2)
                  aformat = AUDIO_FORMAT_E_AC3;
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))
                  aformat = AUDIO_FORMAT_TRUEHD;
+        }else if((sampleRate == 96000 || sampleRate == 88200) && !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())){
+           FS_88_96_enable = true;
+           ALOGI("dts direct output hr pcm");
+           pcmFlags |=  AUDIO_OUTPUT_FLAG_DIRECT;
         }
 
         const PcmInfo info = {
@@ -2204,7 +2226,7 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
         // Note: It is possible to set up the callback, but not use it to send audio data.
         // This requires a fix in AudioSink to explicitly specify the transfer mode.
         mUseAudioCallback = getUseAudioCallbackSetting();
-        if (strcasecmp(MEDIA_MIMETYPE_AUDIO_RAW, mime.c_str()))
+        if ( user_raw_enable || FS_88_96_enable)
            mUseAudioCallback = 1;
         if (mUseAudioCallback) {
             ++mAudioDrainGeneration;  // discard pending kWhatDrainAudioQueue message.

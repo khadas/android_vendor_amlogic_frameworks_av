@@ -677,10 +677,17 @@ void AmNuPlayer::Decoder::handleOutputFormatChange(const sp<AMessage> &format) {
         }
 
         AString mime;
-        int user_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        int32_t sampleRate;
         CHECK(mInputFormat->findString("mime", &mime));
-        if (user_raw_enable && (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  || !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
-          !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))) {
+        CHECK(format->findInt32("sample-rate", &sampleRate));
+        int digital_raw = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        int user_raw_enable = digital_raw && (
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||
+                              !strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()));
+        if (user_raw_enable || ((sampleRate == 88200 || sampleRate == 96000) &&
+            !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str()))) {
           ALOGI("set mime:%s",mime.c_str());
           format->setString("mime",mime.c_str());
         }
