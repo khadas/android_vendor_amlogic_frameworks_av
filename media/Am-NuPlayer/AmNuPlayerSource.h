@@ -129,7 +129,7 @@ struct AmNuPlayer::Source : public AHandler {
     virtual void setParentThreadId(android_thread_id_t) {
     }
 
-    AmSubtitle *mAmSubtitle;
+    AmSubtitle *mAmSubtitle = NULL;
 
 protected:
     virtual ~Source() {}
