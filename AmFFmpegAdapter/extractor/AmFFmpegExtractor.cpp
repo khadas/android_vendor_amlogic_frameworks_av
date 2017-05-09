@@ -180,7 +180,8 @@ status_t AmFFmpegSource::init(
     if (parent->findInt64(kKeyDuration, &durationUs)) {
         mMeta->setInt64(kKeyDuration, durationUs);
     }
-    if ((stream->start_time != AV_NOPTS_VALUE) && (mStartTimeUs != convertStreamTimeToUs(stream->start_time))) {
+    if ((stream->start_time != AV_NOPTS_VALUE) && (llabs(mStartTimeUs - convertStreamTimeToUs(stream->start_time)) > 5000000)) {
+        /* start time diff > 5s use stream start time */
         mStartTimeUs = convertStreamTimeToUs(stream->start_time);
     }
 
