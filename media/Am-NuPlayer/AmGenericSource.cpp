@@ -1069,6 +1069,11 @@ sp<AMessage> AmNuPlayer::GenericSource::getTrackInfo(size_t trackIndex) const {
         }
     }
 
+    int32_t prgnum_num = -1;
+    if (meta->findInt32(kKeyProgramNum, &prgnum_num)) {
+        format->setInt32("program-num", prgnum_num);
+    }
+
     return format;
 }
 

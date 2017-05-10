@@ -511,6 +511,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
     mStreamInfo.stream_info.total_video_num = 0;
     mStreamInfo.stream_info.total_audio_num = 0;
     mStreamInfo.stream_info.cur_sub_index   = -1;
+    mStreamInfo.ts_programe_info.programe_num = 0;
     if (mSource->isStreaming()) {
         sp<AMessage> aformat= mSource->getFormat(true);  //audio
         sp<AMessage> vformat= mSource->getFormat(false);   // video
@@ -595,6 +596,11 @@ status_t AmNuPlayer::updateMediaInfo(void) {
             AString mime;
             format->findString("mime", &mime);
 
+            int32_t prog_num = -1;
+            if (format->findInt32("program-num", &prog_num)) {
+                ALOGV("[%s:%d]get prognum=%d\n", __FUNCTION__, __LINE__, prog_num);
+            }
+
             if (mime.startsWith("video/")) {
                 vinfo = (mvideo_info_t *)malloc(sizeof(mvideo_info_t));
                 memset(vinfo, 0, sizeof(mvideo_info_t));
@@ -622,9 +628,13 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 vinfo->frame_rate_den   = 0;
                 vinfo->video_rotation_degree = 0;
                 mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
+                if (-1 != prog_num) {
+                    mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num]->prog_num = prog_num;
+                }
                 mStreamInfo.stream_info.total_video_num++;
                 if (i == mSource->getSelectedTrack(MEDIA_TRACK_TYPE_VIDEO)) {
                     cur_video_index = i;
+                    mStreamInfo.ts_programe_info.cur_prognum = prog_num;
                 }
                 AString name;
                 if (format->findString("program-name", &name)) {
@@ -657,6 +667,9 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 }
                 ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
                 mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
+                if (-1 != prog_num) {
+                    mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num]->prog_num = prog_num;
+                }
                 mStreamInfo.stream_info.total_audio_num++;
                 if (i == mSource->getSelectedTrack(MEDIA_TRACK_TYPE_AUDIO)) {
                     cur_audio_index = i;
@@ -670,7 +683,27 @@ status_t AmNuPlayer::updateMediaInfo(void) {
             }
         }
 
+        int prog_vnum_tmp = 0;
+        for (int prog_cnt_tmp  = 0; prog_cnt_tmp < mStreamInfo.ts_programe_info.programe_num; prog_cnt_tmp++) {
+            int prog_anum_tmp = 0;
+            prog_vnum_tmp = mStreamInfo.video_info[prog_cnt_tmp]->prog_num;
+            ALOGI("[%s:%d] video prog_num=%d,cnt=%d\n",__FUNCTION__, __LINE__, prog_vnum_tmp, prog_cnt_tmp);
+            mStreamInfo.video_info[prog_cnt_tmp]->audio_info.prog_audio_num = 0;
+            for (int audio_cnt_tmp = 0; audio_cnt_tmp < mStreamInfo.stream_info.total_audio_num; audio_cnt_tmp++) {
+                prog_anum_tmp = mStreamInfo.audio_info[audio_cnt_tmp]->prog_num;
+                if (prog_vnum_tmp == prog_anum_tmp) {
+                    ALOGI("[%s:%d] audio prog_num=%d\n",__FUNCTION__, __LINE__, prog_anum_tmp);
+                    ts_prog_audio_info *pinfo = &mStreamInfo.video_info[prog_cnt_tmp]->audio_info;
+                    pinfo->prog_audio_index_list[pinfo->prog_audio_num] = audio_cnt_tmp;
+                    pinfo->prog_audio_num ++;
+                    mStreamInfo.audio_info[audio_cnt_tmp]->prog_video_index = prog_cnt_tmp;
+                }
+            }
+        }
 
+        mStreamInfo.stream_info.cur_video_index = cur_video_index;
+        mStreamInfo.stream_info.cur_audio_index = cur_audio_index;
+        mStreamInfo.stream_info.cur_sub_index   = -1;
     }
 
     return OK;
@@ -728,8 +761,21 @@ status_t AmNuPlayer::doGetMediaInfo(Parcel* reply){
     }
 
     /*build audio info*/
-    reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
+    int total_audio_num = 0;
+    for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i ++) {
+        if (mStreamInfo.video_info[i]->prog_num == mStreamInfo.ts_programe_info.cur_prognum) {
+            total_audio_num = mStreamInfo.video_info[i]->audio_info.prog_audio_num;
+            break;
+        }
+   }
+    //reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
+    reply->writeInt32(total_audio_num);
     for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i ++) {
+        if (mStreamInfo.ts_programe_info.cur_prognum != \
+            mStreamInfo.audio_info[i]->prog_num) {
+            continue;
+        }
+
         reply->writeInt32(mStreamInfo.audio_info[i]->index);
         reply->writeInt32(mStreamInfo.audio_info[i]->id);
         reply->writeInt32(mStreamInfo.audio_info[i]->aformat);
@@ -1216,6 +1262,37 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                             && info->findInt32("type", &type)
                             && type == MEDIA_TRACK_TYPE_TIMEDTEXT) {
                         ++mTimedTextGeneration;
+                    }
+                }
+
+                /* select the first relevant audio */
+                sp<AMessage> info = mSource->getTrackInfo(trackIndex);
+                if (info != NULL) {
+                    AString mime;
+                    if (info->findString("mime", &mime)) {
+                        if (mime.startsWith("video/")) {
+                           if (mStreamInfo.ts_programe_info.programe_num > 1)  {
+                                size_t atrackIndex = -1;
+                                int prog_num = -1;
+                                for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
+                                    if (mStreamInfo.video_info[i]->index == trackIndex) {
+                                        int index = mStreamInfo.video_info[i]->audio_info.prog_audio_index_list[0];
+                                        atrackIndex = mStreamInfo.audio_info[index]->index;
+                                        break;
+                                    }
+                                }
+                                err = mSource->selectTrack(atrackIndex, select, timeUs);
+                                if (!select && err == OK) {
+                                    int32_t type;
+                                    sp<AMessage> info = mSource->getTrackInfo(atrackIndex);
+                                    if (info != NULL
+                                            && info->findInt32("type", &type)
+                                            && type == MEDIA_TRACK_TYPE_TIMEDTEXT) {
+                                        ++mTimedTextGeneration;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } else {

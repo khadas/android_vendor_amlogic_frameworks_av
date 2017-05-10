@@ -351,6 +351,10 @@ status_t AmFFmpegSource::init(
         return ERROR_UNSUPPORTED;
     }
 
+    if (mProgram) {
+        mMeta->setInt32(kKeyProgramNum, mProgram->program_num);
+    }
+
     mInputFormat = inputFormat;
     mMime= convertCodecIdToMimeType(stream->codec);
     if (mMime) {

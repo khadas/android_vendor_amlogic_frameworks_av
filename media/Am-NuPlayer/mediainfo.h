@@ -420,8 +420,13 @@ typedef struct {
 typedef struct {
     int programe_num;
     ts_programe_detail_t ts_programe_detail[MAX_VIDEO_STREAMS];
+    int cur_prognum;
 } ts_programe_info_t;
 
+typedef struct {
+    int prog_audio_num;
+    int prog_audio_index_list[MAX_AUDIO_STREAMS];
+} ts_prog_audio_info;
 
 
 typedef struct {
@@ -464,6 +469,8 @@ typedef struct {
     int duration;
     audio_tag_info *audio_tag;
     char language[128];
+    int prog_num;
+    int prog_video_index;
 } maudio_info_t;
 
 
@@ -499,6 +506,8 @@ typedef struct {
     vformat_t format;
     int duartion;
     unsigned int video_rotation_degree;
+    int prog_num;
+    ts_prog_audio_info audio_info;
 } mvideo_info_t;
 
 
