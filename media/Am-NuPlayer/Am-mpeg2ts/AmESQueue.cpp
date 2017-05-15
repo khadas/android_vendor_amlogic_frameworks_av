@@ -1308,7 +1308,7 @@ sp<ABuffer> AmElementaryStreamQueue::dequeueAccessUnitH264() {
     size_t nalSize;
     bool foundSlice = false;
     bool foundIDR = false;
-    while ((err = getNextNALUnit_264(&data, &size, &nalStart, &nalSize, true)) == OK) {
+    while ((err = getNextNALUnit_264(&data, &size, &nalStart, &nalSize, false)) == OK) {
         if (nalSize == 0) continue;
 
         unsigned nalType = nalStart[0] & 0x1f;
