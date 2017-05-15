@@ -245,6 +245,28 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         return UNKNOWN_ERROR;
     }
 
+    char value[PROPERTY_VALUE_MAX];
+    bool noaudio = false;
+    bool novideo = false;
+    bool nosubtitle = false;
+    if (property_get("media.amplayer.novideo", value, NULL) &&
+                    (!strcmp("1", value) || !strcasecmp("true", value))) {
+        ALOGE("Disabled video for debug!\n");
+        novideo = true;
+    }
+
+    if (property_get("media.amplayer.noaudio", value, NULL) &&
+                    (!strcmp("1", value) || !strcasecmp("true", value))) {
+        ALOGE("Disabled audio for debug!\n");
+        noaudio = true;
+    }
+
+    if (property_get("media.amplayer.nosubtitle", value, NULL) &&
+                    (!strcmp("1", value) || !strcasecmp("true", value))) {
+        ALOGE("Disabled subtitle for debug!\n");
+        nosubtitle = true;
+    }
+
     for (size_t i = 0; i < numtracks; ++i) {
         sp<IMediaSource> track = extractor->getTrack(i);
         if (track == NULL) {
@@ -266,6 +288,9 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         // extractor operation, some extractors might modify meta
         // during getTrack() and make it invalid.
         if (!strncasecmp(mime, "audio/", 6)) {
+            if (noaudio) {
+                continue;
+            }
             if (mAudioTrack.mSource == NULL) {
                 mAudioTrack.mIndex = i;
                 mAudioTrack.mSource = track;
@@ -279,6 +304,9 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                 }
             }
         } else if (!strncasecmp(mime, "video/", 6)) {
+            if (novideo) {
+                continue;
+            }
             if (mVideoTrack.mSource == NULL) {//  default is first
                 mVideoTrack.mIndex = i;
                 mVideoTrack.mSource = track;
@@ -304,6 +332,9 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                 }
             }
         } else if (!strncasecmp(mime, "subtitle/", 9) || !strncasecmp(mime, "text/", 5)) {
+            if (nosubtitle) {
+                continue;
+            }
             subTotal++;
         }
 
