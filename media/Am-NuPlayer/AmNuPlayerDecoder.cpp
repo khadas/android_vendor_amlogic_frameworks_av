@@ -984,7 +984,7 @@ void AmNuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
 
         //send current time for subtitle checking show time
         if (mSource != NULL && mSource->mAmSubtitle != NULL) {
-            int64_t curpcr = timeUs - (timestampNs - ALooper::GetNowUs())/1000;
+            int64_t curpcr = timeUs - (timestampNs / 1000 - ALooper::GetNowUs());
             if (curpcr > 0) {
                 mSource->mAmSubtitle->sendTime(curpcr);
             }
