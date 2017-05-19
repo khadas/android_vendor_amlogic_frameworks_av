@@ -24,6 +24,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avio.h>
 #include <libavformat/avformat.h>
+#include "libavutil/mastering_display_metadata.h"
 #undef CodecType
 }
 
@@ -295,32 +296,37 @@ status_t AmFFmpegSource::init(
             mMeta->setInt32(kKeyIsMVC, true);
         }
 
-        if (stream->codec->has_hdr_metadata) {
-            HDRStaticInfo info, nullInfo; // nullInfo is a fully unspecified static info
-            memset(&info, 0, sizeof(info));
-            memset(&nullInfo, 0, sizeof(nullInfo));
+        if (stream->nb_side_data) {
+            for (int i = 0; i < stream->nb_side_data; i++) {
+                AVPacketSideData sd = stream->side_data[i];
+                if (sd.type = AV_PKT_DATA_MASTERING_DISPLAY_METADATA) {
+                    AVMasteringDisplayMetadata* metadata = (AVMasteringDisplayMetadata*)sd.data;
+                    HDRStaticInfo info, nullInfo; // nullInfo is a fully unspecified static info
+                    memset(&info, 0, sizeof(info));
+                    memset(&nullInfo, 0, sizeof(nullInfo));
 
-            AVHDRMetadata* hdr = &stream->codec->hdr_metadata;
+                    //info.sType1.mMaxContentLightLevel = metadata->max_cll;
+                    //info.sType1.mMaxFrameAverageLightLevel = metadata->max_pall;
+                    info.sType1.mMaxDisplayLuminance = metadata->max_luminance.num;
+                    info.sType1.mMinDisplayLuminance = metadata->min_luminance.num;
+                    info.sType1.mW.x = metadata->white_point[0].num;
+                    info.sType1.mW.y = metadata->white_point[1].num;
+                    info.sType1.mR.x = metadata->display_primaries[0][0].num;
+                    info.sType1.mR.y = metadata->display_primaries[0][1].num;
+                    info.sType1.mG.x = metadata->display_primaries[1][0].num;
+                    info.sType1.mG.y = metadata->display_primaries[1][1].num;
+                    info.sType1.mB.x = metadata->display_primaries[2][0].num;
+                    info.sType1.mB.y = metadata->display_primaries[2][1].num;
 
-            info.sType1.mMaxContentLightLevel = hdr->max_cll;
-            info.sType1.mMaxFrameAverageLightLevel = hdr->max_pall;
-            info.sType1.mMaxDisplayLuminance = hdr->max_luminance;
-            info.sType1.mMinDisplayLuminance = hdr->min_luminance;
-            info.sType1.mW.x = hdr->white_point[0];
-            info.sType1.mW.y = hdr->white_point[1];
-            info.sType1.mR.x = hdr->display_primaries[0][0];
-            info.sType1.mR.y = hdr->display_primaries[0][1];
-            info.sType1.mG.x = hdr->display_primaries[1][0];
-            info.sType1.mG.y = hdr->display_primaries[1][1];
-            info.sType1.mB.x = hdr->display_primaries[2][0];
-            info.sType1.mB.y = hdr->display_primaries[2][1];
-
-            // Only advertise static info if at least one of the groups have been specified.
-            if (memcmp(&info, &nullInfo, sizeof(info)) != 0) {
-                info.mID = HDRStaticInfo::kType1;
-                mMeta->setData(kKeyHdrStaticInfo, 'hdrS', &info, sizeof(info));
+                    // Only advertise static info if at least one of the groups have been specified.
+                    if (memcmp(&info, &nullInfo, sizeof(info)) != 0) {
+                        info.mID = HDRStaticInfo::kType1;
+                        mMeta->setData(kKeyHdrStaticInfo, 'hdrS', &info, sizeof(info));
+                    }
+                }
             }
         }
+
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (stream->codec->codec_id == AV_CODEC_ID_MOV_TEXT) {
             // Add ISO-14496-12 atom header (BigEndian size + FOURCC tx3g),
@@ -499,6 +505,12 @@ status_t AmFFmpegSource::read(
                 }
             }
         }
+    }
+
+    if ((mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO || mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+        && (mStream->codec->codec  && (mStream->codec->codec->capabilities & AV_CODEC_CAP_DELAY)) || (packet && packet->size) ) {
+        av_packet_split_side_data(packet);
+
     }
 
     MediaBuffer *buffer = NULL;
@@ -905,9 +917,9 @@ bool AmFFmpegExtractor::checkStreamValid(AVCodecContext *codec) {
     bool ret = false;
     switch (codec->codec_type) {
         case AVMEDIA_TYPE_AUDIO:
-            if ((codec->codec_id == CODEC_ID_AAC) ||
-                (codec->codec_id == CODEC_ID_AC3) ||
-                (codec->codec_id == CODEC_ID_DTS)) {
+            if ((codec->codec_id == AV_CODEC_ID_AAC) ||
+                (codec->codec_id == AV_CODEC_ID_AC3) ||
+                (codec->codec_id == AV_CODEC_ID_DTS)) {
                 ret = true;
             } else {
                 ret = (codec->sample_rate > 0) && (codec->channels > 0);

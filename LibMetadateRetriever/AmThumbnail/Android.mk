@@ -8,10 +8,14 @@ LOCAL_C_INCLUDES:= \
     $(TOP)/frameworks/av/include \
     $(LOCAL_PATH)/include \
     $(TOP)/vendor/amlogic/external/ffmpeg \
+	$(TOP)/frameworks/native/include/media/openmax \
+	$(TOP)/vendor/amlogic/frameworks/av/AmFFmpegAdapter/include/ \
+
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libamffmpeg \
+	libamffmpegadapter \
     libmedia \
     libutils
 

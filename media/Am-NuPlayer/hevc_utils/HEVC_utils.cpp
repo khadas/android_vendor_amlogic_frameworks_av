@@ -19,7 +19,7 @@
 #include <utils/Log.h>
 
 #include "HEVC_utils.h"
-
+#include <dlfcn.h>
 #include <media/stagefright/foundation/ABitReader.h>
 #include <media/stagefright/MediaErrors.h>
 
@@ -36,10 +36,38 @@ extern "C" {
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include <libavcodec/hevc.h>
+#include <libavcodec/hevcdec.h>
+#include <libavcodec/hevc_ps.h>
 #include <libavcodec/avcodec.h>
 
 }
 namespace android {
+
+typedef int HevcDecodeNalSpsFunc(GetBitContext *gb, AVCodecContext *avctx, HEVCParamSets *ps, int apply_defdispwin);
+typedef int HevcExtractRbspFunc(const uint8_t *src, int length, H2645NAL *nal, int small_padding);
+
+
+static HevcDecodeNalSpsFunc* decodeNalSps = NULL;
+static HevcExtractRbspFunc* extractRbsp = NULL;
+
+static int HEVC_initFunc()
+{
+    void * mLibHandle = dlopen("libamffmpeg.so", RTLD_NOW);
+
+    if (mLibHandle == NULL) {
+        ALOGE("Unable to locate libamffmpeg.so\n");
+        return -1;
+    }
+    ALOGI("get HEVC func\n");
+
+    decodeNalSps = (HevcDecodeNalSpsFunc*)dlsym(mLibHandle, "ff_hevc_decode_nal_sps");
+    extractRbsp = (HevcExtractRbspFunc*)dlsym(mLibHandle, "ff_h2645_extract_rbsp");
+
+    if (decodeNalSps == NULL  || extractRbsp == NULL)
+        return -1;
+    return 0;
+}
+
 
 status_t HEVC_getNextNALUnit(
         const uint8_t **_data, size_t *_size,
@@ -122,7 +150,7 @@ sp<ABuffer> HEVC_FindNAL(
     const uint8_t *nalStart;
     size_t nalSize;
     while (HEVC_getNextNALUnit(&data, &size, &nalStart, &nalSize, true) == OK) {
-		ALOGE("HEVC_FindNAL sps failed nal type =%d\n",((nalStart[0]>>1) & 0x3f));
+                  ALOGE("HEVC_FindNAL sps failed nal type =%d\n",((nalStart[0]>>1) & 0x3f));
         if (((nalStart[0]>>1) & 0x3f) == nalType) {
             sp<ABuffer> buffer = new ABuffer(nalSize);
             memcpy(buffer->data(), nalStart, nalSize);
@@ -135,48 +163,43 @@ sp<ABuffer> HEVC_FindNAL(
 
 int HEVC_decode_SPS(const uint8_t *buf,int size,struct hevc_info*info)
 {
-	HEVCContext s;
-	AVCodecContext avctx;
-	HEVCLocalContext HEVClc;
-	memset(&s,0,sizeof(s));
-	memset(&avctx,0,sizeof(avctx));
-	memset(&HEVClc,0,sizeof(HEVClc));
-	s.avctx=&avctx;
-	s.HEVClc=&HEVClc;
-	HEVCNAL nal;
-	memset(&nal,0,sizeof(nal));
-	ff_hevc_extract_rbsp(&s,buf,size,&nal);
-	init_get_bits8(&s.HEVClc->gb,nal.data, nal.size);
-	int err=ff_hevc_decode_nal_sps(&s);
+    HEVCContext s;
+    AVCodecContext avctx;
+    HEVCLocalContext HEVClc;
+    HEVCParamSets ps;
+    HEVCVPS VPS;
+    H2645NAL nal;
 
-	if (s.sps_list[0])
-	{
-		HEVCSPS *sps = (HEVCSPS*)s.sps_list[0]->data;
-		ALOGI("ff_hevc_decode_nal_sps= %d,%d\n",sps->width,sps->height);
-		info->mwidth=sps->width;
-		info->mheight=sps->height;
-	}else{
-		return -1;
-	}
-	return 0;
-}
+    if (decodeNalSps == NULL) {
+        int ret = HEVC_initFunc();
+        if (ret < 0) {
+            return -1;
+        }
+    }
 
-int HEVC_parse_keyframe(const uint8_t *buf,int size) {
-    avcodec_register_all();
-    AVCodecParserContext *parser = av_parser_init(AV_CODEC_ID_HEVC);
-    if (!parser) {
-        ALOGE("Couldn't get hevc parser!\n");
+    memset(&s,0,sizeof(s));
+    memset(&avctx,0,sizeof(avctx));
+    memset(&HEVClc,0,sizeof(HEVClc));
+    memset(&ps,0,sizeof(ps));
+
+    ps.vps_list[0] = (AVBufferRef *)&VPS;
+
+    s.avctx=&avctx;
+    s.HEVClc=&HEVClc;
+    memset(&nal,0,sizeof(nal));
+    extractRbsp(buf, size, &nal, 1);
+    init_get_bits8(&HEVClc.gb,nal.data, nal.size);
+    decodeNalSps(&HEVClc.gb, &avctx, &ps, 1);
+    if (ps.sps_list[0])
+    {
+        HEVCSPS *sps = (HEVCSPS*)ps.sps_list[0]->data;
+        ALOGI("ff_hevc_decode_nal_sps= %d,%d\n",sps->width,sps->height);
+        info->mwidth=sps->width;
+        info->mheight=sps->height;
+    }else{
         return -1;
     }
-    AVPacket out_pkt = { 0 };
-    parser->flags |= PARSER_FLAG_COMPLETE_FRAMES;
-    AVCodec * codec= avcodec_find_decoder(AV_CODEC_ID_HEVC);
-    AVCodecContext * ctx = avcodec_alloc_context3(codec);
-    int tmp = av_parser_parse2(parser, ctx, &out_pkt.data, &out_pkt.size, buf, size, 0, 0, 0);
-    int keyframe = parser->key_frame;
-    av_parser_close(parser);
-    avcodec_close(ctx);
-    return keyframe;
+    return 0;
 }
 
 // extract vps/sps/pps from input packet.
@@ -190,9 +213,9 @@ int32_t HEVCCastSpecificData(uint8_t * data, int32_t size) {
     int32_t ps_count = 0;
     while (rsize < size) {
         if (data[rsize] == 0 && data[rsize+1] == 0 && data[rsize+2] == 0 && data[rsize+3] == 1) {
-	     if (ps_count == 3) {
-	         break;
-	     }
+            if (ps_count == 3) {
+                break;
+            }
             rsize += 3;
             ps_count++;
         }

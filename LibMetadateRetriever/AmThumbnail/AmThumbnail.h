@@ -21,7 +21,9 @@
 #include <utils/threads.h>
 #include <utils/Errors.h>
 #include <utils/String8.h>
-
+#include <media/stagefright/DataSource.h>
+#include <AmFFmpegByteIOAdapter.h>
+#include <AmFFmpegUtils.h>
 extern "C" {
 #include <libavutil/avstring.h>
 #include <libavcodec/avcodec.h>
@@ -38,7 +40,7 @@ extern "C" {
 #define lseek(f,p,w) lseek64((f), (p), (w))
 }
 
-#define DEST_FMT PIX_FMT_RGB565
+#define DEST_FMT AV_PIX_FMT_RGB565
 
 typedef struct {
     int num;    //numerator
@@ -54,13 +56,6 @@ typedef struct stream {
     AVFrame         *pFrameRGB;
 } stream_t;
 
-typedef struct AmlogicPlayer_File {
-    int               fd;
-    int           fd_valid;
-    int64_t          mOffset;
-    int64_t          mLength;
-} AmlogicPlayer_File;
-
 namespace android
 {
 
@@ -70,7 +65,7 @@ public:
     AmThumbnailInt();
     ~AmThumbnailInt();
     void amthumbnail_clear();
-    int amthumbnail_decoder_open(const char* filename);
+    int amthumbnail_decoder_open(const sp<DataSource>& source, bool is_slow_media);
     int amthumbnail_extract_video_frame(int64_t time, int flag);
     int amthumbnail_read_frame(char* buffer);
     void amthumbnail_get_video_size(int* width, int* height);
@@ -93,6 +88,11 @@ private:
     int mDataSize;
     uint8_t *mData;
     int mMaxframesize;
+    bool mIsSlowMedia;
+    AVInputFormat *mInputFormat;
+
+    sp<AmFFmpegByteIOAdapter> mSourceAdapter;
+
 
     void calc_aspect_ratio(rational *ratio, struct stream *stream);
     int av_read_next_video_frame(AVFormatContext *pFormatCtx, AVPacket *pkt, int vindex);
@@ -100,14 +100,8 @@ private:
     float amPropGetFloat(const char* str, float def = 0.0);
 
     static status_t BasicInit();
-    static int      vp_open(URLContext *h, const char *filename, int flags);
-    static int      vp_read(URLContext *h, unsigned char *buf, int size);
-    static int      vp_write(URLContext *h, const unsigned char *buf, int size);
-    static int64_t  vp_seek(URLContext *h, int64_t pos, int whence);
-    static int      vp_close(URLContext *h);
-    static int      vp_get_file_handle(URLContext *h);
 
-	bool is_slow_media;
+
 };
 }
 

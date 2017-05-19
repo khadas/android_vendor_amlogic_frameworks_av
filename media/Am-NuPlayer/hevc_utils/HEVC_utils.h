@@ -37,7 +37,6 @@ sp<ABuffer> HEVC_FindNAL(
         size_t *stopOffset);
 
 int HEVC_decode_SPS(const uint8_t *buf,int size,struct hevc_info*info);
-int HEVC_parse_keyframe(const uint8_t *buf,int size);
 
 int32_t HEVCCastSpecificData(uint8_t * data, int32_t size);
 

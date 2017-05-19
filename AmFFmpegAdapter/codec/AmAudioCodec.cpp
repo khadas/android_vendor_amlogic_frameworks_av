@@ -124,7 +124,6 @@ int32_t AmAudioCodec::audio_decode_frame(AUDIO_FRAME_WRAPPER_T * data, int * got
     pkt.data = avpkt->data;
     pkt.size = avpkt->size;
     av_frame_unref(mFrame);
-    avcodec_get_frame_defaults(mFrame);
     int32_t ret = avcodec_decode_audio4(mctx, mFrame, got_frame, &pkt);
     Trace("used data: %d, no used data:%d", ret, avpkt->size - ret);
     data->datasize = 0;
@@ -183,12 +182,12 @@ int32_t AmAudioCodec::audio_decode_frame(AUDIO_FRAME_WRAPPER_T * data, int * got
 }
 
 void AmAudioCodec::audio_decode_free_frame() {
-    avcodec_free_frame(&mFrame);
+    av_frame_free(&mFrame);
     return;
 }
 
 void AmAudioCodec::audio_decode_alloc_frame() {
-    mFrame = avcodec_alloc_frame();
+    mFrame = av_frame_alloc();
     return;
 }
 

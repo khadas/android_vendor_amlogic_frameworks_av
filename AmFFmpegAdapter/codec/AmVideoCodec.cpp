@@ -151,12 +151,12 @@ int32_t AmVideoCodec::video_decode_get_display(int32_t * width, int32_t * height
 }
 
 void AmVideoCodec::video_decode_alloc_frame() {
-    mFrame = avcodec_alloc_frame();
+    mFrame = av_frame_alloc();
     return;
 }
 
 void AmVideoCodec::video_decode_free_frame() {
-    avcodec_free_frame(&mFrame);
+    av_frame_free(&mFrame);
     return;
 }
 

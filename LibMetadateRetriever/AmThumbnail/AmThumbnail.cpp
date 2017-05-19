@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "AmThumbnail"
 #include <utils/Log.h>
 
@@ -33,132 +33,9 @@ static URLProtocol android_protocol;
 
 status_t AmThumbnailInt::BasicInit()
 {
-    static int have_inited = 0;
-    if (!have_inited) {
-        URLProtocol *prot = &android_protocol;
-        prot->name = "amthumb";
-        prot->url_open = (int (*)(URLContext *, const char *, int))vp_open;
-        prot->url_read = (int (*)(URLContext *, unsigned char *, int))vp_read;
-        prot->url_write = (int (*)(URLContext *, const unsigned char *, int))vp_write;
-        prot->url_seek = (int64_t (*)(URLContext *, int64_t , int))vp_seek;
-        prot->url_close = (int (*)(URLContext *))vp_close;
-        prot->url_get_file_handle = (int (*)(URLContext *))vp_get_file_handle;
-        ffurl_register_protocol(prot, sizeof(*prot));
-        av_register_all();
-        have_inited++;
-        avformat_network_init();
-    }
+    av_register_all();
+    avformat_network_init();
     return 0;
-}
-
-int AmThumbnailInt::vp_open(URLContext *h, const char *filename, int flags)
-{
-    /*
-    sprintf(file,"amthumb:AmlogicPlayer=[%x:%x],AmlogicPlayer_fd=[%x:%x]",
-    */
-    ALOGV("vp_open=%s\n", filename);
-    if (strncmp(filename, "amthumb", strlen("amthumb")) == 0) {
-        unsigned int fd = 0, fd1 = 0;
-        char *str = strstr(filename, "AmlogicPlayer_fd");
-        if (str == NULL) {
-            return -1;
-        }
-        sscanf(str, "AmlogicPlayer_fd=[%x:%x]\n", (unsigned int*)&fd, (unsigned int*)&fd1);
-        if (fd != 0 && ((unsigned int)fd1 == ~(unsigned int)fd)) {
-            AmlogicPlayer_File* af = (AmlogicPlayer_File*)fd;
-            h->priv_data = (void*) fd;
-            if (af != NULL && af->fd_valid) {
-                lseek(af->fd, af->mOffset, SEEK_SET);
-                ALOGV("android_open %s OK,h->priv_data=%p\n", filename, h->priv_data);
-                return 0;
-            } else {
-                ALOGV("android_open %s Faild\n", filename);
-                return -1;
-            }
-        }
-    }
-    return -1;
-}
-
-int AmThumbnailInt::vp_read(URLContext *h, unsigned char *buf, int size)
-{
-    AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
-    int ret;
-    //ALOGV("start%s,pos=%" PRId64 ",size=%d,ret=%d\n",__FUNCTION__,(int64_t)lseek(af->fd, 0, SEEK_CUR),size,ret);
-    if (af->fd >= 0) {
-        ret = read(af->fd, buf, size);
-    } else {
-        ret = -1;
-    }
-    if (ret < 0 && af->fd >0) {
-        close(af->fd);
-        af->fd_valid = 0;
-    }
-    //ALOGV("end %s,size=%d,ret=%d\n",__FUNCTION__,size,ret);
-    return ret;
-}
-
-int AmThumbnailInt::vp_write(URLContext *h, const unsigned char *buf, int size)
-{
-    AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
-
-    return -1;
-}
-
-int64_t AmThumbnailInt::vp_seek(URLContext *h, int64_t pos, int whence)
-{
-    AmlogicPlayer_File* af = (AmlogicPlayer_File*)h->priv_data;
-    int64_t ret;
-    //ALOGV("%sret=%" PRId64 ",pos=%" PRId64 ",whence=%d,tell=%" PRId64 "\n",__FUNCTION__,(int64_t)0,pos,whence,(int64_t)lseek(af->fd,0,SEEK_CUR));
-    if (whence == AVSEEK_SIZE) {
-        return af->mLength;
-#if 0
-        struct stat filesize;
-        if (fstat(af->fd, &filesize) < 0) {
-            int64_t size;
-            int64_t oldpos;
-            oldpos = lseek(af->fd, 0, SEEK_CUR);
-            if ((size = lseek(af->fd, -1, SEEK_END)) < 0) {
-                return size;
-            }
-            size++;
-            lseek(af->fd, oldpos, SEEK_SET);
-            return size;
-        } else {
-            return filesize.st_size;
-        }
-#endif
-    }
-    switch (whence) {
-    case SEEK_CUR:
-    case SEEK_END:
-        ret = lseek(af->fd, pos, whence);
-        return ret - af->mOffset;
-    case SEEK_SET:
-        ret = lseek(af->fd, pos + af->mOffset, whence);
-        if (ret < 0) {
-            return ret;
-        } else {
-            return ret - af->mOffset;
-        }
-    default:
-        return -1;
-    }
-    return -1;
-}
-
-int AmThumbnailInt::vp_close(URLContext *h)
-{
-    FILE* fp = (FILE*)h->priv_data;
-    ALOGV("%s\n", __FUNCTION__);
-    return 0; /*don't close file here*/
-    //return fclose(fp);
-}
-
-int AmThumbnailInt::vp_get_file_handle(URLContext *h)
-{
-    ALOGV("%s\n", __FUNCTION__);
-    return (intptr_t) h->priv_data;
 }
 
 AmThumbnailInt::AmThumbnailInt()
@@ -316,35 +193,37 @@ void AmThumbnailInt::find_best_keyframe(AVFormatContext *pFormatCtx, int video_i
     return;
 }
 
-int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
+int AmThumbnailInt::amthumbnail_decoder_open(const sp<DataSource>& source, bool is_slow_media)
 {
     unsigned int i;
     int video_index, audio_index;
-    if ((strncmp(filename, "http", strlen("http")) == 0 ||
-        strncmp(filename, "https", strlen("https")) == 0)) {
-        is_slow_media = true;
-    } else {
-        is_slow_media = false;
+    mIsSlowMedia = is_slow_media;
+
+
+    mSourceAdapter = new AmFFmpegByteIOAdapter();
+    mSourceAdapter->init(source);
+
+    mInputFormat = probeFormat(source);
+    if (mInputFormat == NULL) {
+        ALOGE("Failed to probe the input stream.");
+        goto err;
     }
 
-    if (avformat_open_input(&mStream.pFormatCtx, filename, NULL, NULL) != 0) {
-        ALOGV("Coundn't open file %s !\n", filename);
+    if (!(mStream.pFormatCtx = openAVFormatContext(
+            mInputFormat, mSourceAdapter.get()))) {
+        ALOGE("Failed to open FFmpeg context.");
         goto err;
     }
 
     if (mStream.pFormatCtx->pb) {
         mStream.pFormatCtx->pb->mediascan_flag = 1;
     }
-    if (avformat_find_stream_info(mStream.pFormatCtx, NULL) < 0) {
-        ALOGV("Coundn't find stream information !\n");
-        goto err1;
-    }
 
 #ifdef DUMP_INDEX
 {
     int i, j;
     AVStream *pStream;
-    av_dump_format(AVFormatContext * ic,int index,const char * url,int is_output)(mStream.pFormatCtx, 0,filename, 0);
+    av_dump_format(AVFormatContext * ic,int index,const char * url,int is_output)(mStream.pFormatCtx, 0, NULL, 0);
     ALOGV("*********************************************\n");
     for (i = 0; i < mStream.pFormatCtx->nb_streams; i ++) {
         pStream = mStream.pFormatCtx->streams[i];
@@ -405,7 +284,7 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
         }
 
         /* detect frames */
-        if (!is_slow_media)
+        if (!mIsSlowMedia)
             find_best_keyframe(mStream.pFormatCtx, video_index, 0, &mThumbnailTime, &mThumbnailOffset, &mMaxframesize);
 
         if (avcodec_open2(mStream.pCodecCtx, mStream.pCodec, NULL) < 0) {
@@ -415,13 +294,13 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
 
         mDuration = mStream.pFormatCtx->duration;
 
-        mStream.pFrameYUV = avcodec_alloc_frame();
+        mStream.pFrameYUV = av_frame_alloc();
         if (mStream.pFrameYUV == NULL) {
             ALOGV("alloc YUV frame failed!\n");
             goto err2;
         }
 
-        mStream.pFrameRGB = avcodec_alloc_frame();
+        mStream.pFrameRGB = av_frame_alloc();
         if (mStream.pFrameRGB == NULL) {
             ALOGV("alloc RGB frame failed!\n");
             goto err3;
@@ -440,10 +319,10 @@ int AmThumbnailInt::amthumbnail_decoder_open(const char* filename)
     }
 
 err4:
-    av_free(mStream.pFrameRGB);
+    av_frame_free(&mStream.pFrameRGB);
     mStream.pFrameRGB = NULL;
 err3:
-    av_free(mStream.pFrameYUV);
+    av_frame_free(&mStream.pFrameYUV);
     mStream.pFrameYUV = NULL;
 err2:
     avcodec_close(mStream.pCodecCtx);
@@ -485,7 +364,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
             timestamp += pFormatCtx->start_time;
         }
     } else {
-        if (is_slow_media) {
+        if (mIsSlowMedia) {
             timestamp = 0;
         } else if (starttime >= 0) {
             timestamp = (int64_t)starttime;
@@ -551,7 +430,7 @@ int AmThumbnailInt::amthumbnail_extract_video_frame(int64_t time, int flag)
         int temp_ret;
         ALOGV("[%s] av_read_frame frame size=%d,pts=%" PRId64 "\n", __FUNCTION__, packet.size, packet.pts);
         i++;
-        if (!is_slow_media && packet.size < MAX(mMaxframesize / 10, packet.size) && i < READ_FRAME_MIN) {
+        if (!mIsSlowMedia && packet.size < MAX(mMaxframesize / 10, packet.size) && i < READ_FRAME_MIN) {
             continue;/*skip small size packets,it maybe a black frame*/
         }
 
@@ -703,17 +582,16 @@ int AmThumbnailInt::amthumbnail_get_key_metadata(char* key, const char** value)
 
 int AmThumbnailInt::amthumbnail_get_key_data(char* key, const void** data, int* data_size)
 {
-    AVDictionaryEntry *tag = NULL;
+    AVStream *video_st = mStream.pFormatCtx->streams[mStream.videoStream];
 
-    if (!mStream.pFormatCtx->metadata) {
-        return 0;
-    }
-
-    if (av_dict_get(mStream.pFormatCtx->metadata, key, tag, AV_DICT_IGNORE_SUFFIX)) {
-        *data = mStream.pFormatCtx->cover_data;
-        *data_size = mStream.pFormatCtx->cover_data_len;
-        return 1;
-    }
+    if (video_st && video_st->disposition & AV_DISPOSITION_ATTACHED_PIC) {
+        if (video_st->attached_pic.size > 0) {
+            ALOGV("amthumbnail_get_key_data:pic_size:%d\n", data_size);
+            *data = video_st->attached_pic.data;
+            *data_size = video_st->attached_pic.size;
+            return 1;
+         }
+   }
 
     return 0;
 }
@@ -741,24 +619,11 @@ int AmThumbnailInt::amthumbnail_get_tracks_info(int *vtracks, int *atracks, int 
 
 void AmThumbnailInt::amthumbnail_get_video_rotation(int* rotation)
 {
-    int stream_rotation = mStream.pFormatCtx->streams[mStream.videoStream]->rotation_degree;
-
-    switch (stream_rotation) {
-    case 1:
-        *rotation = 90;
-        break;
-
-    case 2:
-        *rotation = 180;
-        break;
-
-    case 3:
-        *rotation = 270;
-        break;
-
-    default:
-        *rotation = 0;
-        break;
+    *rotation = 0;
+    AVDictionaryEntry *lang =
+                av_dict_get(mStream.pFormatCtx->streams[mStream.videoStream]->metadata, "rotate", NULL, 0);
+    if (lang != NULL && lang->value != NULL) {
+        *rotation = atoi(lang->value);
     }
 
     return;

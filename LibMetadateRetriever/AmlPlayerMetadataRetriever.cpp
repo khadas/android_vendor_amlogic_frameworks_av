@@ -19,15 +19,16 @@
 #include "AmlPlayerMetadataRetriever.h"
 #include <utils/Log.h>
 #include <CharacterEncodingDetector.h>
+#include <media/stagefright/FileSource.h>
 
 namespace android
 {
 
 AmlPlayerMetadataRetriever::AmlPlayerMetadataRetriever()
     : mClient(NULL),
-      mFileName(NULL),
       mAlbumArt(NULL),
       mParsedMetaData(false),
+      mIsSlowMedia(false),
       mOpened(false)
 {
     ALOGV("AmlPlayerMetadataRetriever()");
@@ -37,28 +38,21 @@ AmlPlayerMetadataRetriever::AmlPlayerMetadataRetriever()
         ALOGV("Thumbnail register decoder failed!\n");
     }
 
-    mAmlogicFile.fd_valid = 0;
+    DataSource::RegisterDefaultSniffers();
+
 }
 
 AmlPlayerMetadataRetriever::~AmlPlayerMetadataRetriever()
 {
     ALOGV("~AmlPlayerMetadataRetriever()");
 
-    delete mAlbumArt;
-    mAlbumArt = NULL;
-
-    if (mFileName) {
-        free(mFileName);
-        mFileName = NULL;
-    }
-
     delete mClient;
     mClient = NULL;
 
-    if (mAmlogicFile.fd_valid) {
-        close(mAmlogicFile.fd);
+    clearMetadata();
+    if (mSource != NULL) {
+        mSource->close();
     }
-    mAmlogicFile.fd_valid = 0;
 }
 
 status_t AmlPlayerMetadataRetriever::setDataSource(
@@ -67,81 +61,48 @@ status_t AmlPlayerMetadataRetriever::setDataSource(
             const KeyedVector<String8, String8> *headers)
 {
     ALOGV("setDataSource(%s)", url);
-    mParsedMetaData = false;
-    mMetaData.clear();
-    delete mAlbumArt;
-    mAlbumArt = NULL;
+    clearMetadata();
 
-    return setdatasource(url, -1, 0, 0x7ffffffffffffffLL);
-}
+    mSource = DataSource::CreateFromURI(httpService, url, headers);
 
-status_t AmlPlayerMetadataRetriever::setDataSource(const char * url, const KeyedVector<String8, String8> *headers)
-{
-    ALOGV("setDataSource(%s)", url);
-    mParsedMetaData = false;
-    mMetaData.clear();
-    delete mAlbumArt;
-    mAlbumArt = NULL;
+    if (mSource == NULL) {
+        ALOGE("Unable to create data source for '%s'.", url);
+        return UNKNOWN_ERROR;
+    }
 
-    return setdatasource(url, -1, 0, 0x7ffffffffffffffLL);
+    mIsSlowMedia = true;
+
+    return setDataSource(mSource);
 }
 
 status_t AmlPlayerMetadataRetriever::setDataSource(int fd, int64_t offset, int64_t length)
 {
     ALOGV("setDataSource(%d, %" PRId64 ", %" PRId64 ")", fd, offset, length);
-    mParsedMetaData = false;
-    mMetaData.clear();
+    fd = dup(fd);
+    clearMetadata();
 
-    return setdatasource(NULL, fd, offset, length);
+    mSource = new FileSource(fd, offset, length);
+
+    status_t err;
+    if ((err = mSource->initCheck()) != OK) {
+        mSource.clear();
+
+        return err;
+    }
+
+    return setDataSource(mSource);
 }
 
 status_t AmlPlayerMetadataRetriever::setDataSource(const sp<DataSource>& source)
 {
     ALOGV("setDataSource source ");
-    //mParsedMetaData = false;
-    //mMetaData.clear();
+    clearMetadata();
 
-    return NO_INIT;//setdatasource(NULL, fd, offset, length);
-}
-
-status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int64_t offset, int64_t length)
-{
-    char* file;
-    mAmlogicFile.fd_valid = 0;
-	int err;
-
-    if (url == NULL) {
-        if (fd < 0 || offset < 0) {
-            return -1;
-        }
-
-        file = (char *)malloc(128);
-        if (file == NULL) {
-            return NO_MEMORY;
-        }
-
-        mAmlogicFile.fd = dup(fd);
-        mAmlogicFile.fd_valid = 1;
-        mAmlogicFile.mOffset = offset;
-        mAmlogicFile.mLength = length;
-        sprintf(file, "amthumb:AmlogicPlayer=[%x:%x],AmlogicPlayer_fd=[%x:%x]",
-                (unsigned int)this, (~(unsigned int)this), (unsigned int)&mAmlogicFile, (~(unsigned int)&mAmlogicFile));
-    } else {
-        file = (char *)malloc(strlen(url) + 1);
-        if (file == NULL) {
-            return NO_MEMORY;
-        }
-
-        strcpy(file, url);
-    }
-
-    mFileName = file;
-
-    err = mClient->amthumbnail_decoder_open(mFileName);
+    mSource = source;
+    status_t err;
+    err = mClient->amthumbnail_decoder_open(mSource, mIsSlowMedia);
     if (err != 0) {
         ALOGV("Thumbnail decode init failed!\n");
-        free(mFileName);
-        mFileName = NULL;
         return NO_INIT;
     }
 
@@ -149,6 +110,7 @@ status_t AmlPlayerMetadataRetriever::setdatasource(const char* url, int fd, int6
 
     return OK;
 }
+
 
 VideoFrame *AmlPlayerMetadataRetriever::getFrameAtTime(int64_t timeUs, int option)
 {
@@ -160,7 +122,7 @@ VideoFrame *AmlPlayerMetadataRetriever::getFrameAtTime(int64_t timeUs, int optio
     int rotation;
 
     if (!mOpened) {
-        err = mClient->amthumbnail_decoder_open(mFileName);
+        err = mClient->amthumbnail_decoder_open(mSource, mIsSlowMedia);
         if (err != 0) {
             ALOGV("Thumbnail decode init failed!\n");
             return NULL;
@@ -323,7 +285,7 @@ void AmlPlayerMetadataRetriever::parseMetaData()
 #endif
     int err;
     if (!mOpened) {
-        err = mClient->amthumbnail_decoder_open(mFileName);
+        err = mClient->amthumbnail_decoder_open(mSource, mIsSlowMedia);
         if (err != 0) {
             ALOGV("Thumbnail decode init failed!\n");
             return;
@@ -428,5 +390,12 @@ void AmlPlayerMetadataRetriever::parseMetaData()
 #if 0
     thumbnail_find_stream_info_end(mClient);
 #endif
+}
+
+void AmlPlayerMetadataRetriever::clearMetadata() {
+    mParsedMetaData = false;
+    mMetaData.clear();
+    delete mAlbumArt;
+    mAlbumArt = NULL;
 }
 }
