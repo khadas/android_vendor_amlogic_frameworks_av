@@ -470,11 +470,11 @@ status_t AmFFmpegSource::read(
             if (ERROR_END_OF_STREAM == extractor->feedMore()) {
                 return ERROR_END_OF_STREAM;
             }
-            packet = dequeuePacket();
             if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE
                 && (int)(ALooper::GetNowUs() - nowUs) >= 500) {//500us time out
                 return MEDIA_ERROR_BASE;
             }
+            packet = dequeuePacket();
         }
 
         // seek to current position for timed text change track(cts test)
@@ -503,6 +503,8 @@ status_t AmFFmpegSource::read(
                             packet = dequeuePacket();
                         }
                         curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
+                        av_free_packet(packet);
+                        delete packet;
                     }
                 }
             }
@@ -519,6 +521,8 @@ status_t AmFFmpegSource::read(
     status_t ret = mGroup->acquire_buffer(&buffer);
     if (ret != OK) {
         ALOGE("Failed to acquire buffer.");
+        av_free_packet(packet);
+        delete packet;
         return ret;
     }
 
@@ -536,11 +540,15 @@ status_t AmFFmpegSource::read(
         buffer->release();
         buffer = NULL;
         if (newSize > kMaxFrameBufferSize) {
+            av_free_packet(packet);
+            delete packet;
             return ERROR_BUFFER_TOO_SMALL;
         }
         resetBufferGroup(newSize);
         status_t ret = mGroup->acquire_buffer(&buffer);
         if (ret != OK) {
+            av_free_packet(packet);
+            delete packet;
             return ret;
         }
     }
@@ -555,6 +563,8 @@ status_t AmFFmpegSource::read(
         ALOGE("Failed to format packet data.");
         buffer->release();
         buffer = NULL;
+        av_free_packet(packet);
+        delete packet;
         return ERROR_MALFORMED;
     }
 
