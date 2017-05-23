@@ -289,6 +289,8 @@ status_t AmFFmpegSource::init(
                 char pname[name_len];
                 strncpy(pname, lang->value, name_len - 1);
                 mMeta->setCString(kKeyProgramName, pname);
+            } else {
+                mMeta->setCString(kKeyProgramName, "unknown");
             }
         }
         if (stream->codec->codec_tag == MKTAG('M', 'V', 'C', ' ')) {
