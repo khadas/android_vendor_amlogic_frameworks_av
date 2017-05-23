@@ -221,7 +221,7 @@ OMX_ERRORTYPE SoftADTS::internalSetParameter(
             OMX_AUDIO_PARAM_PCMMODETYPE *pcmParams =
                 (OMX_AUDIO_PARAM_PCMMODETYPE *)params;
 
-            if (pcmParams->nPortIndex != 0) {
+            if (pcmParams->nPortIndex != 1) {
                 return OMX_ErrorUndefined;
             }
 
