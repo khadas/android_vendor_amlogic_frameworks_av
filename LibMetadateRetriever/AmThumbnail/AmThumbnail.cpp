@@ -582,6 +582,10 @@ int AmThumbnailInt::amthumbnail_get_key_metadata(char* key, const char** value)
 
 int AmThumbnailInt::amthumbnail_get_key_data(char* key, const void** data, int* data_size)
 {
+    if (mStream.videoStream == -1) {
+            ALOGV("no video data");
+            return 0;
+    }
     AVStream *video_st = mStream.pFormatCtx->streams[mStream.videoStream];
 
     if (video_st && video_st->disposition & AV_DISPOSITION_ATTACHED_PIC) {
