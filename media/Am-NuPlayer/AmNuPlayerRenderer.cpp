@@ -124,6 +124,7 @@ AmNuPlayer::Renderer::Renderer(
       mVideoLateByUs(0ll),
       mHasAudio(false),
       mHasVideo(false),
+      mAudioEOS(false),
       mNotifyCompleteAudio(false),
       mNotifyCompleteVideo(false),
       mSyncQueues(false),
@@ -1291,6 +1292,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
                 realTimeUs = nowUs;
             }
         }
+
         if (!mHasAudio) {
             // smooth out videos >= 10fps
             mMediaClock->updateMaxTimeMedia(mediaTimeUs + 100000);
@@ -1300,11 +1302,11 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
         // discontinuity. If we have not drained an audio buffer that was
         // received after this buffer, repost in 10 msec. Otherwise repost
         // in 500 msec.
-        if (mAudioQueue.empty()) {
+        if (mHasAudio && mAudioEOS)
             delayUs = 0;
-        }else {
+        else
             delayUs = realTimeUs - nowUs;
-        }
+
         int64_t postDelayUs = -1;
         if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
             postDelayUs = 500000;
@@ -1353,10 +1355,10 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
 
     realTimeUs = mVideoScheduler->schedule(realTimeUs * 1000) / 1000;
     int64_t twoVsyncsUs = 2 * (mVideoScheduler->getVsyncPeriod() / 1000);
-    if ( mAudioQueue.empty()) {
+    if (mHasAudio && mAudioEOS) {
        ALOGI("mAudioQueue empty ,delayUs 0");
        delayUs = 0;
-    }else {
+    } else {
         delayUs = realTimeUs - nowUs;
     }
 
@@ -1460,6 +1462,9 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         Mutex::Autolock autoLock(mLock);
         notifyIfMediaRenderingStarted_l();
     }
+    if (!mHasAudio && mVideoTimeJump) {
+        mMediaClock->updateAnchor(mediaTimeUs, nowUs, mediaTimeUs);
+    }
 }
 
 void AmNuPlayer::Renderer::notifyVideoRenderingStart() {
@@ -1469,6 +1474,8 @@ void AmNuPlayer::Renderer::notifyVideoRenderingStart() {
 }
 
 void AmNuPlayer::Renderer::notifyEOS(bool audio, status_t finalResult, int64_t delayUs) {
+    if (audio)
+        mAudioEOS = true;
     if (audio && delayUs > 0) {
         sp<AMessage> msg = new AMessage(kWhatEOS, this);
         msg->setInt32("audioEOSGeneration", mAudioEOSGeneration);
@@ -1571,7 +1578,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
             mAudioJumpedTimeUs = 0;
         }
     }
-    if (!audio && mLastAudioUs != -1 &&
+    if (!audio && mLastVideoUs != -1 &&
          mAvgVideoFrameIntervalUs > 0) {
         int64_t expectTimeUs = mLastVideoUs + mAvgVideoFrameIntervalUs;
         int64_t diff_us = mediaTimeUs - expectTimeUs;
