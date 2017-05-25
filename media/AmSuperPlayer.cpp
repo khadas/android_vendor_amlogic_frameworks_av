@@ -710,6 +710,8 @@ static bool isAmNuplayerSupport(char *type,int videos,int audios)
 
     if ((NULL != strstr(type, "mpegts"))
         || (NULL != strstr(type, "mov"))
+        || (NULL != strstr(type, "matroska"))
+        || (NULL != strstr(type, "webm"))
         || (NULL != strstr(type, "3gp"))
         || ( NULL != strstr(type, "ogg") && !videos))/*just audio jump*/ {
         if ((NULL == strstr(type, "avs"))
