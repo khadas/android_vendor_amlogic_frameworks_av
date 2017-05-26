@@ -19,6 +19,7 @@
 #include <utils/Log.h>
 
 #include <AmFFmpegExtractor.h>
+#include <cutils/properties.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -748,6 +749,14 @@ sp<MetaData> AmFFmpegExtractor::getMetaData() {
 void AmFFmpegExtractor::init() {
     Mutex::Autolock autoLock(mLock);
     av_register_all();
+    char value[PROPERTY_VALUE_MAX];
+    int  logLevel;
+    if (property_get("media.ffmpegextractor.loglevel", value, "16") > 0) {
+        if ((sscanf(value, "%d", &logLevel)) > 0) {
+            ALOGI("media.ffmpegextractor.loglevel %d\n", logLevel);
+        }
+    }
+    av_log_set_level(logLevel);
 
     mSourceAdapter = new AmFFmpegByteIOAdapter();
     mSourceAdapter->init(mDataSource);
@@ -763,7 +772,8 @@ void AmFFmpegExtractor::init() {
         ALOGE("Failed to open FFmpeg context.");
         return;
     }
-
+    ALOGI("///////////////start dump format");
+    av_dump_format(mFFmpegContext,0,NULL,0);
     mPTSPopulator = new AmPTSPopulator(mFFmpegContext->nb_streams);
 
     mMeta = new MetaData;
