@@ -495,6 +495,10 @@ status_t AmFFmpegSource::read(
                     int64_t curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
                     while (/*packet->pts*/curTimeMs < seekTimeMs) {
                         //ALOGI("[read]curTimeMs:%" PRId64 ",packet->pts : %" PRId64 ", seekTimeMs:%" PRId64 "\n", curTimeMs, packet->size, seekTimeMs);
+                        if (packet != NULL) {
+                            av_free_packet(packet);
+                            delete packet;
+                        }
                         packet = dequeuePacket();
                         while (packet == NULL) {
                             if (ERROR_END_OF_STREAM == extractor->feedMore()) {
@@ -503,8 +507,6 @@ status_t AmFFmpegSource::read(
                             packet = dequeuePacket();
                         }
                         curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
-                        av_free_packet(packet);
-                        delete packet;
                     }
                 }
             }
