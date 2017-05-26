@@ -228,6 +228,9 @@ private:
     bool mStarted;
     bool mStopRead;
     int64_t mBitrate;
+    bool mBuffering;
+    bool mNotifynotifyPrepared;
+    int64_t mBufferingAnchorUs;
     sp<BufferingMonitor> mBufferingMonitor;
     uint32_t mPendingReadBufferTypes;
     sp<ABuffer> mGlobalTimedText;

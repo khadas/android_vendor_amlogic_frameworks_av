@@ -105,7 +105,18 @@ status_t AmMPEG2TSSource::read(
         ALOGI("end of stream %d",__LINE__);
         return ERROR_END_OF_STREAM;
     }
-
+#if 0 //   debug info
+    sp<AMessage> format = new AMessage();
+    sp<MetaData> meta = getFormat();
+    if (meta == NULL) {
+        ALOGE("no metadata for track");
+        return OK;
+    }
+    const char *mime;
+    CHECK(meta->findCString(kKeyMIMEType, &mime));
+    status_t st;
+    ALOGI("read %s getBufferedDurationUs %lld",mime,(long long)mImpl->getBufferedDurationUs(&st));
+#endif
     return mImpl->read(out, options);
 }
 

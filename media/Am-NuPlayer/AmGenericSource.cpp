@@ -49,6 +49,9 @@ static int64_t kHighWaterMarkRebufferUs = 15000000ll;  // 15secs
 static const ssize_t kLowWaterMarkBytes = 40000;
 static const ssize_t kHighWaterMarkBytes = 200000;
 
+static const size_t KAudioMaxReadBuffers = 6;
+static const size_t KVideoMaxReadBuffers = 4;
+
 AmNuPlayer::GenericSource::GenericSource(
         const sp<AMessage> &notify,
         bool uidValid,
@@ -70,6 +73,9 @@ AmNuPlayer::GenericSource::GenericSource(
       mFd(-1),
       mDrmManagerClient(NULL),
       mBitrate(-1ll),
+      mBuffering(false),
+      mNotifynotifyPrepared(false),
+      mBufferingAnchorUs(-1ll),
       mPendingReadBufferTypes(0) {
     mBufferingMonitor = new BufferingMonitor(notify);
     resetDataSource();
@@ -516,6 +522,9 @@ void AmNuPlayer::GenericSource::onSecureDecodersInstantiated(status_t err) {
 }
 
 void AmNuPlayer::GenericSource::finishPrepareAsync() {
+    if (mNotifynotifyPrepared)
+        return;
+    mNotifynotifyPrepared = true;
     status_t err = startSources();
     if (err != OK) {
         ALOGE("Failed to init start data source!");
@@ -781,6 +790,7 @@ void AmNuPlayer::GenericSource::onMessageReceived(const sp<AMessage> &msg) {
           response->postReply(replyID);
           break;
       }
+
       default:
           Source::onMessageReceived(msg);
           break;
@@ -944,21 +954,52 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
     }
 
     status_t finalResult;
+    if (mBuffering && mIsUdp) {
+        int count;
+        //postReadBuffer(audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
+
+        if (mAudioTrack.mSource != NULL && mAudioTrack.mPackets->getAvailableBufferCount(&finalResult) < 5) {
+            postReadBuffer( MEDIA_TRACK_TYPE_AUDIO );
+            return -EWOULDBLOCK;
+        }
+        if (mVideoTrack.mSource != NULL &&  mVideoTrack.mPackets->getAvailableBufferCount(&finalResult) < 5) {
+            postReadBuffer( MEDIA_TRACK_TYPE_VIDEO);
+            return -EWOULDBLOCK;
+        }
+        sp<AMessage> notify = dupNotify();
+        notify->setInt32("what", kWhatResumeOnBufferingEnd);
+        ALOGI("UDP buffering end!\n");
+        notify->post();
+        mBuffering = false;
+    }
+
+
     if (!track->mPackets->hasBufferAvailable(&finalResult)) {
         if (finalResult == OK) {
             postReadBuffer(
                     audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
+
+            if (mBufferingAnchorUs < 0 && mIsUdp)
+                mBufferingAnchorUs = ALooper::GetNowUs();
+            if (mBufferingAnchorUs > 0 && ALooper::GetNowUs() - mBufferingAnchorUs >= 100000ll ) { //delay 100ms
+                sp<AMessage> notify = dupNotify();
+                notify->setInt32("what", kWhatPauseOnBufferingStart);
+                mBuffering = true;
+                notify->post();
+                ALOGI("UDP buffering start!\n");
+            }
             return -EWOULDBLOCK;
         }
         ALOGE("hasBufferAvailable return %d",finalResult);
         return finalResult;
     }
 
+    mBufferingAnchorUs = -1;
     status_t result = track->mPackets->dequeueAccessUnit(accessUnit);
 
     // start pulling in more buffers if we only have one (or no) buffer left
     // so that decoder has less chance of being starved
-    if (track->mPackets->getAvailableBufferCount(&finalResult) < 4) {
+    if (track->mPackets->getAvailableBufferCount(&finalResult) < 10) {
         postReadBuffer(audio? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
     }
 
@@ -984,7 +1025,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
     } else {
         mVideoLastDequeueTimeUs = timeUs;
     }
-    //ALOGI("dequeueAccessUnit %s timeUs %lld",audio?"audio":"video",timeUs);
+    //ALOGI("dequeueAccessUnit %s timeUs %lld conut %d",audio?"audio":"video",timeUs,track->mPackets->getAvailableBufferCount(&finalResult));
     if (mSubtitleTrack.mSource != NULL
             && !mSubtitleTrack.mPackets->hasBufferAvailable(&eosResult)) {
         sp<AMessage> msg = new AMessage(kWhatFetchSubtitleData, this);
@@ -1448,6 +1489,41 @@ void AmNuPlayer::GenericSource::onReadBuffer(sp<AMessage> msg) {
         Mutex::Autolock _l(mReadBufferLock);
         mPendingReadBufferTypes &= ~(1 << trackType);
     }
+
+#if 0 //start play
+    if ( !mStarted && mIsUdp) {
+        int64_t min_dur = -1,dur = 0;
+        status_t err = OK;
+        if (mAudioTrack.mSource != NULL) {
+            dur = mAudioTrack.mPackets->getBufferedDurationUs(&err);
+            if (err == OK && (min_dur == -1 || min_dur > dur)) {
+                min_dur = dur;
+            }
+            ALOGI("audio dur %lld",(long long)dur);
+        }
+
+        if (mVideoTrack.mSource != NULL) {
+            dur = mAudioTrack.mPackets->getBufferedDurationUs(&err);
+            if (err == OK && (min_dur == -1 || min_dur > dur)) {
+                min_dur = dur;
+            }
+            ALOGI("video dur %lld",(long long)dur);
+        }3
+        if (min_dur >= 200*1000ll && !mNotifynotifyPrepared) {
+            finishPrepareAsync();
+            ALOGI("udp finishPrepareAsync");
+        } else {
+            ALOGI("min_dur = %lld",(long long)min_dur);
+            postReadBuffer(trackType);
+        }
+
+        status_t finalResult = OK;
+
+        if (mVideoTrack.mSource != NULL &&  mAudioTrack.mPackets->hasBufferAvailable(&finalResult) < 20 && finalResult == OK ) {
+            postReadBuffer(MEDIA_TRACK_TYPE_VIDEO);
+        }
+    }
+#endif
 }
 
 void AmNuPlayer::GenericSource::readBuffer(
@@ -1464,7 +1540,7 @@ void AmNuPlayer::GenericSource::readBuffer(
             if (mIsWidevine) {
                 maxBuffers = 2;
             } else {
-                maxBuffers = 4;
+                maxBuffers = KVideoMaxReadBuffers;
             }
             break;
         case MEDIA_TRACK_TYPE_AUDIO:
@@ -1472,7 +1548,7 @@ void AmNuPlayer::GenericSource::readBuffer(
             if (mIsWidevine) {
                 maxBuffers = 8;
             } else {
-                maxBuffers = 8;//16;//too mang bufs will read slowly
+                maxBuffers = KAudioMaxReadBuffers;//16;//too mang bufs will read slowly
             }
             break;
         case MEDIA_TRACK_TYPE_SUBTITLE:
@@ -1505,7 +1581,6 @@ void AmNuPlayer::GenericSource::readBuffer(
     if (mIsWidevine) {
         options.setNonBlocking();
     }
-
     bool couldReadMultiple = (!mIsWidevine && trackType == MEDIA_TRACK_TYPE_AUDIO && !mIsUdp);
     for (size_t numBuffers = 0; numBuffers < maxBuffers; ) {
         Vector<MediaBuffer *> mediaBuffers;
