@@ -293,46 +293,6 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
     unsigned char *buffer = NULL;
 	int bread = 0;
 
-
-	if (portIndex == 0 && mInputBufferCount == 0) {
-			
-			++mInputBufferCount;
-
-			BufferInfo *info = *inQueue.begin();
-			OMX_BUFFERHEADERTYPE *header = info->mHeader;
-	
-			buffer = header->pBuffer + header->nOffset;
-			bytes_into_buffer = header->nFilledLen;
-
-			buffer = header->pBuffer + header->nOffset;
-			bytes_into_buffer = header->nFilledLen;
-
-			if ((bread = NeAACDecInit(hDecoder, buffer,
-       				 bytes_into_buffer, (unsigned long *)(&mNumSampleRate), (unsigned char *)(&mNumChannels))) < 0)
-    		{
-       			 /* If some error initializing occured, skip the file */
-       		 	ALOGI("Error initializing decoder library.\n");
-				mSignalledError = true;
-				notify(OMX_EventError, OMX_ErrorUndefined, bread, NULL);
-        		NeAACDecClose(hDecoder);
-        		return;
-    		}else{
-    			ALOGI("NeAACDecInit success!\n");
-				ALOGI("mNumSampleRate=%ld,mNumChannels=%d\n",mNumSampleRate,mNumChannels);
-				if(mNumChannels > 2)
-					mNumChannels = 2;
-			}
-
-			info->mOwnedByUs = false;
-			inQueue.erase(inQueue.begin());
-			notifyEmptyBufferDone(header);
-			notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
-			mOutputPortSettingsChange = AWAITING_DISABLED;
-
-			return;
-
-		}
-
     while (!inQueue.empty() && !outQueue.empty()) {
         BufferInfo *inInfo = *inQueue.begin();
         OMX_BUFFERHEADERTYPE *inHeader = inInfo->mHeader;
@@ -360,7 +320,41 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
             notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
             mSignalledError = true;
         }
-		
+
+        if (portIndex == 0 && mInputBufferCount == 0) {
+
+                ++mInputBufferCount;
+
+                BufferInfo *info = *inQueue.begin();
+                OMX_BUFFERHEADERTYPE *header = info->mHeader;
+
+                buffer = header->pBuffer + header->nOffset;
+                bytes_into_buffer = header->nFilledLen;
+
+                if ((bread = NeAACDecInit(hDecoder, buffer,
+                         bytes_into_buffer, (unsigned long *)(&mNumSampleRate), (unsigned char *)(&mNumChannels))) < 0)
+                {
+                     /* If some error initializing occured, skip the file */
+                    ALOGI("Error initializing decoder library.\n");
+                    mSignalledError = true;
+                    notify(OMX_EventError, OMX_ErrorUndefined, bread, NULL);
+                    NeAACDecClose(hDecoder);
+                    return;
+                }else{
+                    ALOGI("NeAACDecInit success!\n");
+                    ALOGI("mNumSampleRate=%ld,mNumChannels=%d\n",mNumSampleRate,mNumChannels);
+                    if (mNumChannels > 2)
+                        mNumChannels = 2;
+                }
+
+                info->mOwnedByUs = false;
+                inQueue.erase(inQueue.begin());
+                notifyEmptyBufferDone(header);
+                notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
+                mOutputPortSettingsChange = AWAITING_DISABLED;
+
+                return;
+        }
         uint8_t *inputptr = inHeader->pBuffer + inHeader->nOffset;
 
 		//ALOGI("next frame\n");
