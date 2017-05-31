@@ -905,7 +905,8 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
             entry->mOffset += copy;
             if ((entry->mOffset + outlen_pcm  + 8) >= entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
-                entry->mNotifyConsumed->post();
+                entry->mNotifyConsumed->
+                  ();
                 mAudioQueue.erase(mAudioQueue.begin());
                 entry = NULL;
             }
@@ -1275,9 +1276,10 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
         {
             Mutex::Autolock autoLock(mLock);
             if (mAnchorTimeMediaUs < 0) {
-                if (!mHasAudio)
+                if (!mHasAudio) {
                     mMediaClock->updateAnchor(mediaTimeUs, nowUs, mediaTimeUs);
-                mAnchorTimeMediaUs = mediaTimeUs;
+                    mAnchorTimeMediaUs = mediaTimeUs;
+                }
                 realTimeUs = nowUs;
             } else if (!mVideoSampleReceived) {
                 // Always render the first video frame.
@@ -1289,7 +1291,16 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
                 needRepostDrainVideoQueue = true;
                 realTimeUs = nowUs;
             } else {
-                realTimeUs = nowUs;
+                if (mHasAudio) {// if realtime uninitialized will retry in 10ms
+                    msg->setWhat(kWhatPostDrainVideoQueue);
+                    msg->post(10000);
+                    mDrainVideoQueuePending = true;
+                    mVideoScheduler->restart();
+                    ALOGI("uninitialized media clock, retrying in 10ms");
+                    return;
+                } else {
+                    realTimeUs = nowUs;
+                }
             }
         }
 
@@ -1700,7 +1711,8 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
 
         int64_t diff = firstVideoTimeUs - firstAudioTimeUs;
 
-        ALOGI("queueDiff = %.2f secs", diff / 1E6);
+        ALOGI(" firstVideoTimeUs %lld firstAudioTimeUs %lld queueDiff = %.2f secs",
+            (long long)firstVideoTimeUs,(long long)firstAudioTimeUs,diff / 1E6);
 
         if (diff > 100000ll) {
             // Audio data starts More than 0.1 secs before video.
