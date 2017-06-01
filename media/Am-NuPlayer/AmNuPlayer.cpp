@@ -502,6 +502,7 @@ static aformat_t audioTypeConvert(enum CodecID id)
     return format;
 }
 
+#define INVALID_TS_PROG_NUM  -1
 status_t AmNuPlayer::updateMediaInfo(void) {
     ALOGI("updateMediaInfo");
     maudio_info_t *ainfo;
@@ -511,6 +512,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
     mStreamInfo.stream_info.total_video_num = 0;
     mStreamInfo.stream_info.total_audio_num = 0;
     mStreamInfo.stream_info.cur_sub_index   = -1;
+    mStreamInfo.is_multi_prog = 0;
     mStreamInfo.ts_programe_info.programe_num = 0;
     if (mSource->isStreaming()) {
         sp<AMessage> aformat= mSource->getFormat(true);  //audio
@@ -596,7 +598,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
             AString mime;
             format->findString("mime", &mime);
 
-            int32_t prog_num = -1;
+            int32_t prog_num = INVALID_TS_PROG_NUM;
             if (format->findInt32("program-num", &prog_num)) {
                 ALOGV("[%s:%d]get prognum=%d\n", __FUNCTION__, __LINE__, prog_num);
             }
@@ -628,7 +630,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 vinfo->frame_rate_den   = 0;
                 vinfo->video_rotation_degree = 0;
                 mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num] = vinfo;
-                if (-1 != prog_num) {
+                if (INVALID_TS_PROG_NUM != prog_num) {
                     mStreamInfo.video_info[mStreamInfo.stream_info.total_video_num]->prog_num = prog_num;
                 }
                 mStreamInfo.stream_info.total_video_num++;
@@ -667,7 +669,7 @@ status_t AmNuPlayer::updateMediaInfo(void) {
                 }
                 ainfo->aformat      = audioTypeConvert((enum CodecID)ainfo->id);
                 mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num] = ainfo;
-                if (-1 != prog_num) {
+                if (INVALID_TS_PROG_NUM != prog_num) {
                     mStreamInfo.audio_info[mStreamInfo.stream_info.total_audio_num]->prog_num = prog_num;
                 }
                 mStreamInfo.stream_info.total_audio_num++;
@@ -684,6 +686,11 @@ status_t AmNuPlayer::updateMediaInfo(void) {
         }
 
         int prog_vnum_tmp = 0;
+        if (mStreamInfo.ts_programe_info.programe_num > 1) {
+            ALOGI("Multiple Programme\n");
+            mStreamInfo.is_multi_prog  = 1;
+        }
+
         for (int prog_cnt_tmp  = 0; prog_cnt_tmp < mStreamInfo.ts_programe_info.programe_num; prog_cnt_tmp++) {
             int prog_anum_tmp = 0;
             prog_vnum_tmp = mStreamInfo.video_info[prog_cnt_tmp]->prog_num;
@@ -754,24 +761,29 @@ status_t AmNuPlayer::doGetMediaInfo(Parcel* reply){
     for (int i = 0;i < mStreamInfo.stream_info.total_video_num; i ++) {
         reply->writeInt32(mStreamInfo.video_info[i]->index);
         reply->writeInt32(mStreamInfo.video_info[i]->id);
-        reply->writeString16(String16("unknow"));
+        reply->writeString16(String16("unknown"));
         reply->writeInt32(mStreamInfo.video_info[i]->width);
         reply->writeInt32(mStreamInfo.video_info[i]->height);
         ALOGI("--video index:%d id:%d totlanum:%d width:%d height:%d \n",mStreamInfo.video_info[i]->index,mStreamInfo.video_info[i]->id,mStreamInfo.stream_info.total_video_num,mStreamInfo.video_info[i]->width,mStreamInfo.video_info[i]->height);
     }
 
     /*build audio info*/
-    int total_audio_num = 0;
-    for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i ++) {
-        if (mStreamInfo.video_info[i]->prog_num == mStreamInfo.ts_programe_info.cur_prognum) {
-            total_audio_num = mStreamInfo.video_info[i]->audio_info.prog_audio_num;
-            break;
+    if (mStreamInfo.is_multi_prog) {
+        int ts_total_audio_num = 0;
+        for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i ++) {
+            if (mStreamInfo.video_info[i]->prog_num == mStreamInfo.ts_programe_info.cur_prognum) {
+                ts_total_audio_num = mStreamInfo.video_info[i]->audio_info.prog_audio_num;
+                break;
+            }
         }
-   }
-    //reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
-    reply->writeInt32(total_audio_num);
+        reply->writeInt32(ts_total_audio_num);
+    }
+    else {
+        reply->writeInt32(mStreamInfo.stream_info.total_audio_num);
+    }
+
     for (int i = 0; i < mStreamInfo.stream_info.total_audio_num; i ++) {
-        if (mStreamInfo.ts_programe_info.cur_prognum != \
+        if (mStreamInfo.is_multi_prog && mStreamInfo.ts_programe_info.cur_prognum != \
             mStreamInfo.audio_info[i]->prog_num) {
             continue;
         }
@@ -1273,7 +1285,6 @@ void AmNuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                         if (mime.startsWith("video/")) {
                            if (mStreamInfo.ts_programe_info.programe_num > 1)  {
                                 size_t atrackIndex = -1;
-                                int prog_num = -1;
                                 for (int i = 0; i < mStreamInfo.ts_programe_info.programe_num; i++) {
                                     if (mStreamInfo.video_info[i]->index == trackIndex) {
                                         int index = mStreamInfo.video_info[i]->audio_info.prog_audio_index_list[0];

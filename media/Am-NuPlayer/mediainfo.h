@@ -579,6 +579,7 @@ typedef struct {
     maudio_info_t *audio_info[MAX_AUDIO_STREAMS];
     msub_info_t *sub_info[MAX_SUB_STREAMS];
     ts_programe_info_t ts_programe_info;
+    int is_multi_prog;
 } media_info_t;
 
 
