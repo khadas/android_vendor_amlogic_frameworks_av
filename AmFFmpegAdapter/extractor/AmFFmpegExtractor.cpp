@@ -749,6 +749,7 @@ sp<MetaData> AmFFmpegExtractor::getMetaData() {
 void AmFFmpegExtractor::init() {
     Mutex::Autolock autoLock(mLock);
     av_register_all();
+    int64_t duration_us = 0;
     char value[PROPERTY_VALUE_MAX];
     int  logLevel;
     if (property_get("media.ffmpegextractor.loglevel", value, "16") > 0) {
@@ -785,6 +786,23 @@ void AmFFmpegExtractor::init() {
     if (static_cast<int64_t>(AV_NOPTS_VALUE) != mFFmpegContext->duration) {
         mMeta->setInt64(kKeyDuration,
                 convertTimeBaseToMicroSec(mFFmpegContext->duration));
+    } else {
+        //calculate duation
+        int64_t filesize = mFFmpegContext->pb ? avio_size(mFFmpegContext->pb) : 0;
+        if (0 == mFFmpegContext->bit_rate) {
+             int bitrate_sum = 0;
+            for (uint32_t i = 0; i < mFFmpegContext->nb_streams; ++i) {
+                AVCodecContext *codec = mFFmpegContext->streams[i]->codec;
+                bitrate_sum += codec->bit_rate;
+            }
+            if (0 != bitrate_sum) {
+                duration_us = (int)(((filesize << 3) * 1000000) / bitrate_sum);
+            }
+        } else {
+            duration_us = (int)(((filesize << 3) * 1000000) / mFFmpegContext->bit_rate);
+        }
+        if (duration_us != 0)
+            mMeta->setInt64(kKeyDuration,duration_us);
     }
 
     // multiple track support has been added
