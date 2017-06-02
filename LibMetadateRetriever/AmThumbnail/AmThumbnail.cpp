@@ -272,7 +272,13 @@ int AmThumbnailInt::amthumbnail_decoder_open(const sp<DataSource>& source, bool 
             mVheight = mStream.pCodecCtx->height;
         }
 
-        if ((mVwidth > 1920) && (mVheight > 1088)) {
+        const char* file_format = mStream.pFormatCtx->iformat->name;
+        bool isMp3 = false;
+
+        if (file_format && !strcmp(file_format, "mp3")) {
+            isMp3 = true;
+        }
+        if ((mVwidth * mVheight > 1920 * 1088) && !isMp3) {
             ALOGV("Can't support 4k\n");
             goto err1;
         }
