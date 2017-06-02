@@ -263,7 +263,7 @@ static char *StringFromDetector(const char *name)
 static bool convertCreationTimeToDate(const char *time, String8* date)
 {
     struct tm tb;
-    if (strptime(time, "%Y-%m-%d %H:%M:%S", &tb) != NULL) {
+    if (strptime(time, "%Y-%m-%dT%H:%M:%S", &tb) != NULL) {
         char tmp[32];
         if (strftime(tmp, 32, "%Y%m%dT%H%M%S.000Z", &tb) > 0) {
             date->setTo(tmp);
