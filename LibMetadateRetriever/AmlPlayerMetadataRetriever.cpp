@@ -349,6 +349,17 @@ void AmlPlayerMetadataRetriever::parseMetaData()
                         if (convertCreationTimeToDate(value, &s)) {
                             mMetaData.add(kMap[n].to, s);
                         }
+                    } else if (!strcmp(kMap[n].from, "location")) {
+                        //The last char '/' is not needed.
+                        char tmp[32] = "\0";
+                        int str_size = strlen(value);
+                        if (value[str_size - 1] == 0x2f) {
+                            memcpy(tmp, value, str_size - 1);
+                            ALOGV("get %s: %s \n", kMap[n].from, tmp);
+                            mMetaData.add(kMap[n].to, String8(tmp));
+                        } else {
+                            mMetaData.add(kMap[n].to, String8(value));
+                        }
                     } else {
                         mMetaData.add(kMap[n].to, String8(value));
                     }
