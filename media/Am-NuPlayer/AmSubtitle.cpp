@@ -246,7 +246,8 @@ void AmSubtitle::sendToSubtitleService(MediaBuffer *mbuf) {
     } else if (sub_type == CODEC_ID_XSUB) {
         setSubType(2);
     } else if (sub_type == CODEC_ID_TEXT
-        || sub_type == CODEC_ID_SSA) {
+        || sub_type == CODEC_ID_SSA
+        || sub_type == CODEC_ID_ASS) {
         setSubType(3);
     } else if (sub_type == CODEC_ID_DVB_SUBTITLE) {
         setSubType(5);

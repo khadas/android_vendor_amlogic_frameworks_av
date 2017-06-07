@@ -293,7 +293,7 @@ private:
     void onReadBuffer(sp<AMessage> msg);
     void readBuffer(
             media_track_type trackType,
-            int64_t seekTimeUs = -1ll, int64_t *actualTimeUs = NULL, bool formatChange = false);
+            int64_t seekTimeUs = -1ll, int64_t *actualTimeUs = NULL, bool formatChange = false, int *readAgain = NULL);
 
     void queueDiscontinuityIfNeeded(
             bool seeking, bool formatChange, media_track_type trackType, Track *track);

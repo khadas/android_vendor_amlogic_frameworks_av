@@ -858,7 +858,12 @@ void AmNuPlayer::GenericSource::sendTextData(
     }
 
     int64_t nextSubTimeUs;
-    readBuffer(type, -1, &nextSubTimeUs);
+    int readAgain = 0;
+    readBuffer(type, -1, &nextSubTimeUs, false, &readAgain);
+    if (readAgain == 1) {
+        msg->post(0);
+        return;
+    }
 
     sp<ABuffer> buffer;
     status_t dequeueStatus = packets->dequeueAccessUnit(&buffer);
@@ -1541,7 +1546,7 @@ void AmNuPlayer::GenericSource::onReadBuffer(sp<AMessage> msg) {
 }
 
 void AmNuPlayer::GenericSource::readBuffer(
-        media_track_type trackType, int64_t seekTimeUs, int64_t *actualTimeUs, bool formatChange) {
+        media_track_type trackType, int64_t seekTimeUs, int64_t *actualTimeUs, bool formatChange, int *readAgain) {
     // Do not read data if Widevine source is stopped
     if (mStopRead) {
         return;
@@ -1613,6 +1618,10 @@ void AmNuPlayer::GenericSource::readBuffer(
             err = track->mSource->read(&mbuf, &options);
             if (err == OK && mbuf != NULL) {
                 mediaBuffers.push_back(mbuf);
+            }
+            else if (err == ERROR_READ_TIME_OUT && readAgain) {
+                *readAgain = 1;
+                break;
             }
         }
 
