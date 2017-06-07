@@ -392,7 +392,8 @@ status_t AmFFmpegSource::start(MetaData *params) {
     resetBufferGroup(kDefaultFrameBufferSize);
 
     mStarted = true;
-    clearPendingPackets();
+    if (mStream->codec->codec_type != AVMEDIA_TYPE_SUBTITLE)
+        clearPendingPackets();
 
     return OK;
 }
@@ -468,12 +469,12 @@ status_t AmFFmpegSource::read(
         int64_t nowUs = ALooper::GetNowUs();
         packet = dequeuePacket();
         while (packet == NULL) {
-            if (ERROR_END_OF_STREAM == extractor->feedMore()) {
-                return ERROR_END_OF_STREAM;
-            }
             if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE
                 && (int)(ALooper::GetNowUs() - nowUs) >= 500) {//500us time out
-                return MEDIA_ERROR_BASE;
+                return ERROR_READ_TIME_OUT;
+            }
+            if (ERROR_END_OF_STREAM == extractor->feedMore()) {
+                return ERROR_END_OF_STREAM;
             }
             packet = dequeuePacket();
         }
@@ -660,7 +661,7 @@ void AmFFmpegSource::resetBufferGroup(size_t size) {
 status_t AmFFmpegSource::queuePacket(AVPacket *packet) {
     Mutex::Autolock autoLock(mPacketQueueLock);
 
-    if (!mStarted) {
+    if (!mStarted && mStream->codec->codec_type != AVMEDIA_TYPE_SUBTITLE) {
         av_free_packet(packet);
         delete packet;
         return OK;

@@ -131,6 +131,13 @@ static const KeyMap kKeyMap[] = {
     { "subtitle/subviewer",     AV_CODEC_ID_SUBVIEWER },
     { "subtitle/subrip",        AV_CODEC_ID_SUBRIP },
     { "subtitle/webvtt",        AV_CODEC_ID_WEBVTT },
+    { "subtitle/ssa",           AV_CODEC_ID_ASS },
+    { "subtitle/stl",           AV_CODEC_ID_STL },
+    { "subtitle/subviewer1",    AV_CODEC_ID_SUBVIEWER1 },
+    { "subtitle/mpl2",          AV_CODEC_ID_MPL2 },
+    { "subtitle/vplayer",       AV_CODEC_ID_VPLAYER },
+    { "subtitle/pjs",           AV_CODEC_ID_PJS },
+    { "subtitle/hdmv_text_subtitle",    AV_CODEC_ID_HDMV_TEXT_SUBTITLE },
 };
 
 static const size_t kNumEntries = NELEM(kKeyMap);
