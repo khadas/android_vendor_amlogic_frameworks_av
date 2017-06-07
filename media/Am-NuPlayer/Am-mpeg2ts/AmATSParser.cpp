@@ -580,7 +580,13 @@ int64_t AmATSParser::Program::recoverPTS(uint64_t PTS_33bit) {
 sp<MediaSource> AmATSParser::Program::getSource(SourceType type) {
     for (size_t i = 0; i < mStreams.size(); ++i) {
         sp<MediaSource> source = mStreams.editValueAt(i)->getSource(type);
+        if (type == AmATSParser::VIDEO && mStreams.editValueAt(i)->isVideo() && source == NULL)
+            return NULL;
+        if (type == AmATSParser::AUDIO &&
+            (mStreams.editValueAt(i)->isAudio() || mStreams.editValueAt(i)->type() == STREAMTYPE_PES_PRIVATE_DATA) && source == NULL)
+            return NULL;
         if (source != NULL) {
+            //ALOGI("Program::getSource %d streamid 0x%2x",(int)i,mStreams.editValueAt(i)->pid());
             return source;
         }
     }
@@ -1661,6 +1667,7 @@ sp<MediaSource> AmATSParser::getSource(SourceType type) {
         switch (type) {
             case VIDEO: {
                 if (program->hasSource(AUDIO)) {
+                    //ALOGI("mPrograms %d AUDIO",(int)i);
                     return source;
                 }
                 break;
@@ -1668,6 +1675,7 @@ sp<MediaSource> AmATSParser::getSource(SourceType type) {
 
             case AUDIO: {
                 if (program->hasSource(VIDEO)) {
+                    //ALOGI("mPrograms %d VIDEO",(int)i);
                     return source;
                 }
                 break;
