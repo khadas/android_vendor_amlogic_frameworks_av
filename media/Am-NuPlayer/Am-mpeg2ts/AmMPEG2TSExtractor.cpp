@@ -115,7 +115,9 @@ status_t AmMPEG2TSSource::read(
     const char *mime;
     CHECK(meta->findCString(kKeyMIMEType, &mime));
     status_t st;
-    ALOGI("read %s getBufferedDurationUs %lld",mime,(long long)mImpl->getBufferedDurationUs(&st));
+    ALOGI("read %s getBufferedDurationUs %lld count %u",mime,
+        (long long)mImpl->getBufferedDurationUs(&st),
+        (int)mImpl->getAvailableBufferCount(&st));
 #endif
     return mImpl->read(out, options);
 }
@@ -124,7 +126,7 @@ status_t AmMPEG2TSSource::read(
 
 AmMPEG2TSExtractor::AmMPEG2TSExtractor(const sp<DataSource> &source)
     : mDataSource(source),
-      mParser(new AmATSParser),
+      mParser(new AmATSParser(AmATSParser::TS_TIMESTAMPS_ARE_ABSOLUTE)),
       mLastSyncEvent(0),
       mOffset(0) {
       ALOGI("AmMPEG2TSExtractor:AmMPEG2TSExtractor");

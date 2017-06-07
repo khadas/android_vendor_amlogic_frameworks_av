@@ -49,8 +49,6 @@ static int64_t kHighWaterMarkRebufferUs = 15000000ll;  // 15secs
 static const ssize_t kLowWaterMarkBytes = 40000;
 static const ssize_t kHighWaterMarkBytes = 200000;
 
-static const size_t KAudioMaxReadBuffers = 6;
-static const size_t KVideoMaxReadBuffers = 4;
 
 AmNuPlayer::GenericSource::GenericSource(
         const sp<AMessage> &notify,
@@ -59,8 +57,10 @@ AmNuPlayer::GenericSource::GenericSource(
     : Source(notify),
       mAudioTimeUs(0),
       mAudioLastDequeueTimeUs(0),
+      mAudiofirstQueueTimeUs(-1ll),
       mVideoTimeUs(0),
       mVideoLastDequeueTimeUs(0),
+      mVideofirstQueueTimeUs(-1ll),
       mFetchSubtitleDataGeneration(0),
       mFetchTimedTextDataGeneration(0),
       mDurationUs(-1ll),
@@ -508,7 +508,15 @@ void AmNuPlayer::GenericSource::onPrepareAsync() {
         sp<AMessage> reply = new AMessage(kWhatSecureDecodersInstantiated, this);
         notifyInstantiateSecureDecoders(reply);
     } else {
-        finishPrepareAsync();
+        if (!mIsUdp) {
+            finishPrepareAsync();
+        } else {
+            mStopRead = false;
+            if (mAudioTrack.mSource != NULL)
+                postReadBuffer(MEDIA_TRACK_TYPE_AUDIO);
+            if (mVideoTrack.mSource != NULL)
+                postReadBuffer(MEDIA_TRACK_TYPE_VIDEO);
+        }
     }
 }
 
@@ -957,36 +965,20 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
         // try to read a buffer as we may not have been able to the last time
         postReadBuffer(MEDIA_TRACK_TYPE_VIDEO);
     }
+    if (mIsUdp && mBuffering)
+        return -EWOULDBLOCK;
 
     status_t finalResult;
-    if (mBuffering && mIsUdp) {
-        int count;
-        //postReadBuffer(audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
-
-        if (mAudioTrack.mSource != NULL && mAudioTrack.mPackets->getAvailableBufferCount(&finalResult) < 5) {
-            postReadBuffer( MEDIA_TRACK_TYPE_AUDIO );
-            return -EWOULDBLOCK;
-        }
-        if (mVideoTrack.mSource != NULL &&  mVideoTrack.mPackets->getAvailableBufferCount(&finalResult) < 5) {
-            postReadBuffer( MEDIA_TRACK_TYPE_VIDEO);
-            return -EWOULDBLOCK;
-        }
-        sp<AMessage> notify = dupNotify();
-        notify->setInt32("what", kWhatResumeOnBufferingEnd);
-        ALOGI("UDP buffering end!\n");
-        notify->post();
-        mBuffering = false;
-    }
-
 
     if (!track->mPackets->hasBufferAvailable(&finalResult)) {
         if (finalResult == OK) {
-            postReadBuffer(
-                    audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
-
+            if (!mIsUdp)
+                postReadBuffer(
+                        audio ? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
+            //ALOGI("hasBufferAvailable == 0 is audio? %d",audio);
             if (mBufferingAnchorUs < 0 && mIsUdp)
                 mBufferingAnchorUs = ALooper::GetNowUs();
-            if (mBufferingAnchorUs > 0 && ALooper::GetNowUs() - mBufferingAnchorUs >= 100000ll ) { //delay 100ms
+            if (mBufferingAnchorUs > 0 && ALooper::GetNowUs() - mBufferingAnchorUs >= 10000ll) { //delay 50ms
                 sp<AMessage> notify = dupNotify();
                 notify->setInt32("what", kWhatPauseOnBufferingStart);
                 mBuffering = true;
@@ -1007,6 +999,7 @@ status_t AmNuPlayer::GenericSource::dequeueAccessUnit(
     if (track->mPackets->getAvailableBufferCount(&finalResult) < 10) {
         postReadBuffer(audio? MEDIA_TRACK_TYPE_AUDIO : MEDIA_TRACK_TYPE_VIDEO);
     }
+
 
     if (result != OK) {
         if (mSubtitleTrack.mSource != NULL) {
@@ -1495,40 +1488,61 @@ void AmNuPlayer::GenericSource::onReadBuffer(sp<AMessage> msg) {
         mPendingReadBufferTypes &= ~(1 << trackType);
     }
 
-#if 0 //start play
-    if ( !mStarted && mIsUdp) {
+    if (mIsUdp) {
+        if (mBuffering) {
+            bool start = true;
+            status_t finalResult;
+            if (mAudioTrack.mSource != NULL && mAudioTrack.mPackets->getAvailableBufferCount(&finalResult) < 30)
+                start = false;
+            if (mVideoTrack.mSource != NULL &&  mVideoTrack.mPackets->getAvailableBufferCount(&finalResult) < 30)
+                start = false;
+            if (start) {
+                sp<AMessage> notify = dupNotify();
+                notify->setInt32("what", kWhatResumeOnBufferingEnd);
+                ALOGI("UDP buffering end!\n");
+                notify->post();
+                mBuffering = false;
+            }
+
+        }
         int64_t min_dur = -1,dur = 0;
+
         status_t err = OK;
+        media_track_type mintype;
         if (mAudioTrack.mSource != NULL) {
             dur = mAudioTrack.mPackets->getBufferedDurationUs(&err);
             if (err == OK && (min_dur == -1 || min_dur > dur)) {
                 min_dur = dur;
+                mintype = MEDIA_TRACK_TYPE_AUDIO;
             }
-            ALOGI("audio dur %lld",(long long)dur);
+            //ALOGI("audio dur %lld count %d",(long long)dur,mAudioTrack.mPackets->getAvailableBufferCount(&err));
         }
 
         if (mVideoTrack.mSource != NULL) {
-            dur = mAudioTrack.mPackets->getBufferedDurationUs(&err);
+            dur = mVideoTrack.mPackets->getBufferedDurationUs(&err);
             if (err == OK && (min_dur == -1 || min_dur > dur)) {
                 min_dur = dur;
+                mintype = MEDIA_TRACK_TYPE_VIDEO;
             }
-            ALOGI("video dur %lld",(long long)dur);
-        }3
-        if (min_dur >= 200*1000ll && !mNotifynotifyPrepared) {
+            //ALOGI("video dur %lld count %d",(long long)dur,mVideoTrack.mPackets->getAvailableBufferCount(&err));
+        }
+
+        int64_t diff = 0;
+        if (mVideofirstQueueTimeUs >= 0 && mAudiofirstQueueTimeUs >= 0 && !mNotifynotifyPrepared) {
+            if (min_dur >= 500*1000ll && mVideofirstQueueTimeUs > mAudiofirstQueueTimeUs) {//to down audio
+                mintype = MEDIA_TRACK_TYPE_AUDIO;
+                min_dur = mAudioTrack.mPackets->getBufferedDurationUs(&err);
+                diff += (mVideofirstQueueTimeUs - mAudiofirstQueueTimeUs)/3;
+                if (diff > 2000000ll) diff = 2000000ll;
+            }
+        }
+        if (min_dur >= 500*1000ll + diff && !mNotifynotifyPrepared) {//udp buffing 300ms play. it may modify
             finishPrepareAsync();
-            ALOGI("udp finishPrepareAsync");
-        } else {
-            ALOGI("min_dur = %lld",(long long)min_dur);
-            postReadBuffer(trackType);
+            ALOGI("udp finishPrepareAsync %lld", (long long)(mVideofirstQueueTimeUs - mAudiofirstQueueTimeUs));
         }
+        postReadBuffer(mintype);
 
-        status_t finalResult = OK;
-
-        if (mVideoTrack.mSource != NULL &&  mAudioTrack.mPackets->hasBufferAvailable(&finalResult) < 20 && finalResult == OK ) {
-            postReadBuffer(MEDIA_TRACK_TYPE_VIDEO);
-        }
     }
-#endif
 }
 
 void AmNuPlayer::GenericSource::readBuffer(
@@ -1545,7 +1559,10 @@ void AmNuPlayer::GenericSource::readBuffer(
             if (mIsWidevine) {
                 maxBuffers = 2;
             } else {
-                maxBuffers = KVideoMaxReadBuffers;
+                if (mIsUdp)
+                    maxBuffers = 1;
+                else
+                    maxBuffers = 4;
             }
             break;
         case MEDIA_TRACK_TYPE_AUDIO:
@@ -1553,7 +1570,10 @@ void AmNuPlayer::GenericSource::readBuffer(
             if (mIsWidevine) {
                 maxBuffers = 8;
             } else {
-                maxBuffers = KAudioMaxReadBuffers;//16;//too mang bufs will read slowly
+                if (mIsUdp)
+                    maxBuffers = 1;
+                else
+                    maxBuffers = 6;
             }
             break;
         case MEDIA_TRACK_TYPE_SUBTITLE:
@@ -1618,9 +1638,11 @@ void AmNuPlayer::GenericSource::readBuffer(
                 break;
             }
             if (trackType == MEDIA_TRACK_TYPE_AUDIO) {
+                if (mAudiofirstQueueTimeUs < 0) mAudiofirstQueueTimeUs = timeUs;
                 mAudioTimeUs = timeUs;
                 mBufferingMonitor->updateQueuedTime(true /* isAudio */, timeUs);
             } else if (trackType == MEDIA_TRACK_TYPE_VIDEO) {
+                if (mVideofirstQueueTimeUs < 0) mVideofirstQueueTimeUs = timeUs;
                 mVideoTimeUs = timeUs;
                 mBufferingMonitor->updateQueuedTime(false /* isAudio */, timeUs);
                 mAmSubtitle->setSubStartPts(mbuf);//prepare subtitle start pts
