@@ -1,6 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
-
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 #include frameworks/av/media/libstagefright/codecs/common/Config.mk
 
 LOCAL_SRC_FILES:=                         \
@@ -50,8 +50,7 @@ LOCAL_SHARED_LIBRARIES += \
 LOCAL_C_INCLUDES+= \
 	$(TOP)/frameworks/av/media/libstagefright/include  \
 	$(TOP)/frameworks/av/media/libmediaplayerservice  \
-	$(TOP)/frameworks/av/amlogic/include \
-	$(TOP)/vendor/amlogic/external/ffmpeg
+	$(BOARD_AML_VENDOR_PATH)/external/ffmpeg
 
 LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
 
@@ -67,7 +66,7 @@ endif
 LOCAL_CLANG := true
 
 
-#include  $(TOP)/frameworks/av/amlogic/config.mk
+include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
 LOCAL_MODULE:= libstagefright_extrator
 
 LOCAL_MODULE_TAGS := optional

@@ -8,7 +8,7 @@ LOCAL_SRC_FILES := \
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/     \
         frameworks/av/media/libstagefright/include \
         frameworks/native/include/media/openmax \
-        vendor/amlogic/frameworks/av/codecs/include
+        $(LOCAL_PATH)/../include
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
 	LOCAL_CFLAGS += -D__ARM_HAVE_NEON -DOPT_NEON

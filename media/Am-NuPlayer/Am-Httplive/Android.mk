@@ -1,7 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
-
 LOCAL_SRC_FILES:=               \
         AmLiveDataSource.cpp      \
         AmHLSDataSource.cpp       \
@@ -15,9 +14,9 @@ LOCAL_C_INCLUDES:= \
 	$(TOP)/frameworks/native/include/media/openmax \
 	$(TOP)/external/boringssl/src/include \
     $(TOP)/external/curl/include \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
-    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-mpeg2ts \
-	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/hevc_utils \
+    $(LOCAL_PATH)/../../../LibPlayer/third_parts/libcurl-ffmpeg/include \
+    $(LOCAL_PATH)/../Am-mpeg2ts \
+	$(LOCAL_PATH)/../hevc_utils \
 
 LOCAL_CFLAGS += -Werror
 

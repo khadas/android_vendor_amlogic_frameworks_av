@@ -5,7 +5,7 @@ LOCAL_PATH:= $(call my-dir)
 #
 
 include $(CLEAR_VARS)
-
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 LOCAL_SRC_FILES +=                          \
         AmlPlayerMetadataRetriever.cpp \
         AmlogicMetadataRetrieverFactory.cpp \
@@ -27,8 +27,8 @@ LOCAL_STATIC_LIBRARIES :=       \
 LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/              \
     $(TOP)/frameworks/av/include/media \
-    $(TOP)/vendor/amlogic/external/ffmpeg \
-	$(TOP)/vendor/amlogic/frameworks/av/AmFFmpegAdapter/include/ \
+    $(BOARD_AML_VENDOR_PATH)/external/ffmpeg \
+	$(LOCAL_PATH)/../AmFFmpegAdapter/include/ \
 	$(TOP)/frameworks/native/include/media/openmax \
     $(TOP)/external/icu/icu4c/source/common				\
     $(TOP)/external/icu/icu4c/source/i18n					\

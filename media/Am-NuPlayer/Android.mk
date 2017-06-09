@@ -1,6 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
-include $(TOP)/hardware/amlogic/media/media_base_config.mk
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 
 LOCAL_SRC_FILES:=                       \
         AmGenericSource.cpp               \
@@ -20,18 +20,18 @@ LOCAL_SRC_FILES:=                       \
 		AmUDPSource.cpp					 \
 
 LOCAL_C_INCLUDES := \
-	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-Httplive \
-    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/Am-mpeg2ts \
+	$(LOCAL_PATH)/Am-Httplive \
+    $(LOCAL_PATH)/Am-mpeg2ts \
 	$(TOP)/frameworks/av/media/libstagefright/include             \
 	$(TOP)/frameworks/av/media/libstagefright/rtsp                \
 	$(TOP)/frameworks/av/media/libstagefright/timedtext           \
 	$(TOP)/frameworks/av/media/libmediaplayerservice              \
 	$(TOP)/frameworks/native/include/media/openmax                \
     $(TOP)/external/curl/include                                  \
-    $(TOP)/vendor/amlogic/frameworks/av/LibPlayer/third_parts/libcurl-ffmpeg/include \
+    $(LOCAL_PATH)/../..//LibPlayer/third_parts/libcurl-ffmpeg/include \
     $(AMAVUTILS_PATH)/include \
-    $(TOP)/vendor/amlogic/external/ffmpeg/\
-    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol
+    $(BOARD_AML_VENDOR_PATH)/external/ffmpeg/\
+    $(BOARD_AML_VENDOR_PATH)/frameworks/services/systemcontrol
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
@@ -57,7 +57,7 @@ LOCAL_STATIC_LIBRARIES := \
         libcurl_common
 
 LOCAL_CFLAGS := -DDOLBY_UDC -D__STDC_CONSTANT_MACROS # For stdint macros used in FFmpeg.
-include  $(TOP)/frameworks/av/amlogic/config.mk
+include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
 LOCAL_MODULE:= libamnuplayer
 
 LOCAL_MODULE_TAGS := eng

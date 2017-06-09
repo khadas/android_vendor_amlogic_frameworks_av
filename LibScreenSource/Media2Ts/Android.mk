@@ -1,7 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
-
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 LOCAL_SRC_FILES:= \
         esconvertor.cpp     \
         tspack.cpp    \
@@ -11,7 +11,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright/media2ts \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/native/services/systemwrite \
-        $(TOP)/vendor/amlogic/frameworks/av
+        $(BOARD_AML_VENDOR_PATH)/frameworks/av
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \
@@ -42,7 +42,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright/media2ts \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/native/services/systemwrite \
-        $(TOP)/vendor/amlogic/frameworks/av
+        $(BOARD_AML_VENDOR_PATH)/frameworks/av
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \
@@ -74,7 +74,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright/media2ts \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/native/services/systemwrite \
-        $(TOP)/vendor/amlogic/frameworks/av
+        $(BOARD_AML_VENDOR_PATH)/frameworks/av
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \
@@ -106,7 +106,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright/media2ts \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/native/services/systemwrite \
-        $(TOP)/vendor/amlogic/frameworks/av
+        $(BOARD_AML_VENDOR_PATH)/frameworks/av
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \
