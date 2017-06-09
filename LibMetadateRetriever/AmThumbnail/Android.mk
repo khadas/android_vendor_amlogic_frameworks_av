@@ -7,9 +7,9 @@ LOCAL_SRC_FILES:= AmThumbnail.cpp
 LOCAL_C_INCLUDES:= \
     $(TOP)/frameworks/av/include \
     $(LOCAL_PATH)/include \
-    $(TOP)/vendor/amlogic/external/ffmpeg \
+    $(BOARD_AML_VENDOR_PATH)/external/ffmpeg \
 	$(TOP)/frameworks/native/include/media/openmax \
-	$(TOP)/vendor/amlogic/frameworks/av/AmFFmpegAdapter/include/ \
+	$(LOCAL_PATH)/../../AmFFmpegAdapter/include/ \
 
 
 LOCAL_SHARED_LIBRARIES := \

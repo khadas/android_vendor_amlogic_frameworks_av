@@ -11,7 +11,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/av/media/libstagefright/mpeg2ts \
         $(TOP)/frameworks/native/include/media/hardware \
-        $(TOP)/vendor/amlogic/frameworks/av
+        $(LOCAL_PATH)/../../\
 
 LOCAL_SHARED_LIBRARIES:= \
         libbinder                       \

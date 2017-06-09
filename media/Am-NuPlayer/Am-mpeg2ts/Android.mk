@@ -11,7 +11,7 @@ LOCAL_SRC_FILES:=                 \
 LOCAL_C_INCLUDES:= \
 	$(TOP)/frameworks/av/media/libstagefright \
 	$(TOP)/frameworks/native/include/media/openmax\
-	$(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer/hevc_utils \
+	$(LOCAL_PATH)/../hevc_utils \
 
 LOCAL_CFLAGS += -Werror -Wall
 LOCAL_CLANG := true

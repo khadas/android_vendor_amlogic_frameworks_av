@@ -6,7 +6,6 @@ LOCAL_C_INCLUDES := \
     $(TOP)/frameworks/native/include/media/openmax \
     $(TOP)/frameworks/av/include/media/ \
     $(TOP)/frameworks/av/media/libstagefright \
-    $(TOP)/vendor/amlogic/frameworks/av
 
 LOCAL_SRC_FILES:= \
     IScreenMediaSource.cpp \

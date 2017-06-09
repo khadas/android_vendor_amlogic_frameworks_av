@@ -1,6 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 
-include $(TOP)/hardware/amlogic/media/media_base_config.mk
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 #
 # libmedia_amlogic.so
 #
@@ -20,7 +20,7 @@ else
 LOCAL_CFLAGS += -DMALI_AFBC_GRALLOC=0
 endif
 
-MESON_GRALLOC_DIR?=hardware/amlogic/gralloc
+MESON_GRALLOC_DIR?=$(BOARD_AML_HEADWARE_PATH)/gralloc
 
 
 ifeq ($(BOARD_WIDEVINE_OEMCRYPTO_LEVEL),1)
@@ -102,9 +102,9 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/external/icu/icu4c/source/i18n					\
     $(TOP)/$(MESON_GRALLOC_DIR) \
     $(TOP)/system/core/libion/include/\
-    $(TOP)/vendor/amlogic/frameworks/av/media/Am-NuPlayer \
+    $(BOARD_AML_VENDOR_PATH)/frameworks/av/media/Am-NuPlayer \
     $(TOP)/frameworks/native/include \
-    $(TOP)/vendor/amlogic/frameworks/services/systemcontrol
+    $(BOARD_AML_VENDOR_PATH)/frameworks/services/systemcontrol
 
 ifeq ($(BOARD_PLAYREADY_LP_IN_SS), true)
 LOCAL_CFLAGS += -DSS_MSPLAYREADY_TEST

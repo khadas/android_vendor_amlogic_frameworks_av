@@ -1,6 +1,5 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
-
 LOCAL_SRC_FILES := \
         SoftWmapro.cpp  \
         bitstream.c     \
@@ -10,7 +9,7 @@ LOCAL_SRC_FILES := \
 LOCAL_C_INCLUDES := \
         frameworks/av/media/libstagefright/include \
         frameworks/native/include/media/openmax \
-        vendor/amlogic/frameworks/av/codecs/include
+        $(LOCAL_PATH)/../../include
 
 LOCAL_SHARED_LIBRARIES := \
         libstagefright libstagefright_omx \

@@ -1,7 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
-
+include $(BOARD_AML_MEDIA_HAL_CONFIG)
 LOCAL_SRC_FILES:= \
         sink/LinearRegression.cpp       \
         sink/RTPSink.cpp                \
@@ -12,7 +12,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright \
         $(TOP)/frameworks/native/include/media/openmax \
         $(TOP)/frameworks/av/media/libstagefright/mpeg2ts \
-        $(TOP)/vendor/amlogic/frameworks/services/systemcontrol \
+        $(BOARD_AML_VENDOR_PATH)/frameworks/services/systemcontrol \
         $(TOP)/frameworks/native/include/media/hardware \
 
 LOCAL_SHARED_LIBRARIES:= \
