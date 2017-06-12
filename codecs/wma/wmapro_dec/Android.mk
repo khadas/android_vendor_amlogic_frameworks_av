@@ -15,6 +15,8 @@ LOCAL_SHARED_LIBRARIES := \
         libstagefright libstagefright_omx \
         libstagefright_foundation libutils  liblog
 
+include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
 LOCAL_MODULE := libstagefright_soft_wmaprodec
 LOCAL_MODULE_TAGS := optional
 

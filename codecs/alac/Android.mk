@@ -19,7 +19,8 @@ LOCAL_C_INCLUDES := \
 LOCAL_SHARED_LIBRARIES := \
         libvorbisidec libstagefright libstagefright_omx \
         libstagefright_foundation libutils liblog
-
+include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
 LOCAL_MODULE := libstagefright_soft_alacdec
 LOCAL_MODULE_TAGS := optional
 

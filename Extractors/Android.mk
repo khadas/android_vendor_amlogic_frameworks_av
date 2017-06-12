@@ -66,7 +66,10 @@ endif
 LOCAL_CLANG := true
 
 
+
 include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
+
 LOCAL_MODULE:= libstagefright_extrator
 
 LOCAL_MODULE_TAGS := optional
