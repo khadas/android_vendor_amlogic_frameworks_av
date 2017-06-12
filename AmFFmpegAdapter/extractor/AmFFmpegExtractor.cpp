@@ -816,6 +816,12 @@ void AmFFmpegExtractor::init() {
                 && !checkStreamValid(codec)) {
             streamValid = false;
         }
+        //programe that only have audio will discard for mpegts
+        AVProgram *program = av_find_program_from_stream(mFFmpegContext, NULL, mFFmpegContext->streams[i]->index);
+        if ((mInputFormat == av_find_input_format("mpegts")) && (program == NULL)) {
+            streamValid = false;;
+        }
+
         bool shouldAdd = streamValid && ((codec->codec_type == AVMEDIA_TYPE_AUDIO)
                                             || (codec->codec_type == AVMEDIA_TYPE_VIDEO)
                                             || (codec->codec_type == AVMEDIA_TYPE_SUBTITLE));
@@ -830,7 +836,6 @@ void AmFFmpegExtractor::init() {
                     mFFmpegContext->start_time) {
                 startTimeUs = mFFmpegContext->start_time;
             }
-            AVProgram *program = av_find_program_from_stream(mFFmpegContext, NULL, mFFmpegContext->streams[i]->index);
             mSources.editTop().mSource =
                     new AmFFmpegSource(this, mFFmpegContext->streams[i], program,
                             mInputFormat, mPTSPopulator, seekable, startTimeUs);
