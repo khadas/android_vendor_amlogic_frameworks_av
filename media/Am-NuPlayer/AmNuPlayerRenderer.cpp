@@ -905,8 +905,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
             entry->mOffset += copy;
             if ((entry->mOffset + outlen_pcm  + 8) >= entry->mBuffer->size() ||  entry->mBuffer->size() == 0) {
-                entry->mNotifyConsumed->
-                  ();
+                entry->mNotifyConsumed->post();
                 mAudioQueue.erase(mAudioQueue.begin());
                 entry = NULL;
             }
