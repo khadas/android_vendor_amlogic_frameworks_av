@@ -878,10 +878,14 @@ void AmNuPlayer::setDataSourceAsync(const sp<IStreamSource> &source) {
     msg->post();
 }
 
+#define IS_LOCAL_HTTP(uri) (uri && (strcasestr(uri,"://127.0.0.1") || strcasestr(uri,"://localhost")))
 static bool IsHTTPLiveURL(const char *url) {
     if (!strncasecmp("http://", url, 7)
             || !strncasecmp("https://", url, 8)
             || !strncasecmp("file://", url, 7)) {
+            if (IS_LOCAL_HTTP(url) && strstr(url,"html") && !strstr(url,"m3u8")) {// not hls localhost
+                return false;
+            }
             return true;
 #if 0
         size_t len = strlen(url);
