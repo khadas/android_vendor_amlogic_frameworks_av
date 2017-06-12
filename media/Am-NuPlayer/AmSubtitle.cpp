@@ -299,6 +299,11 @@ void AmSubtitle::sendToSubtitleService(MediaBuffer *mbuf) {
     memcpy(data, sub_header, 20);
     memcpy(data + 20, (char *)mbuf->data(), data_size);
     if (mClient != NULL) {
+        if (mDebug) {
+            for (int i = 0; i < size; i++) {
+                ALOGE("[sendToSubtitleService]data[%d]:0x%x\n", i, data[i]);
+            }
+        }
         mClient->socketSend(data, size);
     }
     free(data);
