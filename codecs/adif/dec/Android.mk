@@ -75,7 +75,8 @@ include $(CLEAR_VARS)
 
   LOCAL_SHARED_LIBRARIES := \
         libstagefright libstagefright_omx libstagefright_foundation libutils liblog
-
+  include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+  LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
   LOCAL_MODULE := libstagefright_soft_adifdec
   LOCAL_MODULE_TAGS := optional
 
@@ -100,7 +101,8 @@ include $(CLEAR_VARS)
 
   LOCAL_SHARED_LIBRARIES := \
         libstagefright libstagefright_omx libstagefright_foundation libutils liblog
-
+  include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+  LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
   LOCAL_MODULE := libstagefright_soft_latmdec
   LOCAL_MODULE_TAGS := optional
 
@@ -125,7 +127,8 @@ include $(CLEAR_VARS)
 
   LOCAL_SHARED_LIBRARIES := \
         libstagefright libstagefright_omx libstagefright_foundation libutils liblog
-
+  include  $(AMLOGIC_FRAMEWORKS_AV_CONFIG_MK)
+  LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
   LOCAL_MODULE := libstagefright_soft_adtsdec
   LOCAL_MODULE_TAGS := optional
 

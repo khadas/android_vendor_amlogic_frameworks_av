@@ -32,6 +32,9 @@
 #include <media/stagefright/Utils.h>
 #include <media/stagefright/VideoFrameScheduler.h>
 #include <media/stagefright/MediaDefs.h>
+#ifdef WITH_AMLOGIC_MEDIA_EX_SUPPORT
+#include <media/stagefright/AmMediaDefsExt.h>
+#endif
 
 #include <inttypes.h>
 #include <Amavutils.h>

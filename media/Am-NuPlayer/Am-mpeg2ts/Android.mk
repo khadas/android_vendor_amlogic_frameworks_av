@@ -16,7 +16,8 @@ LOCAL_C_INCLUDES:= \
 LOCAL_CFLAGS += -Werror -Wall
 LOCAL_CLANG := true
 LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow
-
+include  $(TOP)/frameworks/av/amlogic/config.mk
+LOCAL_SHARED_LIBRARIES += libmedia_amlogic_support
 LOCAL_MODULE:= libammpeg2ts
 
 ifeq ($(TARGET_ARCH),arm)

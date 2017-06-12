@@ -7,7 +7,10 @@
 #include <media/stagefright/DataSource.h>
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaBufferGroup.h>
-//#include <media/stagefright/MediaDebug.h>
+#ifdef WITH_AMLOGIC_MEDIA_EX_SUPPORT
+#include <media/stagefright/AmMediaDefsExt.h>
+#endif
+
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MediaSource.h>

@@ -18,6 +18,9 @@
 #include <utils/Log.h>
 
 #include "include/ADTSExtractor.h"
+#ifdef WITH_AMLOGIC_MEDIA_EX_SUPPORT
+#include <media/stagefright/AmMediaDefsExt.h>
+#endif
 
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/DataSource.h>

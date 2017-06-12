@@ -28,6 +28,9 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/Utils.h>
+#ifdef WITH_AMLOGIC_MEDIA_EX_SUPPORT
+#include <media/stagefright/AmMediaDefsExt.h>
+#endif
 
 #include "include/avc_utils.h"
 #include "HEVC_utils.h"
