@@ -43,6 +43,7 @@ private:
     uint8_t* mHVCC;
     uint32_t mHVCCSize;
     size_t mNALLengthSize;
+    bool mHVCCSkip;
 };
 
 }  // namespace android

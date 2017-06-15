@@ -28,6 +28,7 @@ namespace android {
 
 HVCCFormatter::HVCCFormatter(AVCodecContext* codec)
     : mHVCCFound(false),
+      mHVCCSkip(false),
       mHVCC(NULL),
       mHVCCSize(0),
       mNALLengthSize(0) {
@@ -50,9 +51,9 @@ bool HVCCFormatter::parseCodecExtraData(AVCodecContext* codec) {
     }
 
     if (codec->extradata[0] != 1u) {
-        ALOGE("We only support configurationVersion 1, but this is %u.",
-                codec->extradata[0]);
-        return false;
+        ALOGE("We only support configurationVersion 1, but this is %u.",codec->extradata[0]);
+        mHVCCSkip = true;
+        //return false;
     }
 
     mHVCC = new uint8_t[codec->extradata_size];
@@ -67,6 +68,10 @@ bool HVCCFormatter::parseCodecExtraData(AVCodecContext* codec) {
 bool HVCCFormatter::addCodecMeta(const sp<MetaData> &meta) const {
     if (!mHVCCFound) {
         ALOGE("HVCC header has not been set.");
+        return false;
+    }
+    if (mHVCCSkip) {
+        ALOGE("HVCC header is not configurationVersion 1, skip setData kKeyHVCC.");
         return false;
     }
     meta->setData(kKeyHVCC, kTypeHVCC, mHVCC, mHVCCSize);

@@ -61,8 +61,7 @@ sp<StreamFormatter> StreamFormatter::Create(
             && (format == av_find_input_format("mp4")
                     || format == av_find_input_format("flv")
                     || format == av_find_input_format("matroska"))) {
-        if (codec->extradata_size >= 22
-                && reinterpret_cast<uint8_t *>(codec->extradata)[0] == 0x01) {
+        if (codec->extradata_size >= 22) {
             return new HVCCFormatter(codec);
         }
     } else if (!strcmp(codecMime, MEDIA_MIMETYPE_AUDIO_AAC)
