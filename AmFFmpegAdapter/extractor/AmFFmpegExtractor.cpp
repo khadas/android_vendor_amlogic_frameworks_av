@@ -472,7 +472,7 @@ status_t AmFFmpegSource::read(
         packet = dequeuePacket();
         while (packet == NULL) {
             if (mStream->codec->codec_type == AVMEDIA_TYPE_SUBTITLE
-                && (int)(ALooper::GetNowUs() - nowUs) >= 500) {//500us time out
+                && (int)(ALooper::GetNowUs() - nowUs) >= 50) {//50us time out
                 return ERROR_READ_TIME_OUT;
             }
             if (ERROR_END_OF_STREAM == extractor->feedMore()) {
@@ -481,6 +481,7 @@ status_t AmFFmpegSource::read(
             packet = dequeuePacket();
         }
 
+        #if 0
         // seek to current position for timed text change track(cts test)
         bool skipTimedTextSeek = false;
         if (!strcmp(mMime, MEDIA_MIMETYPE_VIDEO_AVC)
@@ -497,6 +498,7 @@ status_t AmFFmpegSource::read(
                 if (seekTimeUs > 0 && !skipTimedTextSeek) {
                     int64_t seekTimeMs = seekTimeUs / 1000;
                     int64_t curTimeMs = (packet->pts - extractor->mFirstVpts) / 90;
+                    int64_t nowUs1 = ALooper::GetNowUs();
                     while (/*packet->pts*/curTimeMs < seekTimeMs) {
                         //ALOGI("[read]curTimeMs:%" PRId64 ",packet->pts : %" PRId64 ", seekTimeMs:%" PRId64 "\n", curTimeMs, packet->size, seekTimeMs);
                         if (packet != NULL) {
@@ -505,6 +507,9 @@ status_t AmFFmpegSource::read(
                         }
                         packet = dequeuePacket();
                         while (packet == NULL) {
+                            if ((int)(ALooper::GetNowUs() - nowUs1) >= 50) {//50us time out
+                                return ERROR_READ_TIME_OUT;
+                            }
                             if (ERROR_END_OF_STREAM == extractor->feedMore()) {
                                 return ERROR_END_OF_STREAM;
                             }
@@ -515,6 +520,7 @@ status_t AmFFmpegSource::read(
                 }
             }
         }
+        #endif
     }
 
     if ((mStream->codec->codec_type == AVMEDIA_TYPE_AUDIO || mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
