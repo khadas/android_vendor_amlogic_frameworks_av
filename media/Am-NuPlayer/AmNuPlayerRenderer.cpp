@@ -857,6 +857,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     bool firstEntry = true;
     int frame_mul = 1;
     int pts_div = 1;
+    int64_t mediaTimeUs;
     while (sizeCopied < size && !mAudioQueue.empty() && !mQueueInitial) {
         if (entry == NULL) {
             entry = &*mAudioQueue.begin();
@@ -870,7 +871,6 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
         if (firstEntry && entry->mOffset == 0) {
             firstEntry = false;
-            int64_t mediaTimeUs;
             CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
             ALOGV("fillAudioBuffer: rendering audio at media time %.2f secs", mediaTimeUs / 1E6);
             setAudioFirstAnchorTimeIfNeeded_l(mediaTimeUs);
@@ -944,6 +944,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             mAudioFirstAnchorTimeMediaUs + mAudioSink->getPlayedOutDurationUs(nowUs)/pts_div;
         // we don't know how much data we are queueing for offloaded tracks.
         mMediaClock->updateAnchor(nowMediaUs, nowUs, INT64_MAX);
+        mAnchorTimeMediaUs = mediaTimeUs;
     }
 
     // for non-offloaded audio, we need to compute the frames written because
