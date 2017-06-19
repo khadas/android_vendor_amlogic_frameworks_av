@@ -2583,6 +2583,24 @@ status_t AmNuPlayer::setVideoScalingMode(int32_t mode) {
                 -ret, strerror(-ret));
             return ret;
         }
+
+        int videoscreenmode = 1; //0.normal mode,1.full,2.4:3,3,16:9
+        switch (mode) {
+            case NATIVE_WINDOW_SCALING_MODE_FREEZE:
+                videoscreenmode = 0;
+                break;
+            case NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW:
+                videoscreenmode = 1; ///full strecch
+                break;
+            case NATIVE_WINDOW_SCALING_MODE_SCALE_CROP:
+            case NATIVE_WINDOW_SCALING_MODE_NO_SCALE_CROP:
+            default:
+                videoscreenmode = 0; ///normal mode
+        }
+#ifndef UNUSE_SCREEN_MODE
+        ALOGI("set video screenmode to %d\n", videoscreenmode);
+        amsysfs_set_sysfs_int("/sys/class/video/screen_mode", videoscreenmode);
+#endif
     }
     return OK;
 }
