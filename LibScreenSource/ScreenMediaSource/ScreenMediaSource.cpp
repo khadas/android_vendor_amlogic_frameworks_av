@@ -535,14 +535,6 @@ int ScreenMediaSource::dataCallBack(aml_screen_buffer_info_t *buffer){
             return BAD_VALUE;
         }
 
-        FrameBufferInfo* frame = new FrameBufferInfo;
-        if (!frame) {
-            mScreenDev->ops.release_buffer(mScreenDev, buffer->buffer_mem);
-            mError = true;
-            ALOGE("Could Alloc Frame!");
-            return BAD_VALUE;
-        }
-
         mFrameCount++;
 
         ++mNumFramesReceived;
