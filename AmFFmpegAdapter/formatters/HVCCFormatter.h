@@ -35,6 +35,9 @@ public:
             const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
             uint32_t outAllocLen) const;
 
+    virtual int32_t getMetaFromES(
+            const uint8_t* data, uint32_t size, const sp<MetaData> &meta);
+
 private:
     bool parseCodecExtraData(AVCodecContext* codec);
     size_t parseNALSize(const uint8_t *data) const ;
@@ -44,6 +47,7 @@ private:
     uint32_t mHVCCSize;
     size_t mNALLengthSize;
     bool mHVCCSkip;
+    int mCheckHDR;
 };
 
 }  // namespace android

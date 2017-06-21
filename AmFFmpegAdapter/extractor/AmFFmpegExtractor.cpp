@@ -101,6 +101,7 @@ private:
     bool mStarted;
     bool mFirstPacket;
     bool mStartRead;
+    int mCheckHEVCHDR;
     MediaBufferGroup *mGroup;
 
     int64_t mStartTimeUs;
@@ -143,6 +144,7 @@ AmFFmpegSource::AmFFmpegSource(
       mStarted(false),
       mFirstPacket(true),
       mStartRead(false),
+      mCheckHEVCHDR(0),
       mGroup(NULL),
       mStream(stream),
       mProgram(program),
@@ -515,7 +517,7 @@ status_t AmFFmpegSource::read(
         }
     }
 
-    if ((mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO || mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+    if ((mStream->codec->codec_type == AVMEDIA_TYPE_AUDIO || mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
         && (mStream->codec->codec  && (mStream->codec->codec->capabilities & AV_CODEC_CAP_DELAY)) || (packet && packet->size) ) {
         av_packet_split_side_data(packet);
 
@@ -571,6 +573,8 @@ status_t AmFFmpegSource::read(
         delete packet;
         return ERROR_MALFORMED;
     }
+
+    mFormatter->getMetaFromES((const uint8_t *)buffer->data(), filledLength, mMeta);
 
 	if(AV_NOPTS_VALUE == packet->pts) {
         packet->pts = mLastValidPts;

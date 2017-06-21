@@ -59,6 +59,10 @@ class StreamFormatter : public RefBase{
             const uint8_t* in, uint32_t inAllocLen, uint8_t* out,
             uint32_t outAllocLen) const = 0;
 
+
+    virtual int32_t getMetaFromES(
+            const uint8_t* data, uint32_t size, const sp<MetaData> &meta) { return 0;}
+
     void checkNAL(const uint8_t* in, uint32_t inAllocLen);
     status_t dequeueAccessUnit(sp<ABuffer> *buffer);
 };
