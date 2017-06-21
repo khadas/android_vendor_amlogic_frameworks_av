@@ -317,9 +317,9 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
             return;
         }
 
-		if (inHeader->nFilledLen > (AAC_MIN_STREAMSIZE * AAC_CHANNELS)) {
-            ALOGE("input buffer too large (%ld).", inHeader->nFilledLen);
-
+        if (inHeader->nFilledLen < 7) {
+            ALOGE("Audio data too short to contain even the ADTS header. "
+                            "Got %d bytes.", inHeader->nFilledLen);
             notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
             mSignalledError = true;
         }
@@ -370,7 +370,8 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
             ALOGI("Decoder Error: %s\n",
                 NeAACDecGetErrorMessage(frameInfo->error));
         }
-
+        if (frameInfo->channels < 0 || frameInfo->channels > 8 )
+            frameInfo->samples = 0;
 		if ((frameInfo->error == 0) && (frameInfo->samples > 0))
         {
             //ALOGI("decoder success\n");
