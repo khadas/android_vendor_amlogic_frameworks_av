@@ -241,7 +241,12 @@ int ScreenCatch::threadFunc()
     }
 
     ALOGE("[%s %d] thread out", __FUNCTION__, __LINE__);
-    mThreadOutCondition.signal();
+
+    buffer->decStrong(this);
+    buffer.clear();
+    newMemoryHeap->decStrong(this);
+    newMemoryHeap.clear();
+
     return 0;
 }
 
@@ -313,11 +318,13 @@ status_t ScreenCatch::start(MetaData *params)
 status_t ScreenCatch::stop()
 {
     ALOGV("[%s %d]", __FUNCTION__, __LINE__);
+    status_t ret = OK;
     Mutex::Autolock autoLock(mLock);
     mStart = false;
-
-    mThreadOutCondition.waitRelative(mLock, 1000000000000);
-    ALOGV("[%s %d]", __FUNCTION__, __LINE__);
+    void *dummy;
+    pthread_join(mThread, &dummy);
+    ret = static_cast<status_t>(reinterpret_cast<uintptr_t>(dummy));
+    ALOGV("[%s %d], ret = %d", __FUNCTION__, __LINE__, ret);
 
     while (!mRawBufferQueue.empty()) {
 		    ALOGV("[%s %d] free buffer", __FUNCTION__, __LINE__);
@@ -329,7 +336,7 @@ status_t ScreenCatch::stop()
     mScreenMediaSourceService->stop(mClientId);
     mScreenMediaSourceService->unregisterClient(mClientId);
 
-    return OK;
+    return ret;
 }
 
 status_t ScreenCatch::read(MediaBuffer **buffer)
