@@ -48,6 +48,7 @@
 
 #define ES_AUDIO_DUMP_PATH    "/data/tmp/nuplayer_audio_es.bit"
 #define ES_VIDEO_DUMP_PATH    "/data/tmp/nuplayer_video_es.bit"
+#define AUDIO_DIGITAL_RAW_NODE "/sys/class/audiodsp/digital_raw"
 
 namespace android {
 
@@ -83,7 +84,8 @@ AmNuPlayer::Decoder::Decoder(
       mComponentName("decoder"),
       mDumpMode(-1),
       mAudioHandle(NULL),
-      mVideoHandle(NULL) {
+      mVideoHandle(NULL),
+      mDigital_raw(0){
     mCodecLooper = new ALooper;
     mCodecLooper->setName("NPDecoder-CL");
     mCodecLooper->start(false, false, ANDROID_PRIORITY_AUDIO);
@@ -108,6 +110,10 @@ AmNuPlayer::Decoder::~Decoder() {
     }
     if (mVideoHandle) {
         fclose(mVideoHandle);
+    }
+
+    if (mIsAudio) {
+        amsysfs_set_sysfs_int(AUDIO_DIGITAL_RAW_NODE,mDigital_raw);
     }
 }
 
@@ -316,11 +322,36 @@ void AmNuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
 
      CHECK(format->findString("mime", &mime));
      if (mIsAudio) {
-          int user_raw_enable = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+          audio_io_handle_t handle = -1;
+          int user_raw_enable = amsysfs_get_sysfs_int(AUDIO_DIGITAL_RAW_NODE);
+          mDigital_raw = user_raw_enable;
           if (user_raw_enable && (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  || !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
               !strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) ||!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))){
               ALOGI("user_raw_enable:%d,mime:%s",user_raw_enable,mime.c_str());
               format->setInt32("audio_extendformat",1);
+              if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())) {
+                    int32_t channelMask;
+                    if (!format->findInt32("channel-mask", &channelMask)) {
+                        channelMask = AUDIO_CHANNEL_OUT_STEREO;
+                    }
+                    int32_t sampleRate;
+                    CHECK(format->findInt32("sample-rate", &sampleRate));
+                    uint32_t pcmFlags = AUDIO_OUTPUT_FLAG_DIRECT | AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO;
+                    handle = AudioSystem::getOutput(AUDIO_STREAM_MUSIC,
+                                        sampleRate,
+                                        AUDIO_FORMAT_DTS,
+                                        AUDIO_CHANNEL_OUT_STEREO,
+                                        (audio_output_flags_t)pcmFlags
+                                        );
+                   if (handle == 0 ) {
+                       ALOGI("no output for sampleRate:%d ,aformat:%0x ,channelMask:%0x ,pcmFlags:%0x ,force to pcm output"
+                        ,sampleRate,AUDIO_FORMAT_DTS,channelMask,pcmFlags);
+                       format->setInt32("audio_extendformat",0);
+                       amsysfs_set_sysfs_int(AUDIO_DIGITAL_RAW_NODE,0);
+                  }else if (handle > 0) {
+                       AudioSystem::releaseOutput(handle, AUDIO_STREAM_MUSIC, AUDIO_SESSION_OUTPUT_STAGE);
+                  }
+              }
           } else {
               format->setInt32("audio_extendformat",0);
           }
@@ -684,7 +715,7 @@ void AmNuPlayer::Decoder::handleOutputFormatChange(const sp<AMessage> &format) {
         int32_t sampleRate;
         CHECK(mInputFormat->findString("mime", &mime));
         CHECK(format->findInt32("sample-rate", &sampleRate));
-        int digital_raw = amsysfs_get_sysfs_int("/sys/class/audiodsp/digital_raw");
+        int digital_raw = amsysfs_get_sysfs_int(AUDIO_DIGITAL_RAW_NODE);
         int user_raw_enable = digital_raw && (
                               !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())  ||
                               !strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
