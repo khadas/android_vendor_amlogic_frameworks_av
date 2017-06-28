@@ -97,6 +97,7 @@ private:
     int32_t mDumpMode;
     FILE * mAudioHandle;
     FILE * mVideoHandle;
+    int32_t mDigital_raw;
 
     void handleError(int32_t err);
     bool handleAnInputBuffer(size_t index);
