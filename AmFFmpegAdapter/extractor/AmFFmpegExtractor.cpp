@@ -86,6 +86,11 @@ struct AmFFmpegSource : public MediaSource {
 
     sp<StreamFormatter> mFormatter;
 
+    int32_t mTimeBase;
+    int32_t mNumerator;
+    int32_t mDenominator;
+    int64_t convertStreamTimeToUs(int64_t timeInStreamTime);
+
 private:
     Mutex mLock;
 
@@ -106,10 +111,6 @@ private:
 
     int64_t mStartTimeUs;
 
-    int32_t mTimeBase;
-    int32_t mNumerator;
-    int32_t mDenominator;
-
     const char * mMime;
     const AVInputFormat *mInputFormat;
 
@@ -125,7 +126,7 @@ private:
     status_t init(
             AVStream *stream, AVInputFormat *inputFormat,
             const sp<AmFFmpegExtractor> &extractor);
-    int64_t convertStreamTimeToUs(int64_t timeInStreamTime);
+
     void resetBufferGroup(size_t size);
 
     DISALLOW_EVIL_CONSTRUCTORS(AmFFmpegSource);
@@ -874,11 +875,21 @@ status_t AmFFmpegExtractor::feedMore() {
                 av_free_packet(packet);
                 continue;
             }
-            av_dup_packet(packet);
 
-            //parse and store SEI for cc subtitle
-            mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
-            mSources[sourceIdx].mSource->queuePacket(packet);
+            const int64_t ptsFromFFmpeg = (packet->pts == static_cast<int64_t>(AV_NOPTS_VALUE))
+                    ? kUnknownPTS : mSources[sourceIdx].mSource->convertStreamTimeToUs(packet->pts);
+            if (ptsFromFFmpeg >= mFFmpegContext->duration) {
+                delete packet;
+                ret = ERROR_END_OF_STREAM;
+                break;
+            }
+            else {
+                av_dup_packet(packet);
+
+                //parse and store SEI for cc subtitle
+                mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
+                mSources[sourceIdx].mSource->queuePacket(packet);
+            }
         } else {
             delete packet;
             ALOGV("No more packets from ffmpeg.");
