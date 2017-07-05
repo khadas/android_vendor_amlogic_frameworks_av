@@ -202,6 +202,10 @@ private:
     int64_t mVideofirstQueueTimeUs;
     Track mSubtitleTrack;
     Track mTimedTextTrack;
+    //add by amlogic Dolby Vision
+    Track mDVTrack;
+    Vector<sp<ABuffer>> mDVABuffer;
+    Vector<MediaBuffer*> mDVMediaBuffer;
 
     int32_t mFetchSubtitleDataGeneration;
     int32_t mFetchTimedTextDataGeneration;
@@ -294,6 +298,12 @@ private:
     void readBuffer(
             media_track_type trackType,
             int64_t seekTimeUs = -1ll, int64_t *actualTimeUs = NULL, bool formatChange = false, int *readAgain = NULL);
+    sp<ABuffer> mergeElMetataToBl(
+        MediaBuffer* mb,
+        MediaBuffer* second,
+        media_track_type trackType,
+        int64_t /* seekTimeUs */,
+        int64_t *actualTimeUs) ;
 
     void queueDiscontinuityIfNeeded(
             bool seeking, bool formatChange, media_track_type trackType, Track *track);

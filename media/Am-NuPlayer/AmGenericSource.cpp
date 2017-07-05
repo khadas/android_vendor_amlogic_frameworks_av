@@ -32,6 +32,7 @@
 #include <media/stagefright/MediaExtractor.h>
 #include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MetaData.h>
+#include <media/stagefright/AmMetaDataExt.h>
 #include <media/stagefright/Utils.h>
 #include "../../libstagefright/include/DRMExtractor.h"
 #include "../../libstagefright/include/NuCachedSource2.h"
@@ -48,6 +49,10 @@ static int64_t kHighWaterMarkUs = 5000000ll;  // 5secs
 static int64_t kHighWaterMarkRebufferUs = 15000000ll;  // 15secs
 static const ssize_t kLowWaterMarkBytes = 40000;
 static const ssize_t kHighWaterMarkBytes = 200000;
+static FILE* dv_fpbl = NULL;
+static FILE* dv_fpel = NULL;
+static FILE* dv_fpbel = NULL;
+
 
 
 AmNuPlayer::GenericSource::GenericSource(
@@ -85,6 +90,19 @@ AmNuPlayer::GenericSource::GenericSource(
     mAmSubtitle->setSubFlag(false);
     mAmSubtitle->setStartPtsUpdateFlag(false);
     mAmSubtitle->setTypeUpdateFlag(false);
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("media.dv.dumpEs", value, NULL)
+        && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
+            dv_fpbl = fopen("/data/tmp/dv_bl_es.h264", "wb");
+            dv_fpel = fopen("/data/tmp/dv_el_es.h264", "wb");
+            dv_fpbel = fopen("/data/tmp/dv_bel_es.h264", "wb");
+            if (!(dv_fpbl && dv_fpel)) {
+                ALOGE("[%s %d] create dump file failed\n", __FUNCTION__, __LINE__);
+                dv_fpbl = NULL;
+                dv_fpel = NULL;
+                dv_fpbel = NULL;
+            }
+    }
 }
 
 void AmNuPlayer::GenericSource::resetDataSource() {
@@ -98,6 +116,13 @@ void AmNuPlayer::GenericSource::resetDataSource() {
     extractor.clear();
     sp<DataSource> dataSource = mDataSource;
     dataSource.clear();
+    Vector<MediaBuffer*>::iterator it = mDVMediaBuffer.begin();
+    while (it != mDVMediaBuffer.end()) {
+        MediaBuffer *mediabuf = *it;
+        mediabuf->release();
+        ++it;
+    }
+    mDVMediaBuffer.clear();
     ALOGI("[%s %d]", __FUNCTION__, __LINE__);
     mUri.clear();
     mUriHeaders.clear();
@@ -268,6 +293,7 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
     }
 
     for (size_t i = 0; i < numtracks; ++i) {
+        int32_t isDv = false;
         sp<IMediaSource> track = extractor->getTrack(i);
         if (track == NULL) {
             continue;
@@ -306,6 +332,18 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
         } else if (!strncasecmp(mime, "video/", 6)) {
             if (novideo) {
                 continue;
+            }
+             ALOGI("++++++++++++++++++++++++\n");
+            if (meta->findInt32(KKeyIsDV, &isDv)) {
+                ALOGI("is a dolby vision");
+                isDv = true;
+            }
+            if (isDv && mVideoTrack.mSource != NULL) {
+                mDVTrack.mIndex = i;
+                mDVTrack.mSource = track;
+                mDVTrack.mPackets = NULL;
+                ALOGI("set dv source\n");
+                //new AmAnotherPacketSource(mDVTrack.mSource->getFormat());
             }
             if (mVideoTrack.mSource == NULL) {//  default is first
                 mVideoTrack.mIndex = i;
@@ -381,6 +419,11 @@ status_t AmNuPlayer::GenericSource::startSources() {
         return UNKNOWN_ERROR;
     }
 
+    if (mDVTrack.mSource != NULL && mDVTrack.mSource->start() != OK) {
+        ALOGE("failed to start dv track!");
+        return UNKNOWN_ERROR;
+    }
+
     return OK;
 }
 
@@ -429,6 +472,11 @@ AmNuPlayer::GenericSource::~GenericSource() {
     }
     ALOGI(">>>[%s %d]", __FUNCTION__, __LINE__);
     resetDataSource();
+    if (dv_fpbl && dv_fpbl && dv_fpbel) {
+        fclose(dv_fpbl);
+        fclose(dv_fpel);
+        fclose(dv_fpbel);
+    }
 
     delete mAmSubtitle;
 }
@@ -1632,6 +1680,13 @@ void AmNuPlayer::GenericSource::readBuffer(
     if (seekTimeUs >= 0) {
         options.setSeekTo(seekTimeUs, MediaSource::ReadOptions::SEEK_PREVIOUS_SYNC);
         seeking = true;
+        Vector<MediaBuffer*>::iterator it = mDVMediaBuffer.begin();
+        while (it != mDVMediaBuffer.end()) {
+            MediaBuffer *mediabuf = *it;
+            mediabuf->release();
+            ++it;
+        }
+        mDVMediaBuffer.clear();
     }
 
     if (mIsWidevine) {
@@ -1662,11 +1717,15 @@ void AmNuPlayer::GenericSource::readBuffer(
         size_t count = mediaBuffers.size();
         for (; id < count; ++id) {
             int64_t timeUs;
+            int64_t dtsTime;
             MediaBuffer *mbuf = mediaBuffers[id];
             if (!mbuf->meta_data()->findInt64(kKeyTime, &timeUs)) {
                 mbuf->meta_data()->dumpToLog();
                 track->mPackets->signalEOS(ERROR_MALFORMED);
                 break;
+            }
+            if (!mbuf->meta_data()->findInt64(kKeyDTSFromContainer, &dtsTime)) {
+                ALOGE("no dts found\n");
             }
             if (trackType == MEDIA_TRACK_TYPE_AUDIO) {
                 if (mAudiofirstQueueTimeUs < 0) mAudiofirstQueueTimeUs = timeUs;
@@ -1686,10 +1745,56 @@ void AmNuPlayer::GenericSource::readBuffer(
                 mAmSubtitle->sendToSubtitleService(mbuf);
             }
 
-            sp<ABuffer> buffer = mediaBufferToABuffer(
-                    mbuf, trackType, seekTimeUs,
-                    numBuffers == 0 ? actualTimeUs : NULL);
-            track->mPackets->queueAccessUnit(buffer);
+            sp<ABuffer> buffer;
+            if (trackType == MEDIA_TRACK_TYPE_VIDEO && mDVTrack.mSource != NULL) { //merge dv
+                MediaBuffer *tmpbuf;
+                int64_t tmptimeUs, tmptimeUs1;
+                int index = 0;
+                //ALOGI("need to merge dts %lld\n", dtsTime);
+                do {
+                    MediaBuffer *buf, *copybuf;
+                    err = mDVTrack.mSource->read(&buf, NULL);
+                    if (err != OK)
+                        break;
+                    copybuf = new MediaBuffer(buf->range_length());
+                    copybuf->set_range(0, buf->range_length());
+                    buf->meta_data()->findInt64(kKeyDTSFromContainer, &tmptimeUs1);
+                    copybuf->meta_data()->setInt64(kKeyDTSFromContainer, tmptimeUs1);
+                    //ALOGI("read el dts:%lld\n", tmptimeUs1);
+                    memcpy((uint8_t *)copybuf->data() + copybuf->range_offset(),
+                        (const uint8_t *)buf->data() + buf->range_offset(), buf->range_length());
+                    mDVMediaBuffer.push_back(copybuf);
+                    buf->release();
+                    buf = NULL;
+                    if (mDVMediaBuffer.size() > index) {
+                        for (int i = index ; i < mDVMediaBuffer.size(); i++,index++) {
+                            mDVMediaBuffer[i]->meta_data()->findInt64(kKeyDTSFromContainer, &tmptimeUs);
+                            //ALOGI("tmptimeUs %lld timeUs %lld",(long long)tmptimeUs,(long long)timeUs);
+                            if (tmptimeUs == dtsTime) {
+                                tmpbuf = mDVMediaBuffer[i];
+                               // ALOGI("size %d, index=%d\n",mDVMediaBuffer.size(), index);
+                                mDVMediaBuffer.erase(mDVMediaBuffer.begin()+i); //mDVMediaBuffer[i]
+                                break;
+                            }
+                        }
+                    }
+                    if (tmptimeUs != dtsTime)
+                        ALOGI("need to read dv mediabuffer again\n");
+                } while (tmptimeUs != dtsTime);
+                if (err == OK) {
+                    //ALOGI("mergeMediaBufferandtoABuffer %lld\n",(long long)timeUs);
+                    sp<ABuffer> buffer = mergeElMetataToBl(mbuf,tmpbuf, trackType, seekTimeUs,numBuffers == 0 ? actualTimeUs : NULL);
+                    ALOGI("bufflen= %d %d %d\n", mbuf->range_length(), tmpbuf->range_length(), buffer->size());
+                    if (buffer == NULL)
+                        ALOGE("[%s:%d] this should not enter\n", __FUNCTION__, __LINE__);
+                    track->mPackets->queueAccessUnit(buffer);
+                }
+             } else {
+                sp<ABuffer> buffer = mediaBufferToABuffer(
+                        mbuf, trackType, seekTimeUs,
+                        numBuffers == 0 ? actualTimeUs : NULL);
+                track->mPackets->queueAccessUnit(buffer);
+            }
             formatChange = false;
             seeking = false;
             ++numBuffers;
@@ -1718,6 +1823,159 @@ void AmNuPlayer::GenericSource::readBuffer(
             break;
         }
     }
+}
+
+sp<ABuffer> AmNuPlayer::GenericSource::mergeElMetataToBl(
+    MediaBuffer* mb,
+    MediaBuffer* second,
+    media_track_type trackType,
+    int64_t /* seekTimeUs */,
+    int64_t *actualTimeUs) {// modify mediaBufferToABuffer
+        bool audio = trackType == MEDIA_TRACK_TYPE_AUDIO;
+        size_t outLength = mb->range_length() + second->range_length();
+        size_t elLength = second->range_length();
+        int start_code_length = 0;
+        const char dolbyvision_eheader_4[6] = {0x00, 0x00, 0x00, 0x01, 0x7e, 0x01};
+        const char dolbyvision_eheader_3[5] = {0x00, 0x00, 0x01, 0x7e, 0x01};
+#define MAX_EL_UNIT_COUNT (20)
+        if (audio && mAudioIsVorbis) {
+            outLength += sizeof(int32_t);
+        }
+        sp<ABuffer> ab;
+        if (mIsSecure && !audio) {
+             // data is already provided in the buffer
+             ab = new ABuffer(NULL, mb->range_length());
+             mb->add_ref();
+             ab->setMediaBufferBase(mb);
+             ALOGE("%s:%d",__func__,__LINE__);
+         } else {
+             char *pdata = (char *)second->data()  + second->range_offset();
+             if (pdata[0] == 0x00 && pdata[1] == 0x00 && pdata[2] == 0x00 && pdata[3] == 0x01) {
+                start_code_length = 4;
+             } else if (pdata[0] == 0x00 && pdata[1] == 0x00 && pdata[2] == 0x01) {
+                start_code_length = 3;
+             } else {
+                ALOGE("%s:%d should not enter here~\n",__func__,__LINE__);
+             }
+             int startcode_index[MAX_EL_UNIT_COUNT];
+             int el_unitcnt = 0;
+             if (start_code_length == 4) {
+                 for (int i = 0; i < elLength - 6; i++) {
+                    if (pdata[i] == 0x00 && pdata[i+1] == 0x00 && pdata[i+2] == 0x00 && pdata[i+3] == 0x01) {
+                        startcode_index[el_unitcnt] = i;
+                        el_unitcnt ++;
+                        if (pdata[i+4] == 0x7c && pdata[5] == 0x01) {
+                            //ALOGI("[%s:%d] find the metadata!\n",__func__,__LINE__);
+                            break;
+                        }
+                    }
+                 }
+                 //ALOGI("el_unitcnt=%d\n", el_unitcnt);
+                 outLength += (el_unitcnt - 1) * 2 ;
+                 ab = new ABuffer(outLength);
+                 memcpy(ab->data(),
+                    (const uint8_t *)mb->data() + mb->range_offset(),
+                    mb->range_length());
+                 pdata = (char *)second->data()  + second->range_offset();
+                 int buflen = mb->range_length();
+                 //add 0x7e01 el header
+                 for (int j = 0; j < el_unitcnt -1; j ++) {
+                    memcpy(ab->data() + buflen, dolbyvision_eheader_4, 6);
+                    buflen += 6;
+                    pdata += 4;
+                    //ALOGI("startcode_index[j+1]=%d %d\n", startcode_index[j+1], startcode_index[j]);
+                    memcpy(ab->data() + buflen, pdata, startcode_index[j+1] - startcode_index[j] - 4);
+                    buflen += startcode_index[j+1] - startcode_index[j] - 4;
+                    pdata += startcode_index[j+1] - startcode_index[j] - 4;
+                 }
+                 memcpy(ab->data() + buflen, pdata, outLength - buflen);
+             } else if (start_code_length == 3) {
+                 for (int i = 0; i < elLength - 5; i++) {
+                    if (pdata[i] == 0x00 && pdata[i+1] == 0x00 && pdata[i+2] == 0x01) {
+                        startcode_index[el_unitcnt] = i;
+                        el_unitcnt ++;
+                        if (pdata[i+3] == 0x7c && pdata[4] == 0x01) {
+                            ALOGI("[%s:%d] find the metadata!\n",__func__,__LINE__);
+                            break;
+                        }
+                    }
+                 }
+                 //ALOGI("el_unitcnt=%d\n", el_unitcnt);
+                 outLength += (el_unitcnt - 1) * 2 ;
+                 ab = new ABuffer(outLength);
+                 memcpy(ab->data(),
+                    (const uint8_t *)mb->data() + mb->range_offset(),
+                    mb->range_length());
+                 pdata = (char *)second->data()  + second->range_offset();
+                 int buflen = mb->range_length();
+                 //add 0x7e01 el header
+                 for (int j = 0; j < el_unitcnt -1; j ++) {
+                    memcpy(ab->data() + buflen, dolbyvision_eheader_3, 5);
+                    buflen += 5;
+                    pdata += 3;
+                    //ALOGI("startcode_index[j+1]=%d %d\n", startcode_index[j+1], startcode_index[j]);
+                    memcpy(ab->data() + buflen, pdata, startcode_index[j+1] - startcode_index[j] - 3);
+                    buflen += startcode_index[j+1] - startcode_index[j] - 3;
+                    pdata += startcode_index[j+1] - startcode_index[j] - 3;
+                 }
+                 memcpy(ab->data() + buflen, pdata, outLength - buflen);
+             } else {
+                ALOGE("[%s:%d] this should not enter!\n",__func__,__LINE__);
+                return NULL;
+             }
+
+             if (dv_fpbl) {
+                fwrite((const uint8_t *)mb->data() + mb->range_offset(), mb->range_length(), 1, dv_fpbl);
+             }
+             if (dv_fpel) {
+                fwrite((const uint8_t *)second->data()  + second->range_offset(), second->range_length(), 1, dv_fpel);
+             }
+             if (dv_fpbel) {
+                fwrite((const uint8_t *)mb->data() + mb->range_offset(), mb->range_length(), 1, dv_fpbel);
+                fwrite((const uint8_t *)second->data()  + second->range_offset(), second->range_length(), 1, dv_fpbel);
+             }
+         }
+
+         sp<AMessage> meta = ab->meta();
+
+         int64_t timeUs;
+         CHECK(mb->meta_data()->findInt64(kKeyTime, &timeUs));
+         meta->setInt64("timeUs", timeUs);
+
+
+         int64_t durationUs;
+         if (mb->meta_data()->findInt64(kKeyDuration, &durationUs)) {
+            meta->setInt64("durationUs", durationUs);
+         }
+
+         if (trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
+            meta->setInt32("trackIndex", mSubtitleTrack.mIndex);
+         }
+
+         uint32_t dataType; // unused
+         const void *seiData;
+         size_t seiLength;
+         if (mb->meta_data()->findData(kKeySEI, &dataType, &seiData, &seiLength)) {
+            sp<ABuffer> sei = ABuffer::CreateAsCopy(seiData, seiLength);
+            meta->setBuffer("sei", sei);
+         }
+
+         const void *mpegUserDataPointer;
+         size_t mpegUserDataLength;
+         if (mb->meta_data()->findData(
+            kKeyMpegUserData, &dataType, &mpegUserDataPointer, &mpegUserDataLength)) {
+            sp<ABuffer> mpegUserData = ABuffer::CreateAsCopy(mpegUserDataPointer, mpegUserDataLength);
+            meta->setBuffer("mpegUserData", mpegUserData);
+         }
+
+         mb->release();
+         second->release();
+
+         if (actualTimeUs) {
+            *actualTimeUs = timeUs;
+         }
+
+         return ab;
 }
 
 void AmNuPlayer::GenericSource::queueDiscontinuityIfNeeded(

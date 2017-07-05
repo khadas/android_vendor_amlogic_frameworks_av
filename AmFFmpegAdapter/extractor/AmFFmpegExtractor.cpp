@@ -302,6 +302,11 @@ status_t AmFFmpegSource::init(
             mMeta->setInt32(kKeyIsMVC, true);
         }
 
+        if (stream->codec->codec_tag == MKTAG('d', 'v', 'h', 'e') || stream->codec->codec_tag == MKTAG('D', 'O', 'V', 'I') ) {
+            mMeta->setInt32(KKeyIsDV, 1);
+            ALOGI("is dobyvison\n");
+        }
+
         if (stream->nb_side_data) {
             for (int i = 0; i < stream->nb_side_data; i++) {
                 AVPacketSideData sd = stream->side_data[i];
