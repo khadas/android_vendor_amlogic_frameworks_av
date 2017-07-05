@@ -28,9 +28,11 @@ AmPTSPopulator::AmPTSPopulator(uint32_t streamsCount) {
     mStreamsCount = streamsCount;
     mIsPTSReliable = new bool[mStreamsCount];
     mLastPTS = new int64_t[mStreamsCount];
+    mPTSUnRealiableCnt = new int[mStreamsCount];
     for (unsigned int i = 0; i < mStreamsCount; i++) {
         mIsPTSReliable[i] = true;
         mLastPTS[i] = kUnknownPTS;
+        mPTSUnRealiableCnt[i] = 0;
     }
 }
 
@@ -38,6 +40,7 @@ AmPTSPopulator::~AmPTSPopulator() {
     mStreamsCount = 0;
     delete [] mIsPTSReliable;
     delete [] mLastPTS;
+    delete [] mPTSUnRealiableCnt;
 }
 
 int64_t AmPTSPopulator::computePTS(uint32_t streamIndex,
@@ -49,8 +52,11 @@ int64_t AmPTSPopulator::computePTS(uint32_t streamIndex,
             && (pts != kUnknownPTS)
             && (mLastPTS[streamIndex] != kUnknownPTS)
             && (mLastPTS[streamIndex] == pts)) {
-        mIsPTSReliable[streamIndex] = false;
-        mLastPTS[streamIndex] = kUnknownPTS;
+        mPTSUnRealiableCnt[streamIndex] ++;
+        if (mPTSUnRealiableCnt[streamIndex] > 60) {
+            mIsPTSReliable[streamIndex] = false;
+            mLastPTS[streamIndex] = kUnknownPTS;
+        }
     }
 
     if (mIsPTSReliable[streamIndex]) {

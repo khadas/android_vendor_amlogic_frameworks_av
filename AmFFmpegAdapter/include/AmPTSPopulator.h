@@ -34,6 +34,7 @@ private:
     uint32_t mStreamsCount;
     bool *mIsPTSReliable;
     int64_t *mLastPTS;
+    int *mPTSUnRealiableCnt;
 };
 
 }  // namespace android
