@@ -138,7 +138,6 @@ private:
     };
 
     static const int64_t kMinPositionUpdateDelayUs;
-    static const int64_t kSlowSyncStepUs;
 
     sp<MediaPlayerBase::AudioSink> mAudioSink;
     bool mUseVirtualAudioSink;
@@ -177,9 +176,6 @@ private:
     bool mNotifyCompleteVideo;
 
     bool mSyncQueues;
-
-    bool mEnableSlowSync;
-    bool mInSlowSync;
 
     bool mQueueInitial; //in order to  sync when start play
     bool mRenderStarted;
