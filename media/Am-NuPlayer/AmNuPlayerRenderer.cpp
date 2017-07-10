@@ -91,7 +91,6 @@ const AmNuPlayer::Renderer::PcmInfo AmNuPlayer::Renderer::AUDIO_PCMINFO_INITIALI
 
 // static
 const int64_t AmNuPlayer::Renderer::kMinPositionUpdateDelayUs = 100000ll;
-const int64_t AmNuPlayer::Renderer::kSlowSyncStepUs = 300000ll;
 
 #define PTS_LOG_LEVEL(level,formats...)\
     do {\
@@ -132,8 +131,6 @@ AmNuPlayer::Renderer::Renderer(
       mNotifyCompleteAudio(false),
       mNotifyCompleteVideo(false),
       mSyncQueues(false),
-      mEnableSlowSync(false),
-      mInSlowSync(false),
       mQueueInitial(true),
       mRenderStarted(false),
       mPaused(false),
@@ -181,10 +178,6 @@ AmNuPlayer::Renderer::Renderer(
             ALOGW("media.hls.ptsdebug is set to %d\n", ret);
             mDebugLevel = ret;
         }
-    }
-    if (property_get("media.hls.slowsync", value, "1")//default is slowsync
-        && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
-        mEnableSlowSync = true;
     }
 /////////////
 }
@@ -1271,7 +1264,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
         mDrainVideoQueuePending = true;
         return;
     }
-    bool clockInit = false;
+
     bool needRepostDrainVideoQueue = false;
     int64_t delayUs;
     int64_t nowUs = ALooper::GetNowUs();
@@ -1297,7 +1290,6 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
             } else if (mAudioFirstAnchorTimeMediaUs < 0
                 || mMediaClock->getRealTimeFor(mediaTimeUs, &realTimeUs) == OK) {
                 realTimeUs = getRealTimeUs(mediaTimeUs, nowUs);
-                clockInit = true;
             } else if (mediaTimeUs - mAudioFirstAnchorTimeMediaUs >= 0) {
                 needRepostDrainVideoQueue = true;
                 realTimeUs = nowUs;
@@ -1329,17 +1321,8 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
         else
             delayUs = realTimeUs - nowUs;
 
-
-        if (mInSlowSync && clockInit && delayUs < 500000) {
-            mInSlowSync = false;
-            ALOGI("clear slowsync");
-        }
-
         int64_t postDelayUs = -1;
-        if (mInSlowSync) {
-            realTimeUs = nowUs + kSlowSyncStepUs;
-            ALOGI("delayUs %lld realTimeUs %lld",delayUs,realTimeUs);
-        } else if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
+        if (delayUs > 500000 && !mVideoTimeJump && !mAudioTimeJump) {
             postDelayUs = 500000;
             if (mHasAudio && (mLastAudioBufferDrained - entry.mBufferOrdinal) <= 0) {
                 postDelayUs = 10000;
@@ -1593,7 +1576,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         expectTimeUs += mLastAudioUs;
         diff_us = (mediaTimeUs - expectTimeUs);
         abs_diff_us = llabs(diff_us);
-        if (abs_diff_us < 20ll || mLastAudioUs == mediaTimeUs) {
+        if (abs_diff_us < 20ll) {
             mContinuous = true;
         }
         if (diff_us > 3000000ll || diff_us < -500000ll) {
@@ -1735,18 +1718,12 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
             (long long)firstVideoTimeUs,(long long)firstAudioTimeUs,diff / 1E6);
 
         if (diff > 100000ll) {
-            if (mEnableSlowSync && diff < 3000000ll) { // if < 3s start slowsync else drop frame
-                mInSlowSync = true;
-                mQueueInitial = false;
-                ALOGI("video precedes audio %.2f secs, start slowsync!", diff / 1E6);
-            } else {
-                // Audio data starts More than 0.1 secs before video.
-                // Drop some audio.
+            // Audio data starts More than 0.1 secs before video.
+            // Drop some audio.
 
-                (*mAudioQueue.begin()).mNotifyConsumed->post();
-                mAudioQueue.erase(mAudioQueue.begin());
-                return;
-            }
+            (*mAudioQueue.begin()).mNotifyConsumed->post();
+            mAudioQueue.erase(mAudioQueue.begin());
+            return;
         } else if (diff < -100000ll) {
             (*mVideoQueue.begin()).mNotifyConsumed->post();
             mVideoQueue.erase(mVideoQueue.begin());
@@ -1836,9 +1813,7 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
         syncQueuesDone_l();
         clearAnchorTime_l();
     }
-
-    mQueueInitial = true;
-    mInSlowSync = false;
+    //mQueueInitial = true;
     ALOGI("flushing %s", audio ? "audio" : "video");
     if (audio) {
         {
