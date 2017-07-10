@@ -878,7 +878,7 @@ status_t AmFFmpegExtractor::feedMore() {
 
             const int64_t ptsFromFFmpeg = (packet->pts == static_cast<int64_t>(AV_NOPTS_VALUE))
                     ? kUnknownPTS : mSources[sourceIdx].mSource->convertStreamTimeToUs(packet->pts);
-            if (ptsFromFFmpeg >= mFFmpegContext->duration) {
+            if (ptsFromFFmpeg >= mFFmpegContext->duration && mFFmpegContext->duration > 0 && (mInputFormat != av_find_input_format("mpegts"))) {
                 delete packet;
                 ret = ERROR_END_OF_STREAM;
                 break;
