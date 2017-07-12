@@ -1579,7 +1579,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         if (abs_diff_us < 20ll) {
             mContinuous = true;
         }
-        if (diff_us > 3000000ll || diff_us < -500000ll) {
+        if (diff_us > 4500000ll || diff_us < -500000ll) {
             PTS_LOG("audio Discontinue %lld-->%lld us,jump =%lld us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mAudioTimeJump = true;
@@ -1600,7 +1600,7 @@ void AmNuPlayer::Renderer::onQueueBufferDiscontinueCheck(sp<ABuffer> buffer, boo
         if (abs_diff_us < 20ll) {
             mContinuous = true;
         }
-        if (diff_us > 3000000ll || diff_us < -500000ll) {
+        if (diff_us > 4500000ll || diff_us < -500000ll) {
             PTS_LOG("video Discontinue %lld-->%lld us,jump =%lld us",
             expectTimeUs, mediaTimeUs, (mediaTimeUs - expectTimeUs));
             mVideoTimeJump = true;
