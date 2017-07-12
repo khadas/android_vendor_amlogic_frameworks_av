@@ -828,7 +828,12 @@ status_t AmNuPlayer::setParameter(int key , const Parcel &  request ) {
         if (ApreID >= 0 && ApreAssetSel >= 0) {
             dtsm6_set_exchange_info(&ApreID,&ApreAssetSel);
         }
-    }else{
+    } else if (KEY_PARAMETER_AML_PLAYER_SET_TRICKPLAY_MODE == key) {
+        const String16 uri16 = request.readString16();
+        String8 keyStr = String8(uri16);
+        ALOGI("setParameter %d=[%s]\n", key, keyStr.string());
+        // TODO: keyStr will be "fastforward" "fastbackward" or "faststop"
+    }else {
         ALOGI("unsupport setParameter value!=%d\n", key);
         return INVALID_OPERATION;
     }
