@@ -320,8 +320,6 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
         if (inHeader->nFilledLen < 7) {
             ALOGE("Audio data too short to contain even the ADTS header. "
                             "Got %d bytes.", inHeader->nFilledLen);
-            notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
-            mSignalledError = true;
         }
 
         if (portIndex == 0 && mInputBufferCount == 0) {
@@ -337,12 +335,13 @@ void SoftADTS::onQueueFilled(OMX_U32 portIndex) {
                 if ((bread = NeAACDecInit(hDecoder, buffer,
                          bytes_into_buffer, (unsigned long *)(&mNumSampleRate), (unsigned char *)(&mNumChannels))) < 0)
                 {
-                     /* If some error initializing occured, skip the file */
                     ALOGI("Error initializing decoder library.\n");
-                    mSignalledError = true;
-                    notify(OMX_EventError, OMX_ErrorUndefined, bread, NULL);
                     NeAACDecClose(hDecoder);
-                    return;
+                    mInputBufferCount = 0;
+                    info->mOwnedByUs = false;
+                    inQueue.erase(inQueue.begin());
+                    notifyEmptyBufferDone(header);
+                    continue ;
                 }else{
                     ALOGI("NeAACDecInit success!\n");
                     ALOGI("mNumSampleRate=%ld,mNumChannels=%d\n",mNumSampleRate,mNumChannels);
