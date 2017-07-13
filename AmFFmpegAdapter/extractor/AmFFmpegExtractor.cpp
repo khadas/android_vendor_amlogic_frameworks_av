@@ -375,11 +375,19 @@ status_t AmFFmpegSource::init(
         return ERROR_UNSUPPORTED;
     }
 
-    /** SoftAAC2 cannot decode adts extracted from ffmpeg because of no extradata, to use SoftADTS */
-    if(!strcmp(mMime, MEDIA_MIMETYPE_AUDIO_AAC)
-	&& (inputFormat == av_find_input_format("mpegts") ||
-	    inputFormat == av_find_input_format("rm"))) {
-        mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE);
+    /** SoftAAC2 cannot decode adts extracted from ffmpeg because of no extradata, to use SoftADTS
+       and aac profile main also not supported*/
+    if (!strcmp(mMime, MEDIA_MIMETYPE_AUDIO_AAC)) {
+        uint8_t profile = 0, header[2];
+        if (stream->codec->extradata && stream->codec->extradata_size > 0) {
+            memcpy(header,stream->codec->extradata,2);
+            profile = (header[0] >> 3) & 0x1f;
+            ALOGI("aac profile:%d",profile);
+        }
+        if ( profile == 1 || inputFormat == av_find_input_format("mpegts") ||
+            inputFormat == av_find_input_format("rm") ) {
+            mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE);
+        }
     }
 
     mFormatter = StreamFormatter::Create(stream->codec, inputFormat);
