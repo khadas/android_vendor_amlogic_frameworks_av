@@ -118,8 +118,8 @@ private:
     // will be seekable, otherwise the single stream will be seekable.
     bool mSeekable;
 
-    int64_t mLastValidPts;
-    int64_t mLastValidDts;
+    int64_t mLastValidPts = 0;
+    int64_t mLastValidDts = 0;
 
     virtual ~AmFFmpegSource();
     AVPacket *dequeuePacket();
@@ -591,12 +591,16 @@ status_t AmFFmpegSource::read(
 
     mFormatter->getMetaFromES((const uint8_t *)buffer->data(), filledLength, mMeta);
 
-	if(AV_NOPTS_VALUE == packet->pts) {
+    if (AV_NOPTS_VALUE == packet->pts) {
         packet->pts = mLastValidPts;
-        packet->dts = mLastValidDts;
         ALOGV("meet invalid pts, set last pts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
     } else {
         mLastValidPts = packet->pts;
+    }
+    if (AV_NOPTS_VALUE == packet->dts) {
+        packet->dts = mLastValidDts;
+        ALOGV("meet invalid dts, set last ts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
+    } else {
         mLastValidDts = packet->dts;
     }
 
