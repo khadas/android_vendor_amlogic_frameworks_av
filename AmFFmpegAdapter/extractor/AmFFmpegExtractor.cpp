@@ -85,6 +85,7 @@ struct AmFFmpegSource : public MediaSource {
     status_t clearPendingPackets();
 
     sp<StreamFormatter> mFormatter;
+    AVStream *mStream;
 
     int32_t mTimeBase;
     int32_t mNumerator;
@@ -97,9 +98,8 @@ private:
     sp<AmFFmpegExtractor> mExtractor;
     sp<MetaData> mMeta;
     sp<AmPTSPopulator> mPTSPopulator;
-    AVStream *mStream;
-    AVProgram *mProgram;
 
+    AVProgram *mProgram;
     Mutex mPacketQueueLock;
     List<AVPacket *> mPacketQueue;
 
@@ -411,7 +411,6 @@ status_t AmFFmpegSource::start(MetaData *params) {
 
 status_t AmFFmpegSource::stop() {
     Mutex::Autolock autoLock(mLock);
-
     ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     if (!mStarted)
         return OK;
@@ -467,8 +466,8 @@ status_t AmFFmpegSource::read(
 	     int32_t cast_size = castHEVCSpecificData(packet->data, packet->size);
 	     if(cast_size > 0) {
                 av_shrink_packet(packet, cast_size);
-            }
-            ALOGI("Need send hevc specific data first, size : %d", packet->size);
+         }
+        ALOGI("Need send hevc specific data first, size : %d", packet->size);
 	 }
 
         extractor->seekTo(seekTimeUs + mStartTimeUs, seekMode);
@@ -719,11 +718,13 @@ AmFFmpegExtractor::AmFFmpegExtractor(const sp<DataSource> &source)
       mPTSPopulator(NULL),
       mFFmpegContext(NULL),
       mFirstVpts(-1) {
+      mSeek = false;
       ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     init();
 }
 
 AmFFmpegExtractor::~AmFFmpegExtractor() {
+    mSeek = false;
     if (NULL != mFFmpegContext) {
         avformat_close_input(&mFFmpegContext);
         ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
@@ -869,6 +870,7 @@ status_t AmFFmpegExtractor::feedMore() {
     AVPacket *packet = new AVPacket();
     while (true) {
         int res = av_read_frame(mFFmpegContext, packet);
+
         if (res >= 0) {
             uint32_t sourceIdx = kInvalidSourceIdx;
             if (static_cast<size_t>(packet->stream_index) < mStreamIdxToSourceIdx.size()) {
@@ -890,8 +892,16 @@ status_t AmFFmpegExtractor::feedMore() {
                 break;
             }
             else {
+                if (mSeek && mSources[sourceIdx].mSource->mStream  && mSources[sourceIdx].mSource->mStream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+                    if (packet->flags & AV_PKT_FLAG_KEY) {
+                        mSeek = false;
+                    } else {
+                        ALOGI("drop a frame");
+                        av_free_packet(packet);
+                        continue;
+                    }
+                }
                 av_dup_packet(packet);
-
                 //parse and store SEI for cc subtitle
                 mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
                 mSources[sourceIdx].mSource->queuePacket(packet);
@@ -909,6 +919,7 @@ status_t AmFFmpegExtractor::feedMore() {
 void AmFFmpegExtractor::seekTo(
         int64_t seekTimeUs, MediaSource::ReadOptions::SeekMode mode) {
     int seekFlag = 0;
+    mSeek = false;
     switch (mode) {
         case MediaSource::ReadOptions::SEEK_CLOSEST_SYNC:
             ALOGW("Seek to the closest sync frame is not supported. "
@@ -929,6 +940,7 @@ void AmFFmpegExtractor::seekTo(
     mPTSPopulator->reset();
     int64_t seekPosition = convertMicroSecToTimeBase(seekTimeUs);
     Mutex::Autolock autoLock(mLock);
+    mSeek = true;
     if (av_seek_frame(mFFmpegContext, -1 /* default stream */,
             seekPosition, seekFlag) < 0) {
         ALOGE("Failed to seek to %" PRId64 "", seekPosition);
@@ -940,7 +952,7 @@ void AmFFmpegExtractor::seekTo(
             mSources[i].mSource->clearPendingPackets();
         }
     }
-    ALOGV("Seeking to %" PRId64 " was successful.", seekPosition);
+    ALOGI("Seeking to %" PRId64 " was successful. seekflag %d ", seekPosition ,seekFlag);
 }
 
 int32_t AmFFmpegExtractor::getPrimaryStreamIndex(AVFormatContext *context) {

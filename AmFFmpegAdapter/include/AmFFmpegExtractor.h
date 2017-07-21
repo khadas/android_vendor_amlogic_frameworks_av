@@ -94,7 +94,7 @@ private:
     // End of protected variables by mLock.
 
     int64_t mFirstVpts;
-
+    bool mSeek;
     virtual ~AmFFmpegExtractor();
     void init();
 
