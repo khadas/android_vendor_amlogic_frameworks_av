@@ -400,13 +400,16 @@ status_t AmFFmpegSource::init(
             ALOGI("aac profile:%d",profile);
         }
         if ( profile == 1 || inputFormat == av_find_input_format("mpegts") ||
-            inputFormat == av_find_input_format("rm") ) {
+            inputFormat == av_find_input_format("rm") ||
+            inputFormat == av_find_input_format("matroska") ) {
             mMeta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ADTS_PROFILE);
         }
     }
 
     mFormatter = StreamFormatter::Create(stream->codec, inputFormat);
-    mFormatter->addCodecMeta(mMeta);
+    if (stream->codec->codec_id != AV_CODEC_ID_MP3) {
+        mFormatter->addCodecMeta(mMeta);
+    }
     return OK;
 }
 
@@ -606,17 +609,24 @@ status_t AmFFmpegSource::read(
     mFormatter->getMetaFromES((const uint8_t *)buffer->data(), filledLength, mMeta);
 
     if (AV_NOPTS_VALUE == packet->pts) {
-        packet->pts = mLastValidPts;
-        ALOGV("meet invalid pts, set last pts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
-    } else {
-        mLastValidPts = packet->pts;
+        if (AV_NOPTS_VALUE == packet->dts) {
+            packet->pts = mLastValidPts;
+            packet->dts = mLastValidDts;
+            ALOGV("meet invalid pts & dts, set LastValid pts & dts to current frame pts:%" PRId64 " dts:%" PRId64 "\n", mLastValidPts, mLastValidDts);
+        }
+        else {
+            packet->pts = packet->dts;
+            ALOGV("meet invalid pts, set current dts to current frame pts:%" PRId64 " dts:%" PRId64 "\n", mLastValidPts, mLastValidDts);
+        }
     }
-    if (AV_NOPTS_VALUE == packet->dts) {
-        packet->dts = mLastValidDts;
-        ALOGV("meet invalid dts, set last ts to current frame pts:%" PRId64 " dts:%" PRId64 "", mLastValidPts, mLastValidDts);
-    } else {
-        mLastValidDts = packet->dts;
+    else {
+        if (AV_NOPTS_VALUE == packet->dts) {
+            packet->dts = packet->pts;
+            ALOGV("meet invalid dts, set current pts to current frame pts:%" PRId64 " dts:%" PRId64 "\n", mLastValidPts, mLastValidDts);
+        }
     }
+    mLastValidPts = packet->pts;
+    mLastValidDts = packet->dts;
 
     buffer->set_range(0, filledLength);
     const bool isKeyFrame = (packet->flags & AV_PKT_FLAG_KEY) != 0;
