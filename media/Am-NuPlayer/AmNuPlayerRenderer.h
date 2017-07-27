@@ -198,6 +198,9 @@ private:
     bool mAudioTornDown;
     audio_offload_info_t mCurrentOffloadInfo;
 
+    int64_t mFirstVideoRealTime;
+    int64_t mVideoRealtime;
+
     struct PcmInfo {
         audio_channel_mask_t mChannelMask;
         audio_output_flags_t mFlags;

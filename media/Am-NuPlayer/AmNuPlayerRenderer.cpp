@@ -172,6 +172,8 @@ AmNuPlayer::Renderer::Renderer(
     mDebugLevel = 0;
     mLastInfoTime = 0;
     mVideoFrameOutNum = 0;
+    mFirstVideoRealTime = 0;
+    mVideoRealtime = 0;
     int ret;
     if (property_get("media.hls.ptsdebug", value, NULL) > 0) {
         if ((sscanf(value, "%d", &ret)) > 0) {
@@ -1283,7 +1285,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
                     mMediaClock->updateAnchor(mediaTimeUs, nowUs, mediaTimeUs);
                     mAnchorTimeMediaUs = mediaTimeUs;
                 }
-                realTimeUs = nowUs;
+                realTimeUs = nowUs + 180000;//add the average realtime diff before audio init ok, whick will out video smoothly(set omx_pts) befor audio init ok
             } else if (!mVideoSampleReceived) {
                 // Always render the first video frame.
                 realTimeUs = nowUs;
@@ -1294,7 +1296,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
                 needRepostDrainVideoQueue = true;
                 realTimeUs = nowUs;
             } else {
-                if (mHasAudio) {// if realtime uninitialized will retry in 10ms
+                if (/*mHasAudio*/0) {// if realtime uninitialized will retry in 10ms
                     msg->setWhat(kWhatPostDrainVideoQueue);
                     msg->post(10000);
                     mDrainVideoQueuePending = true;
@@ -1335,7 +1337,7 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
             postDelayUs /= mPlaybackRate;
         }
 
-        if (postDelayUs >= 0) {
+        /*if (postDelayUs >= 0) {
             msg->setWhat(kWhatPostDrainVideoQueue);
             msg->post(postDelayUs);
             mVideoScheduler->restart();
@@ -1343,7 +1345,26 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
                     (int)(delayUs / 1000), (int)(postDelayUs / 1000));
             mDrainVideoQueuePending = true;
             return;
-        }
+        }*/
+
+        if (mNextAudioClockUpdateTimeUs < 0) {
+            if (!mFirstVideoRealTime) {
+                mFirstVideoRealTime = realTimeUs;
+                mVideoRealtime = mFirstVideoRealTime;//record the real time for the first video, the next will update based the first realtime
+            } else {
+                if (mLastestVideoFrameIntervalUs > 0)
+                    mVideoRealtime += mLastestVideoFrameIntervalUs;
+                else
+                    mVideoRealtime += 16666;//first use 60fps instead, next will use mLastestVideoFrameIntervalUs(the real differ)
+            }
+            entry.mBuffer->meta()->setInt64("RealTimeUs", mVideoRealtime);
+            ALOGI("realtime=%lld, mLastestVideoFrameIntervalUs=%lld\n",
+                mVideoRealtime, mLastestVideoFrameIntervalUs);
+            msg->post(0);
+            mDrainVideoQueuePending = true;
+            return;
+       }
+
     }
     if (mVideoTimeJump || mAudioTimeJump ) {
         if (mSmootOutNum == 0)
