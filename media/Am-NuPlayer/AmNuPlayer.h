@@ -221,6 +221,7 @@ private:
 
     bool mEnableFrameRate;
     float mFrameRate;
+    int32_t mDecodecParam;
     int32_t mWaitSeconds;
 
     int64_t mStartTimeUs;

@@ -368,6 +368,14 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                     //ALOGI("send a frame-rate %.2f",frameRate);
                     msg->post();
                 }
+                int32_t decodec_param;
+                if (meta->findInt32('depa',&decodec_param)) {
+                    sp<AMessage> msg = dupNotify();
+                    msg->setInt32("what", kWhatDecodeParam);
+                    msg->setInt32("decodc-param", decodec_param);
+                    //ALOGI("send a decodc-param %d",decodec_param);
+                    msg->post();
+                }
             }
         } else if (!strncasecmp(mime, "subtitle/", 9) || !strncasecmp(mime, "text/", 5)) {
             if (nosubtitle) {
