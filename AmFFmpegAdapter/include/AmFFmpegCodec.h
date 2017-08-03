@@ -35,7 +35,7 @@ typedef struct VIDEO_FRAME_WRAPPER {
 }VIDEO_FRAME_WRAPPER_T;
 
 typedef struct AUDIO_FRAME_WRAPPER{
-    uint8_t data[8192];
+    uint8_t data[512*1024];
     unsigned int datasize;
     int samplerate;
     int channels;

@@ -113,6 +113,7 @@ static const KeyMap kKeyMap[] = {
     { MEDIA_MIMETYPE_TEXT_3GPP, AV_CODEC_ID_MOV_TEXT },
     { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_COOK },
     { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_FLAC },
+    { MEDIA_MIMETYPE_AUDIO_FFMPEG, AV_CODEC_ID_AAC_LATM },
 
     //add for subtitle
     { "subtitle/dvd",           AV_CODEC_ID_DVD_SUBTITLE },

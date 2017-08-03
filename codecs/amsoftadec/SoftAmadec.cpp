@@ -192,11 +192,14 @@ OMX_ERRORTYPE SoftAmadec::internalGetParameter(
         pcmParams->eChannelMapping[3] = OMX_AUDIO_ChannelLFE;
         pcmParams->eChannelMapping[4] = OMX_AUDIO_ChannelLS;
         pcmParams->eChannelMapping[5] = OMX_AUDIO_ChannelRS;
-
-
-        pcmParams->nChannels = mAInfo->channels;
-        pcmParams->nSamplingRate = mAInfo->samplerate;
-
+        if (mAInfo->channels > 0 && mAInfo->channels <=8 )
+            pcmParams->nChannels = mAInfo->channels;
+        else
+            pcmParams->nChannels = 2;
+        if (mAInfo->samplerate > 0 && mAInfo->samplerate <= 192000)
+            pcmParams->nSamplingRate = mAInfo->samplerate;
+         else
+            pcmParams->nSamplingRate = 48000;
 
         return OMX_ErrorNone;
     }
@@ -315,18 +318,24 @@ void SoftAmadec::onQueueFilled(OMX_U32 portIndex) {
             }
             pkt.data +=len;
             pkt.size -=len;
-            if (mAInfo->samplerate != frame->samplerate ||mAInfo->channels != frame->channels) {
-                mAInfo->samplerate = frame->samplerate;
-                mAInfo->channels = frame->channels;
-                notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
-                mOutputPortSettingsChange = AWAITING_DISABLED;
-                free(frame);
-                return;
+            if (frame->channels > 0 && frame->channels <= 8 && frame->samplerate > 0 && frame->samplerate <=192000) {
+                if (mAInfo->samplerate != frame->samplerate ||mAInfo->channels != frame->channels) {
+                    mAInfo->samplerate = frame->samplerate;
+                    mAInfo->channels = frame->channels;
+                    notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
+                    mOutputPortSettingsChange = AWAITING_DISABLED;
+                    free(frame);
+                    return;
+                }
             }
             dst = outHeader->pBuffer+outHeader->nFilledLen;
+            if (frame->datasize > 512 * 1024) {
+                frame->datasize = 512 * 1024;
+                ALOGI("framesize %d exceed the bufsize 512* 1024",frame->datasize);
+            }
             memcpy((char *)dst, (char *)frame->data, frame->datasize);
             outHeader->nFilledLen += frame->datasize;
-        } while(mAInfo->codec_id==AV_CODEC_ID_WMAVOICE && pkt.size>0);
+        } while( pkt.size>0);
 #if 0
         FILE *fp = NULL;
         fp = fopen("/data/pcm", "ab+");
