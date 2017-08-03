@@ -2404,6 +2404,10 @@ status_t AmNuPlayer::instantiateDecoder(
 
         format->setFloat("frame-rate", mFrameRate);
         ALOGI("set frame-rate %.2f",mFrameRate);
+
+        if (mDecodecParam > 0)
+            format->setInt32("decodec-param",mDecodecParam); // 0x40
+
         *decoder = new Decoder(
                 notify, mSource, mPID, mRenderer, mSurface, mCCDecoder);
         mRenderer->setHasMedia(audio);
@@ -3143,6 +3147,11 @@ void AmNuPlayer::onSourceNotify(const sp<AMessage> &msg) {
         {
             CHECK(msg->findFloat("frame-rate", &mFrameRate));
             //ALOGI("frame-rate %.2f",mFrameRate);
+            break;
+        }
+        case Source::kWhatDecodeParam:
+        {
+            CHECK(msg->findInt32("decodc-param", &mDecodecParam));
             break;
         }
 

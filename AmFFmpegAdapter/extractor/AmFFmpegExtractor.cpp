@@ -262,7 +262,17 @@ status_t AmFFmpegSource::init(
         if (rationalFramerate != NULL) {
             float framerate = (rationalFramerate->num*1.0)/rationalFramerate->den;
             mMeta->setFloat('frRa', framerate);
-            ALOGI("set frame-rate %.2f   \n", framerate);
+            ALOGI("set frame-rate %.2f   rationalFramerate num %d den %d\n", framerate,rationalFramerate->num,rationalFramerate->den);
+        }
+        if (inputFormat == av_find_input_format("webm")) {//set decodec param
+            if (stream->codec->codec_id == AV_CODEC_ID_MPEG4 || stream->codec->codec_id == AV_CODEC_ID_VP9
+                || (stream->codec->codec_id == AV_CODEC_ID_H264 && rationalFramerate != NULL &&
+                (!av_cmp_q((AVRational){ 2997, 125 },*rationalFramerate) ||
+                !av_cmp_q((AVRational){ 24000, 1001 },*rationalFramerate) ) ) ) {
+                //AVRational  = (AVRational){ 2997, 125 };  /* default: 23.976 fps */
+                //{fps=24000/1001}  29.97fps
+                mMeta->setInt32('depa', 0x40);//player_priv.h UNSTABLE_PTS
+            }
         }
         if (stream->codec->extradata_size > 0) {
             mMeta->setData(kKeyExtraData, 0, (char*)stream->codec->extradata, stream->codec->extradata_size);
