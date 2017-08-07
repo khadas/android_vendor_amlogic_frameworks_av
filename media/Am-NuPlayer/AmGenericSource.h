@@ -248,6 +248,7 @@ private:
     sp<ALooper> mBufferingMonitorLooper;
 
     bool mIsUdp;
+    bool mDvSeekDisable;
 
     void resetDataSource();
 

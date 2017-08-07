@@ -80,6 +80,7 @@ AmNuPlayer::GenericSource::GenericSource(
       mBitrate(-1ll),
       mBuffering(false),
       mNotifynotifyPrepared(false),
+      mDvSeekDisable(true),
       mBufferingAnchorUs(-1ll),
       mPendingReadBufferTypes(0) {
     mBufferingMonitor = new BufferingMonitor(notify);
@@ -102,6 +103,10 @@ AmNuPlayer::GenericSource::GenericSource(
                 dv_fpel = NULL;
                 dv_fpbel = NULL;
             }
+    }
+    if (property_get("media.dv.seekable", value, NULL)
+        && (!strcmp(value, "1") || !strcasecmp(value, "true"))) {
+        mDvSeekDisable = false;
     }
 }
 
@@ -1686,15 +1691,22 @@ void AmNuPlayer::GenericSource::readBuffer(
     bool seeking = false;
 
     if (seekTimeUs >= 0) {
-        options.setSeekTo(seekTimeUs, MediaSource::ReadOptions::SEEK_PREVIOUS_SYNC);
-        seeking = true;
-        Vector<MediaBuffer*>::iterator it = mDVMediaBuffer.begin();
-        while (it != mDVMediaBuffer.end()) {
-            MediaBuffer *mediabuf = *it;
-            mediabuf->release();
-            ++it;
+        if (mDVTrack.mSource != NULL && mDvSeekDisable) {
+            seeking = false;
+        } else if (mDVTrack.mSource != NULL) {
+            options.setSeekTo(seekTimeUs, MediaSource::ReadOptions::SEEK_PREVIOUS_SYNC);
+            seeking = true;
+            Vector<MediaBuffer*>::iterator it = mDVMediaBuffer.begin();
+            while (it != mDVMediaBuffer.end()) {
+                MediaBuffer *mediabuf = *it;
+                mediabuf->release();
+                ++it;
+            }
+            mDVMediaBuffer.clear();
+        } else {
+            options.setSeekTo(seekTimeUs, MediaSource::ReadOptions::SEEK_PREVIOUS_SYNC);
+            seeking = true;
         }
-        mDVMediaBuffer.clear();
     }
 
     if (mIsWidevine) {
