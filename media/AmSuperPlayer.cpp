@@ -981,7 +981,7 @@ Retry:
 	    mTypeReady = true;
 	}
 
-	if(!mTypeReady && p->playerType()==AMLOGIC_PLAYER){
+	if (p->playerType() == AMLOGIC_PLAYER) {
 		AmlogicPlayer* amplayer;
 		bool FileTypeReady=false;
 		amplayer=(AmlogicPlayer *)p.get();
