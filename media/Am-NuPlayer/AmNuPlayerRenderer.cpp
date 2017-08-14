@@ -851,8 +851,6 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
 
     size_t sizeCopied = 0;
     bool firstEntry = true;
-    int frame_mul = 1;
-    int pts_div = 1;
     int64_t mediaTimeUs;
     while (sizeCopied < size && !mAudioQueue.empty() && !mQueueInitial) {
         if (entry == NULL) {
@@ -882,7 +880,6 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
         size_t datalength = entry->mBuffer->size();
         if (copy > 8 && mCurrentPcmInfo.mFormat != AUDIO_FORMAT_PCM_16_BIT) {
             unsigned char *pbuf = entry->mBuffer->data() /*+ entry->mOffset*/;
-            frame_mul = 4;
             memcpy(&outlen_pcm,pbuf,4);
             if (outlen_pcm + 8 <= datalength)
                 memcpy(&outlen_raw,pbuf+4+outlen_pcm,4);
@@ -932,12 +929,11 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
         notifyIfMediaRenderingStarted_l();
 
     }
-    if ( mCurrentPcmInfo.mFormat == AUDIO_FORMAT_E_AC3 )
-        pts_div = 4;
+
     if (mAudioFirstAnchorTimeMediaUs >= 0) {
         int64_t nowUs = ALooper::GetNowUs();
         int64_t nowMediaUs =
-            mAudioFirstAnchorTimeMediaUs + mAudioSink->getPlayedOutDurationUs(nowUs)/pts_div;
+            mAudioFirstAnchorTimeMediaUs + mAudioSink->getPlayedOutDurationUs(nowUs);
         // we don't know how much data we are queueing for offloaded tracks.
         mMediaClock->updateAnchor(nowMediaUs, nowUs, INT64_MAX);
         mAnchorTimeMediaUs = mediaTimeUs;
@@ -947,8 +943,7 @@ size_t AmNuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
     // there is no EVENT_STREAM_END notification. The frames written gives
     // an estimate on the pending played out duration.
     if (!offloadingAudio()) {
-        //as audiotrack directoutput framesize is 1 ,and audio sync should use pcm framesize 4.
-        mNumFramesWritten += sizeCopied /  (frame_mul * mAudioSink->frameSize());
+        mNumFramesWritten += sizeCopied / mAudioSink->frameSize();
     }
 
     if (hasEOS) {
@@ -2244,16 +2239,18 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
         if ( user_raw_enable ) {
             pcmFlags |= (AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO | AUDIO_OUTPUT_FLAG_DIRECT);
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())) {
-                aformat = AUDIO_FORMAT_DTS;
+                aformat = AUDIO_FORMAT_IEC61937;
                 //for high samprate ma stream, raw output raw samplerate will be half
                 if (sampleRate == 96000 || sampleRate == 88200)
                      sampleRate = sampleRate / 2;
             }
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_AC3, mime.c_str()) ||
                 (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) && digital_raw == 1))
-                 aformat = AUDIO_FORMAT_AC3;
-            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) && digital_raw == 2)
-                 aformat = AUDIO_FORMAT_E_AC3;
+                 aformat = AUDIO_FORMAT_IEC61937;
+            if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_EAC3, mime.c_str()) && digital_raw == 2) {
+                 aformat = AUDIO_FORMAT_IEC61937;
+                 sampleRate = sampleRate * 4;
+            }
             if (!strcasecmp(MEDIA_MIMETYPE_AUDIO_TRUEHD, mime.c_str()))
                  aformat = AUDIO_FORMAT_TRUEHD;
         }else if((sampleRate == 96000 || sampleRate == 88200) && !strcasecmp(MEDIA_MIMETYPE_AUDIO_DTSHD, mime.c_str())){
@@ -2289,8 +2286,9 @@ status_t AmNuPlayer::Renderer::onOpenAudioSink(
 
         // Compute the desired buffer size.
         // For callback mode, the amount of time before wakeup is about half the buffer size.
-        const uint32_t frameCount =
-                (unsigned long long)sampleRate * getAudioSinkPcmMsSetting() / 1000;
+        //for passthrough frameCount need to be decided by hal buf size
+        const uint32_t frameCount = (aformat!= AUDIO_FORMAT_PCM_16_BIT) ? 0:
+            (unsigned long long)sampleRate * getAudioSinkPcmMsSetting()  / 1000;
 
         // The doNotReconnect means AudioSink will signal back and let AmNuPlayer to re-construct
         // AudioSink. We don't want this when there's video because it will cause a video seek to
