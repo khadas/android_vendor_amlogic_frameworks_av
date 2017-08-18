@@ -1526,6 +1526,9 @@ sp<ABuffer> AmNuPlayer::GenericSource::mediaBufferToABuffer(
     if (mb->meta_data()->findInt64(kKeyDuration, &durationUs)) {
         meta->setInt64("durationUs", durationUs);
     }
+    else {
+        meta->setInt64("durationUs", 0ll);
+    }
 
     if (trackType == MEDIA_TRACK_TYPE_SUBTITLE) {
         meta->setInt32("trackIndex", mSubtitleTrack.mIndex);
