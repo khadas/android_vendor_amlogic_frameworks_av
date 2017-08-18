@@ -947,7 +947,7 @@ void AmFFmpegExtractor::seekTo(
                     "Trying to seek to the previous sync frame...");
             // Fall-through
         case MediaSource::ReadOptions::SEEK_PREVIOUS_SYNC:
-            seekFlag |= AVSEEK_FLAG_BACKWARD;
+            seekFlag |= AVSEEK_FLAG_FRAME;//AVSEEK_FLAG_BACKWARD;
             break;
         case MediaSource::ReadOptions::SEEK_NEXT_SYNC:
             break;
