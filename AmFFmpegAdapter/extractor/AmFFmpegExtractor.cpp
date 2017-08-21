@@ -90,6 +90,7 @@ struct AmFFmpegSource : public MediaSource {
     int32_t mTimeBase;
     int32_t mNumerator;
     int32_t mDenominator;
+    int mReadPktCnt;
     int64_t convertStreamTimeToUs(int64_t timeInStreamTime);
 
 private:
@@ -154,6 +155,7 @@ AmFFmpegSource::AmFFmpegSource(
       mTimeBase(0),
       mNumerator(0),
       mDenominator(0),
+      mReadPktCnt(0),
       mSeekable(seekable) {
       ALOGI(" [%s %d]", __FUNCTION__, __LINE__);
     init(stream, inputFormat, extractor);
@@ -896,22 +898,28 @@ void AmFFmpegExtractor::init() {
 }
 
 status_t AmFFmpegExtractor::feedMore() {
+#define MAX_TRY_READ_COUNT  (50)
     Mutex::Autolock autoLock(mLock);
     status_t ret = OK;
     AVPacket *packet = new AVPacket();
     while (true) {
         int res = av_read_frame(mFFmpegContext, packet);
 
+        uint32_t sourceIdx = kInvalidSourceIdx;
+        if (static_cast<size_t>(packet->stream_index) < mStreamIdxToSourceIdx.size()) {
+            sourceIdx = mStreamIdxToSourceIdx[packet->stream_index];
+        }
+        if (sourceIdx == kInvalidSourceIdx) {
+            av_free_packet(packet);
+            ALOGI("continue to read a frame1\n");
+            continue;
+        }
         if (res >= 0) {
-            uint32_t sourceIdx = kInvalidSourceIdx;
-            if (static_cast<size_t>(packet->stream_index) < mStreamIdxToSourceIdx.size()) {
-                sourceIdx = mStreamIdxToSourceIdx[packet->stream_index];
-            }
-            if (sourceIdx == kInvalidSourceIdx
-                    || !mSources[sourceIdx].mIsActive
+            if (!mSources[sourceIdx].mIsActive
                     || packet->size <= 0
                     || (packet->pts < 0 &&  packet->pts != AV_NOPTS_VALUE)) {
                 av_free_packet(packet);
+                ALOGI("continue to read a frame2\n");
                 continue;
             }
 
@@ -920,6 +928,7 @@ status_t AmFFmpegExtractor::feedMore() {
             if (ptsFromFFmpeg >= mFFmpegContext->duration && mFFmpegContext->duration > 0 && (mInputFormat != av_find_input_format("mpegts"))) {
                 delete packet;
                 ret = ERROR_END_OF_STREAM;
+                ALOGI("end of stream\n");
                 break;
             }
             else {
@@ -936,11 +945,15 @@ status_t AmFFmpegExtractor::feedMore() {
                 //parse and store SEI for cc subtitle
                 mSources[sourceIdx].mSource->mFormatter->checkNAL(packet->data, packet->size);
                 mSources[sourceIdx].mSource->queuePacket(packet);
+                mSources[sourceIdx].mSource->mReadPktCnt = 0;
             }
         } else {
             delete packet;
-            ALOGV("No more packets from ffmpeg.");
-            ret = ERROR_END_OF_STREAM;
+            mSources[sourceIdx].mSource->mReadPktCnt++;
+            if (mSources[sourceIdx].mSource->mReadPktCnt > MAX_TRY_READ_COUNT) {
+                ret = ERROR_END_OF_STREAM;
+                ALOGI("No more packets from ffmpeg.");
+            }
         }
         break;
     }
