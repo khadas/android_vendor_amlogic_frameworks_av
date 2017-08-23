@@ -205,6 +205,7 @@ AmNuPlayer::AmNuPlayer(pid_t pid)
       mVideoScalingMode(NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW),
       mEnableFrameRate(false),
       mFrameRate(-1.0),
+      mDecodecParam(-1),
       mWaitSeconds(10),
       mPlaybackSettings(AUDIO_PLAYBACK_RATE_DEFAULT),
       mVideoFpsHint(-1.f),
