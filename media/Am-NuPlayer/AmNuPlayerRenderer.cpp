@@ -1834,7 +1834,8 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
         syncQueuesDone_l();
         clearAnchorTime_l();
     }
-    //mQueueInitial = true;
+    mQueueInitial = true;
+    mFirstVideoRealTime = 0;
     ALOGI("flushing %s", audio ? "audio" : "video");
     if (audio) {
         {
