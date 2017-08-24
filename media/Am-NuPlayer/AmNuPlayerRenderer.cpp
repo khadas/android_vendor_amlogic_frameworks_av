@@ -1428,6 +1428,7 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
         return;
     }
 
+    mVideoFrameOutNum ++;
     int64_t nowUs = ALooper::GetNowUs();
     int64_t realTimeUs;
     int64_t mediaTimeUs = -1;
@@ -1443,15 +1444,23 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
     }
 
     bool tooLate = false;
-
+    bool render = true;
     if (!mPaused) {
         mLastVideoDrainRealTimeUs = nowUs;
         setVideoLateByUs(nowUs - realTimeUs);
         tooLate = (mVideoLateByUs > 40000);
+        render = !tooLate;
 
         if (tooLate) {
             ALOGV("video late by %lld us (%.2f secs)",
                  (long long)mVideoLateByUs, mVideoLateByUs / 1E6);
+            if (mVideoLateByUs < 1000000) {
+                render = mVideoFrameOutNum & 1;
+            } else if (mVideoLateByUs < 2000000) {
+                render = ((mVideoFrameOutNum & 3) == 1);
+            } else {
+                render = ((mVideoFrameOutNum & 7) == 1);
+            }
         } else {
             int64_t mediaUs = 0;
             mMediaClock->getMediaTime(realTimeUs, &mediaUs);
@@ -1484,7 +1493,7 @@ void AmNuPlayer::Renderer::onDrainVideoQueue() {
     }
 
     entry->mNotifyConsumed->setInt64("timestampNs", realTimeUs * 1000ll);
-    entry->mNotifyConsumed->setInt32("render", !tooLate);
+    entry->mNotifyConsumed->setInt32("render", render);
     entry->mNotifyConsumed->post();
     mVideoQueue.erase(mVideoQueue.begin());
     entry = NULL;
