@@ -128,6 +128,7 @@ AmNuPlayer::Renderer::Renderer(
       mHasAudio(false),
       mHasVideo(false),
       mAudioEOS(false),
+      misTrickmode(false),
       mNotifyCompleteAudio(false),
       mNotifyCompleteVideo(false),
       mSyncQueues(false),
@@ -1808,6 +1809,14 @@ void AmNuPlayer::Renderer::onQueueEOS(const sp<AMessage> &msg) {
     }
 }
 
+void AmNuPlayer::Renderer::setplaystate(String8 keyStr) {
+    ALOGI("setplaystate [%s]\n", keyStr.string());
+    if (!strcmp("trick_mode:fastforward", keyStr.string()) || !strcmp("trick_mode:fastbackward", keyStr.string()))
+        misTrickmode = true;
+    if (!strcmp("trick_mode:faststop", keyStr.string()))
+        misTrickmode = false;
+}
+
 void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
     int32_t audio, notifyComplete;
     CHECK(msg->findInt32("audio", &audio));
@@ -1834,8 +1843,13 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
         syncQueuesDone_l();
         clearAnchorTime_l();
     }
-    mQueueInitial = true;
-    mFirstVideoRealTime = 0;
+
+	if (!misTrickmode) {
+        ALOGI("misTrickmode %d", misTrickmode);
+        mQueueInitial = true;
+        mFirstVideoRealTime = 0;
+    }
+
     ALOGI("flushing %s", audio ? "audio" : "video");
     if (audio) {
         {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "NU-AmNuPlayer"
 #include <utils/Log.h>
 
@@ -832,6 +832,8 @@ status_t AmNuPlayer::setParameter(int key , const Parcel &  request ) {
         const String16 uri16 = request.readString16();
         String8 keyStr = String8(uri16);
         ALOGI("setParameter %d=[%s]\n", key, keyStr.string());
+        if (mRenderer != NULL)
+            mRenderer->setplaystate(keyStr);
         // TODO: keyStr will be "fastforward" "fastbackward" or "faststop"
     }else {
         ALOGI("unsupport setParameter value!=%d\n", key);
