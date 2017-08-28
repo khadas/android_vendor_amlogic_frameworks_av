@@ -91,6 +91,7 @@ private:
     Vector<SourceInfo> mSources;
     AVFormatContext *mFFmpegContext;
     Vector<uint32_t> mStreamIdxToSourceIdx;
+    int mReadPktCnt;
     // End of protected variables by mLock.
 
     int64_t mFirstVpts;
