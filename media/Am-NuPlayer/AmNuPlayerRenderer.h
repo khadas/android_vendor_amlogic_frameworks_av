@@ -67,6 +67,7 @@ struct AmNuPlayer::Renderer : public AHandler {
 
     void pause();
     void resume();
+    void setplaystate(String8 keyStr);
 
     void setVideoFrameRate(float fps);
 
@@ -171,6 +172,7 @@ private:
     bool mHasAudio;
     bool mHasVideo;
     bool mAudioEOS;
+    bool misTrickmode;
 
     bool mNotifyCompleteAudio;
     bool mNotifyCompleteVideo;
