@@ -253,6 +253,7 @@ status_t AmFFmpegSource::init(
         mMeta->setInt32(kKeyWidth, stream->codec->width);
         mMeta->setInt32(kKeyHeight, stream->codec->height);
         mMeta->setInt32(kKeyCodecID, stream->codec->codec_id);
+        mMeta->setInt32(kKeyBitRate, stream->codec->bit_rate);
         // NOTE: this framerate value is just a guess from FFmpeg. Decoder
         //       should get and use the real framerate from decoding.
         AVRational *rationalFramerate = NULL;
@@ -408,7 +409,24 @@ status_t AmFFmpegSource::init(
     }
 
     mFormatter = StreamFormatter::Create(stream->codec, inputFormat);
-    mFormatter->addCodecMeta(mMeta);
+    if (stream->codec->codec_id != AV_CODEC_ID_MP3) {
+        mFormatter->addCodecMeta(mMeta);
+    }
+
+    //wxl add for debug info apk 20170829
+    switch (stream->codec->codec_type) {
+        case AVMEDIA_TYPE_AUDIO:
+            mExtractor->prepareAudioInfo(mMeta);
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            mExtractor->prepareVideoInfo(mMeta);
+            break;
+        case AVMEDIA_TYPE_SUBTITLE:
+            mExtractor->prepareSubtitleInfo(mMeta);
+            break;
+        default:
+            break;
+    }
     return OK;
 }
 
@@ -436,6 +454,7 @@ status_t AmFFmpegSource::stop() {
     mStarted = false;
     clearPendingPackets();
 
+    mExtractor->resetInfo();
     return OK;
 }
 
@@ -801,6 +820,7 @@ void AmFFmpegExtractor::init() {
     }
     av_log_set_level(logLevel);
 
+    resetInfo();
     mSourceAdapter = new AmFFmpegByteIOAdapter();
     mSourceAdapter->init(mDataSource);
 
@@ -1021,6 +1041,89 @@ void AmFFmpegExtractor::release(AmFFmpegSource* source){
         mSources.erase(mSources.begin());
     }
 
+}
+
+void AmFFmpegExtractor::prepareAudioInfo(sp<MetaData> meta) {
+    //codec
+    const char *mimestr;
+    CHECK(meta->findCString(kKeyMIMEType, &mimestr));
+    property_set("media.debuginfo.acodec", mimestr);
+
+    //hardware accelerated
+    property_set("media.debuginfo.ahwaccelerated", "NO");
+
+    //bitrate
+    int32_t bitrate;
+    char bitratestr[16] = {0};
+    CHECK(meta->findInt32(kKeyBitRate, &bitrate));
+    sprintf(bitratestr, "%d", bitrate);
+    property_set("media.debuginfo.abitrate", bitratestr);
+
+    //secure
+    property_set("media.debuginfo.asecure", "NO");
+}
+
+void AmFFmpegExtractor::prepareVideoInfo(sp<MetaData> meta) {
+    //codec
+    const char *mimestr;
+    CHECK(meta->findCString(kKeyMIMEType, &mimestr));
+    property_set("media.debuginfo.vcodec", mimestr);
+
+    //bitrate
+    int32_t bitrate;
+    char bitratestr[16] = {0};
+    CHECK(meta->findInt32(kKeyBitRate, &bitrate));
+    sprintf(bitratestr, "%d", bitrate);
+    property_set("media.debuginfo.vbitrate", bitratestr);
+
+    //width &height
+    int32_t width;
+    int32_t height;
+    char widthstr[16] = {0};
+    char heightstr[16] = {0};
+    char resolutionstr[32] = {0};
+    CHECK(meta->findInt32(kKeyWidth, &width));
+    CHECK(meta->findInt32(kKeyHeight, &height));
+    sprintf(widthstr, "%d", width);
+    sprintf(heightstr, "%d", height);
+    strcpy(resolutionstr, widthstr);
+    strcat(resolutionstr, "x");
+    strcat(resolutionstr, heightstr);
+    property_set("media.debuginfo.vresolution", resolutionstr);
+
+    //frame rate
+    float framerate;
+    char frameratestr[16] = {0};
+    CHECK(meta->findFloat('frRa',&framerate));
+    sprintf(frameratestr, "%f", framerate);
+    property_set("media.debuginfo.vframerate", frameratestr);
+
+    property_set("media.debuginfo.vcolorstandard", "BT709");
+}
+
+void AmFFmpegExtractor::prepareSubtitleInfo(sp<MetaData> meta) {
+
+}
+
+void AmFFmpegExtractor::resetInfo() {
+    ALOGE("[resetInfo]");
+    //for audio
+    property_set("media.debuginfo.acodec", "UNKNOW");
+    property_set("media.debuginfo.ahwaccelerated", "NO");
+    property_set("media.debuginfo.abitrate", "0");
+    property_set("media.debuginfo.asecure", "NO");
+
+    //for video
+    property_set("media.debuginfo.vcodec", "UNKNOW");
+    property_set("media.debuginfo.vhwaccelerated", "NO");
+    property_set("media.debuginfo.vbitrate", "0");
+    property_set("media.debuginfo.vsecure", "NO");
+    property_set("media.debuginfo.vframsdropped", "0");
+    property_set("media.debuginfo.vresolution", "0x0");
+    property_set("media.debuginfo.vframerate", "0");
+    property_set("media.debuginfo.vcolorstandard", "UNKNOW");
+
+    //for subtitle
 }
 
 uint32_t AmFFmpegExtractor::flags() const {

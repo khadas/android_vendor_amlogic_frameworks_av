@@ -103,6 +103,12 @@ private:
     bool checkStreamValid(AVCodecContext *codec);
     void release(AmFFmpegSource* source);
 
+    //for debug info apk
+    void prepareAudioInfo(sp<MetaData> meta);
+    void prepareVideoInfo(sp<MetaData> meta);
+    void prepareSubtitleInfo(sp<MetaData> meta);
+    void resetInfo();
+
     DISALLOW_EVIL_CONSTRUCTORS(AmFFmpegExtractor);
 };
 

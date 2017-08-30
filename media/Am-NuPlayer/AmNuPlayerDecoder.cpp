@@ -1027,6 +1027,13 @@ void AmNuPlayer::Decoder::onRenderBuffer(const sp<AMessage> &msg) {
     } else {
         mNumOutputFramesDropped += !mIsAudio;
         err = mCodec->releaseOutputBuffer(bufferIx);
+
+        if (!mIsAudio) {
+            char vframsdroppedstr[64] = {0};
+            sprintf(vframsdroppedstr, "%" PRId64, mNumOutputFramesDropped);
+            ALOGE("[onRenderBuffer]mNumOutputFramesDropped=%" PRId64 ", vframsdroppedstr:%s", mNumOutputFramesDropped, vframsdroppedstr);
+            property_set("media.debuginfo.vframsdropped", vframsdroppedstr);
+        }
     }
     if (err != OK) {
         ALOGE("failed to release output buffer for %s (err=%d)",
