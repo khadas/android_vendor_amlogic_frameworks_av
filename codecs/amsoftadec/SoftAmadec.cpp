@@ -309,33 +309,110 @@ void SoftAmadec::onQueueFilled(OMX_U32 portIndex) {
         outHeader->nOffset = 0;
         outHeader->nFilledLen=0;
         uint8_t *dst;
-        do {
-            memset(frame, 0, sizeof(AUDIO_FRAME_WRAPPER_T));
-            int32_t len = mCodec->audio_decode_frame(frame, &got_picture, &pkt);
-            if (len < 0 || !got_picture) {
-                ALOGE("Cannot decode this frame! len/%d got_picture/%d\n",len,got_picture);
-                break;
-            }
-            pkt.data +=len;
-            pkt.size -=len;
-            if (frame->channels > 0 && frame->channels <= 8 && frame->samplerate > 0 && frame->samplerate <=192000) {
-                if (mAInfo->samplerate != frame->samplerate ||mAInfo->channels != frame->channels) {
-                    mAInfo->samplerate = frame->samplerate;
-                    mAInfo->channels = frame->channels;
-                    notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
-                    mOutputPortSettingsChange = AWAITING_DISABLED;
-                    free(frame);
-                    return;
+		if (mAInfo->codec_id == AV_CODEC_ID_PCM_BLURAY) {
+           uint8_t header[4];
+           uint8_t bps = 0;
+           uint8_t bits_per_samples[4] = { 0, 16, 20, 24 };
+           int tmp_buf[10] = {0};
+           int i ,j;
+           short *sample;
+           for (i = 0;i < 4 ;i++)
+               header [i] = pkt.data [i];
+           /* get the sample depth and derive the sample format from it */
+           bps = bits_per_samples[header[3] >> 6];
+           pkt.data = pkt.data + 4;
+           pkt.size = pkt.size - 4;
+           sample = (short *)pkt.data;
+           if (bps == 16) {
+                if (mAInfo->channels == 1) {
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        sample[j + 1] = sample[j] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 2;
+                        j += 2;
+                    }
+                } else if (mAInfo->channels == 2) {
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        sample[j++] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 2;
+                        sample[j++] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 2;
+                    }
+                } else if (mAInfo->channels > 2 && mAInfo->channels <= 8) {
+                    int k;
+                    memset(tmp_buf, 0, sizeof(tmp_buf));
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        for (k = 0; k < mAInfo->channels; k++) {
+                            tmp_buf[k] = (int16_t)((pkt.data[i] << 8) | pkt.data[i + 1]);
+                            i += 2;
+                        }
+                        //LoRo downmix:L R C Ls Rs LFE  Lsr Rsr
+                        sample[j++] = av_clip_int16(tmp_buf[0] + 0.707f * tmp_buf[2] + 0.707f * (tmp_buf[3] + tmp_buf[6])); //Lo=L+0.707C+0.707 (Ls+Lsr)
+                        sample[j++] = av_clip_int16(tmp_buf[1] + 0.707f * tmp_buf[2] + 0.707f * (tmp_buf[4] + tmp_buf[7])); //Ro=R+0.707C+0.707(Rs+Rsr)
+                    }
                 }
-            }
-            dst = outHeader->pBuffer+outHeader->nFilledLen;
-            if (frame->datasize > 512 * 1024) {
-                frame->datasize = 512 * 1024;
-                ALOGI("framesize %d exceed the bufsize 512* 1024",frame->datasize);
-            }
-            memcpy((char *)dst, (char *)frame->data, frame->datasize);
-            outHeader->nFilledLen += frame->datasize;
-        } while( pkt.size>0);
+           } else if (bps == 24 || bps == 20) {
+                int k;
+                memset(tmp_buf, 0, sizeof(tmp_buf));
+                if (mAInfo->channels == 1) {
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        sample[j++] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 3;
+                    }
+                } else if (mAInfo->channels == 2) {
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        sample[j++] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 3;
+                        sample[j++] = (pkt.data[i] << 8) | pkt.data[i + 1];
+                        i += 3;
+                    }
+                } else if (mAInfo->channels >= 2 && mAInfo->channels <= 8) {
+                    int k;
+                    memset(tmp_buf, 0, sizeof(tmp_buf));
+                    for (i = 0, j = 0; i < pkt.size;) {
+                        for (k = 0; k < mAInfo->channels; k++) {
+                            tmp_buf[k] = (int16_t)(pkt.data[i] << 8) | pkt.data[i + 1];
+                            i += 3;
+                        }
+                        //LoRo downmix:L R C Ls Rs LFE  Lsr Rsr
+                        sample[j++] = av_clip_int16(tmp_buf[0] + 0.707f * tmp_buf[2] + 0.707f * (tmp_buf[3] + tmp_buf[6])); //Lo=L+0.707C+0.707 (Ls+Lsr)
+                        sample[j++] = av_clip_int16(tmp_buf[1] + 0.707f * tmp_buf[2] + 0.707f * (tmp_buf[4] + tmp_buf[7])); //Ro=R+0.707C+0.707(Rs+Rsr)
+                    }
+                }
+           } else {
+               ALOGI("[%s %d]blueray pcm is %d bps, don't process now\n", __FUNCTION__, __LINE__, bps);
+           }
+           dst = outHeader->pBuffer+outHeader->nFilledLen;
+           memcpy((char *)dst, (char *)pkt.data, 2*j);
+           outHeader->nFilledLen += 2 *j;
+        } else {
+            do {
+                memset(frame, 0, sizeof(AUDIO_FRAME_WRAPPER_T));
+                int32_t len = mCodec->audio_decode_frame(frame, &got_picture, &pkt);
+                if (len < 0 || !got_picture) {
+                    ALOGE("Cannot decode this frame! len/%d got_picture/%d\n",len,got_picture);
+                    break;
+                }
+                pkt.data +=len;
+                pkt.size -=len;
+                if (frame->channels > 0 && frame->channels <= 8 && frame->samplerate > 0 && frame->samplerate <=192000) {
+                    if (mAInfo->samplerate != frame->samplerate ||mAInfo->channels != frame->channels) {
+                        mAInfo->samplerate = frame->samplerate;
+                        mAInfo->channels = frame->channels;
+                        notify(OMX_EventPortSettingsChanged, 1, 0, NULL);
+                        mOutputPortSettingsChange = AWAITING_DISABLED;
+                        free(frame);
+                        return;
+                    }
+                }
+                dst = outHeader->pBuffer+outHeader->nFilledLen;
+                if (frame->datasize > 512 * 1024) {
+                    frame->datasize = 512 * 1024;
+                    ALOGI("framesize %d exceed the bufsize 512* 1024",frame->datasize);
+                }
+                memcpy((char *)dst, (char *)frame->data, frame->datasize);
+                outHeader->nFilledLen += frame->datasize;
+            } while( pkt.size>0);
+        }
 #if 0
         FILE *fp = NULL;
         fp = fopen("/data/pcm", "ab+");
