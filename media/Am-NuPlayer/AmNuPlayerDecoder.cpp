@@ -658,6 +658,9 @@ bool AmNuPlayer::Decoder::handleAnOutputBuffer(
 
         buffer->meta()->setInt32("eos", true);
         reply->setInt32("eos", true);
+        //avoid that audio none in middle which may lead stuck
+        if (mIsAudio)
+            mRenderer->setHasNoMedia(true /*audio*/);
     } else if (mSkipRenderingUntilMediaTimeUs >= 0) {
         if (timeUs < mSkipRenderingUntilMediaTimeUs) {
             ALOGV("[%s] dropping buffer at time %lld as requested.",
@@ -861,7 +864,6 @@ status_t AmNuPlayer::Decoder::fetchInputData(sp<AMessage> &reply) {
         fwrite(accessUnit->data(), 1, accessUnit->size(), mVideoHandle);
         fflush(mVideoHandle);
     }
-
     reply->setBuffer("buffer", accessUnit);
 
     return OK;

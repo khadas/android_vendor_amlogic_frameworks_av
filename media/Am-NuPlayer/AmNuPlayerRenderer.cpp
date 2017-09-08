@@ -454,6 +454,7 @@ void AmNuPlayer::Renderer::setHasMedia(bool audio) {
 void AmNuPlayer::Renderer::setHasNoMedia(bool audio) {
     if (audio) {
         mHasAudio = false;
+        postDrainVideoQueue();
     } else {
         mHasVideo = false;
     }
