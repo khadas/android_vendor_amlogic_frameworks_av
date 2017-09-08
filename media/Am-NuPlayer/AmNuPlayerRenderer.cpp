@@ -1348,7 +1348,8 @@ void AmNuPlayer::Renderer::postDrainVideoQueue() {
             return;
         }*/
 
-        if (mNextAudioClockUpdateTimeUs < 0) {
+        if (mNextAudioClockUpdateTimeUs < 0 && mHasAudio &&
+            mMediaClock->getRealTimeFor(mediaTimeUs, &realTimeUs) != OK) {
             if (!mFirstVideoRealTime) {
                 mFirstVideoRealTime = realTimeUs;
                 mVideoRealtime = mFirstVideoRealTime;//record the real time for the first video, the next will update based the first realtime
