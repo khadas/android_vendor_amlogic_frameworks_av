@@ -251,6 +251,9 @@ OMX_ERRORTYPE SoftAmadec::internalSetParameter(
         mAInfo->bitrate = FFmpegParams->nBitRate;
         mAInfo->codec_id = FFmpegParams->nCodecID;
         mAInfo->extradata_size = FFmpegParams->nExtraData_Size;
+        if ( mAInfo->codec_id == AV_CODEC_ID_ADPCM_IMA_WAV ||
+            mAInfo->codec_id == AV_CODEC_ID_ADPCM_MS)
+            mAInfo->bitspersample = 4;
         if (mAInfo->extradata_size > 0)
             memcpy((char *)mAInfo->extradata, (char *)FFmpegParams->nExtraData, mAInfo->extradata_size);
         setflag = true;

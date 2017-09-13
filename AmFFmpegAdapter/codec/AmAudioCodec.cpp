@@ -90,7 +90,7 @@ int32_t AmAudioCodec::audio_decode_init(const char * codecMime, AUDIO_INFO_T *ai
     mctx->channels = ainfo->channels;
     mctx->sample_rate = ainfo->samplerate;
     mctx->bit_rate = ainfo->bitrate;
-
+    mctx->bits_per_coded_sample = ainfo->bitspersample;
     Trace("=========init audio info==========\n");
     Trace("extradata_size: %d\n", mctx->extradata_size);
     Trace("0x%x,0x%x,0x%x,0x%x\n",mctx->extradata[0],mctx->extradata[1], mctx->extradata[2],mctx->extradata[3]);
@@ -168,7 +168,24 @@ int32_t AmAudioCodec::audio_decode_frame(AUDIO_FRAME_WRAPPER_T * data, int * got
             Trace("decoder output: sample_size = %d\n",samplesize);
             Trace("output pcm data size: %d\n", data_size);
 
-          } else{
+          }else if(mFrame->format == AV_SAMPLE_FMT_S16P) {
+            int i;
+            short * in1 = (short *)mFrame->data[0];
+            short * in2 = (short *)mFrame->data[1];
+            short * out = (short *)data->data;
+            if (channels == 2) {
+                for (i= 0; i < data_size/4; i++ ) {
+                   out[2*i] = in1[i];
+                   out[2*i+1] = in2[i];
+                }
+
+            }else if (channels == 1) {
+                memcpy((char *)data->data, mFrame->data[0], data_size);
+            }
+            Trace("output pcm data size: %d\n", data_size);
+            data->datasize = data_size;
+
+          }else {
             Trace("output pcm data size: %d\n", data_size);
             memcpy((char *)data->data, mFrame->data[0], data_size);
             data->datasize = data_size;
