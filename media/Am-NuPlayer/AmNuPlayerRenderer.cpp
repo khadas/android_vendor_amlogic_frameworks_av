@@ -1714,7 +1714,9 @@ void AmNuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
         }
         mRenderStarted = true;
     }
-
+    int32_t eos;
+    if (notifyConsumed->findInt32("eos", &eos) && eos != 0)
+        mQueueInitial = false;
     if (mQueueInitial) {
         Mutex::Autolock autoLock(mLock);
         //if (!mSyncQueues || mAudioQueue.empty() || mVideoQueue.empty()) {
@@ -1853,8 +1855,8 @@ void AmNuPlayer::Renderer::onFlush(const sp<AMessage> &msg) {
 	if (!misTrickmode) {
         ALOGI("misTrickmode %d", misTrickmode);
         mQueueInitial = true;
-        mFirstVideoRealTime = 0;
     }
+    mFirstVideoRealTime = 0;
 
     ALOGI("flushing %s", audio ? "audio" : "video");
     if (audio) {
