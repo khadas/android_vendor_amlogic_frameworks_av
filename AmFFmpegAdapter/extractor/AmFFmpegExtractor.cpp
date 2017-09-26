@@ -584,6 +584,9 @@ status_t AmFFmpegSource::read(
 
     uint32_t requiredLen =
             mFormatter->computeNewESLen(packet->data, packet->size);
+    if (requiredLen == 0) {//create PassthruFormatter for invalid requiredLen, ext: HVCCFormatter
+        mFormatter = StreamFormatter::Create(mStream->codec, NULL);
+    }
 
     if (buffer->size() < requiredLen) {
         size_t newSize = buffer->size();
