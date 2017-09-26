@@ -336,6 +336,11 @@ void AmNuPlayer::Decoder::onConfigure(const sp<AMessage> &format) {
                     }
                     int32_t sampleRate;
                     CHECK(format->findInt32("sample-rate", &sampleRate));
+                    if (sampleRate == 96000 || sampleRate == 192000) {
+                        sampleRate = 48000;
+                    }else if (sampleRate == 88200 || sampleRate == 176400) {
+                        sampleRate = 44100;
+                    }
                     uint32_t pcmFlags = AUDIO_OUTPUT_FLAG_DIRECT | AUDIO_OUTPUT_FLAG_IEC958_NONAUDIO;
                     handle = AudioSystem::getOutput(AUDIO_STREAM_MUSIC,
                                         sampleRate,
