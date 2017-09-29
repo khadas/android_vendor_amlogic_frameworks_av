@@ -1758,6 +1758,7 @@ void AmNuPlayer::GenericSource::readBuffer(
                 MediaBuffer *tmpbuf;
                 int64_t tmptimeUs, tmptimeUs1;
                 int index = 0;
+                int waitelcount = 0;
                 //ALOGI("need to merge dts %lld\n", dtsTime);
                 do {
                     MediaBuffer *buf, *copybuf;
@@ -1788,6 +1789,16 @@ void AmNuPlayer::GenericSource::readBuffer(
                     }
                     if (tmptimeUs != dtsTime)
                         ALOGI("need to read dv mediabuffer again\n");
+                    //abnormal dv stream not support now
+                    if (waitelcount ++ > 10) {
+                        //if (mDVTrack.mSource != NULL)
+                        //    mDVTrack.mPackets->signalEOS(ERROR_UNSUPPORTED);
+                        if (mAudioTrack.mSource != NULL)
+                            mAudioTrack.mPackets->signalEOS(ERROR_UNSUPPORTED);
+                        if (mVideoTrack.mSource != NULL)
+                            mVideoTrack.mPackets->signalEOS(ERROR_UNSUPPORTED);
+                        return;
+                    }
                 } while (tmptimeUs != dtsTime);
                 if (err == OK) {
                     //ALOGI("mergeMediaBufferandtoABuffer %lld\n",(long long)timeUs);
