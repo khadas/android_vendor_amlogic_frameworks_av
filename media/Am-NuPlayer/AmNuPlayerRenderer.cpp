@@ -1175,7 +1175,14 @@ int64_t AmNuPlayer::Renderer::getPendingAudioPlayoutDurationUs(int64_t nowUs) {
             return writtenAudioDurationUs - (mediaUs - mAudioFirstAnchorTimeMediaUs);
         }
     }
-    return writtenAudioDurationUs - mAudioSink->getPlayedOutDurationUs(nowUs);
+    //when playing , hdmi device pull  and insert audiosink maybe could not get correct pts ,so
+    //the PlayedOutDurationUs will be 0;it is not right, so we make PendingAudioPlayoutDurationUs
+    //0 here.
+    if (mAudioSink->getPlayedOutDurationUs(nowUs)) {
+        return writtenAudioDurationUs - mAudioSink->getPlayedOutDurationUs(nowUs);
+    } else {
+        return 0ll;
+    }
 #endif
     uint32_t numFramesPlayed;
     mAudioSink->getPosition(&numFramesPlayed);
