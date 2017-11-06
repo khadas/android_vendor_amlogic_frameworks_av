@@ -49,6 +49,7 @@ static int64_t kHighWaterMarkUs = 5000000ll;  // 5secs
 static int64_t kHighWaterMarkRebufferUs = 15000000ll;  // 15secs
 static const ssize_t kLowWaterMarkBytes = 40000;
 static const ssize_t kHighWaterMarkBytes = 200000;
+static int kDVDtsDiffThreshold = 22;
 static FILE* dv_fpbl = NULL;
 static FILE* dv_fpel = NULL;
 static FILE* dv_fpbel = NULL;
@@ -343,6 +344,11 @@ status_t AmNuPlayer::GenericSource::initFromDataSource() {
                 mDVTrack.mSource = track;
                 mDVTrack.mPackets = NULL;
                 ALOGI("set dv source\n");
+                int32_t streamtimeToUsRatio;
+                if (meta->findInt32(MKTAG('s', 't', 't', 'u'), &streamtimeToUsRatio)) {
+                    //get dts convert accuracy, for check dts when dv double layer
+                    kDVDtsDiffThreshold = 5 * streamtimeToUsRatio;
+                }
                 //new AmAnotherPacketSource(mDVTrack.mSource->getFormat());
             }
             if (mVideoTrack.mSource == NULL) {//  default is first
@@ -1759,6 +1765,7 @@ void AmNuPlayer::GenericSource::readBuffer(
                 int64_t tmptimeUs, tmptimeUs1;
                 int index = 0;
                 int waitelcount = 0;
+                bool findavailabledts = false;
                 //ALOGI("need to merge dts %lld\n", dtsTime);
                 do {
                     MediaBuffer *buf, *copybuf;
@@ -1779,15 +1786,16 @@ void AmNuPlayer::GenericSource::readBuffer(
                         for (int i = index ; i < mDVMediaBuffer.size(); i++,index++) {
                             mDVMediaBuffer[i]->meta_data()->findInt64(kKeyDTSFromContainer, &tmptimeUs);
                             //ALOGI("tmptimeUs %lld timeUs %lld",(long long)tmptimeUs,(long long)timeUs);
-                            if (tmptimeUs == dtsTime) {
+                            if (abs(dtsTime - tmptimeUs) <= kDVDtsDiffThreshold) {
                                 tmpbuf = mDVMediaBuffer[i];
                                // ALOGI("size %d, index=%d\n",mDVMediaBuffer.size(), index);
                                 mDVMediaBuffer.erase(mDVMediaBuffer.begin()+i); //mDVMediaBuffer[i]
+                                findavailabledts = true;
                                 break;
                             }
                         }
                     }
-                    if (tmptimeUs != dtsTime)
+                    if (!findavailabledts)
                         ALOGI("need to read dv mediabuffer again\n");
                     //abnormal dv stream not support now
                     if (waitelcount ++ > 10) {
@@ -1799,7 +1807,7 @@ void AmNuPlayer::GenericSource::readBuffer(
                             mVideoTrack.mPackets->signalEOS(ERROR_UNSUPPORTED);
                         return;
                     }
-                } while (tmptimeUs != dtsTime);
+                } while (!findavailabledts);
                 if (err == OK) {
                     //ALOGI("mergeMediaBufferandtoABuffer %lld\n",(long long)timeUs);
                     sp<ABuffer> buffer = mergeElMetataToBl(mbuf,tmpbuf, trackType, seekTimeUs,numBuffers == 0 ? actualTimeUs : NULL);
@@ -1914,7 +1922,7 @@ sp<ABuffer> AmNuPlayer::GenericSource::mergeElMetataToBl(
                         startcode_index[el_unitcnt] = i;
                         el_unitcnt ++;
                         if (pdata[i+3] == 0x7c && pdata[4] == 0x01) {
-                            ALOGI("[%s:%d] find the metadata!\n",__func__,__LINE__);
+                            //ALOGI("[%s:%d] find the metadata!\n",__func__,__LINE__);
                             break;
                         }
                     }

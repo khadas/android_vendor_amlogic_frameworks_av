@@ -320,6 +320,11 @@ status_t AmFFmpegSource::init(
             ALOGI("is dobyvison\n");
         }
 
+        if (stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+            //dts convert to us ratio, also dts convert accuracy
+            mMeta->setInt32(MKTAG('s', 't', 't', 'u'), convertStreamTimeToUs(1));
+        }
+
         if (stream->nb_side_data) {
             for (int i = 0; i < stream->nb_side_data; i++) {
                 AVPacketSideData sd = stream->side_data[i];
