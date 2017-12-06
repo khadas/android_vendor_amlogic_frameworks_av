@@ -1,5 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 
+ifeq ($(BOARD_USE_CUSTOM_MEDIASERVEREXTENSIONS),true)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES:= \
 	register.cpp \
@@ -24,6 +25,6 @@ LOCAL_MODULE := libregistermsext
 LOCAL_MODULE_TAGS := optional
 LOCAL_CFLAGS := -Werror -Wall
 include $(BUILD_STATIC_LIBRARY)
-
+endif
 
 
