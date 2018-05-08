@@ -18,24 +18,24 @@
 #include <string.h>
 
 #include <hardware/audio_effect.h>
+#include <cutils/properties.h>
 
 #include "IniParser.h"
 #include "TrebleBass.h"
 
 extern "C" {
 
-#include "hpeq.h"
 #include "aml_treble_bass.h"
 
-#define FIREOS_AUDIOEFFECT
-#define DEFAULT_INI_FILE_PATH "/tvconfig/audio/amlogic_audio_effect_default.ini"
+#define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
+#define AUDIO_EFFECT_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_AUDIO_EFFECT_DEFAULT.ini"
 
-// effect_handle_t interface implementation for HPEQ effect
-extern const struct effect_interface_s HPEQInterface;
+// effect_handle_t interface implementation for treblebass effect
+extern const struct effect_interface_s TrebleBassInterface;
 
 //HPEQ effect TYPE: 7e282240-242e-11e6-bb63-0002a5d5c51b
 //HPEQ effect UUID: 76733af0-2889-11e2-81c1-0800200c9a66
-const effect_descriptor_t HPEQDescriptor = {
+const effect_descriptor_t TrebleBassDescriptor = {
         {0x7e282240, 0x242e, 0x11e6, 0xbb63, {0x00, 0x02, 0xa5, 0xd5, 0xc5, 0x1b}},
         {0x76733af0, 0x2889, 0x11e2, 0x81c1, {0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66}},
         EFFECT_CONTROL_API_VERSION,
@@ -46,34 +46,18 @@ const effect_descriptor_t HPEQDescriptor = {
         "Amlogic",
 };
 
-enum hpeq_state_e {
-    HPEQ_STATE_UNINITIALIZED,
-    HPEQ_STATE_INITIALIZED,
-    HPEQ_STATE_ACTIVE,
+enum treblebass_state_e {
+    TREBASS_STATE_UNINITIALIZED,
+    TREBASS_STATE_INITIALIZED,
+    TREBASS_STATE_ACTIVE,
 };
 
 typedef enum {
-    HPEQ_PARAM_INVALID = -1,
-#ifdef  FIREOS_AUDIOEFFECT
-    HPEQ_PARAM_BASS_LEVEL,
-    HPEQ_PARAM_TREBLE_LEVEL,
-#endif
-    HPEQ_PARAM_ENABLE,
-    HPEQ_PARAM_BAND_1,
-    HPEQ_PARAM_BAND_2,
-    HPEQ_PARAM_BAND_3,
-    HPEQ_PARAM_BAND_4,
-    HPEQ_PARAM_BAND_5,
-    HPEQ_PARAM_BAND_COUNT,
-} HPEQparams;
-
-typedef struct HPEQcfg_s {
-    int band1;
-    int band2;
-    int band3;
-    int band4;
-    int band5;
-} HPEQcfg;
+    TREBASS_PARAM_INVALID = -1,
+    TREBASS_PARAM_BASS_LEVEL,
+    TREBASS_PARAM_TREBLE_LEVEL,
+    TREBASS_PARAM_ENABLE,
+} TREBASSparams;
 
 typedef struct TrebleBasscfg_s {
     int32_t     bass_level;
@@ -82,83 +66,52 @@ typedef struct TrebleBasscfg_s {
     float       treble_gain;
 } TrebleBasscfg;
 
-typedef struct HPEQdata_s {
-    /* This struct is used to initialize HPEQ default config*/
-    HPEQcfg       cfg;
-    HPEQcfg       *usr_cfg;
+typedef struct TreBassdata_s {
     int32_t       count;
     TrebleBasscfg tbcfg;
     int32_t       enable;
-} HPEQdata;
+} TreBassdata;
 
-typedef struct HPEQContext_s {
+typedef struct TREBASSContext_s {
     const struct effect_interface_s *itfe;
     effect_config_t                 config;
-    hpeq_state_e                    state;
-    HPEQdata                        gHPEQdata;
-} HPEQContext;
+    treblebass_state_e                    state;
+    TreBassdata                        gTreBassdata;
+} TREBASSContext;
 
-const char *HPEQStatusstr[] = {"Disable", "Enable"};
+const char *TREBASSStatusstr[] = {"Disable", "Enable"};
 
-#ifdef LOAD_PARAM_FROM_CONFIG_FILE
-HPEQcfg default_usr_cfg[] = {
-    { 3,  0,  0,  0,  3},   /* Normal Preset */
-    { 8,  5, -3,  5,  6},   /* Classical Preset */
-    {12, -6,  7, 12, 10},   /* Dance Preset */
-    { 0,  0,  0,  0,  0},   /* Flat Preset */
-    { 6, -2, -2,  6, -3},   /* Folk Preset */
-    { 8, -8, 12, -1, -4},   /* Heavy Metal Preset */
-    {10,  6, -4,  5,  8},   /* Hip Hop Preset */
-    { 8,  5, -4,  5,  9},   /* Jazz Preset */
-    {-6,  4,  9,  4, -5},   /* Pop Preset */
-    {10,  6, -1,  8, 10},   /* Rock Preset */
-};
-#endif
-
-int HPEQ_get_model_name(char *model_name, int size)
+int TrebleBass_get_model_name(char *model_name, int size)
 {
-    int fd;
-    int ret = -1;
-    char node[50] = {0};
-    const char *filename = "/proc/idme/model_name";
+     int ret = -1;
+    char node[PROPERTY_VALUE_MAX];
 
-    fd = open(filename, O_RDONLY);
-    if (fd < 0) {
-        ALOGE("%s: open %s failed", __FUNCTION__, filename);
-        goto exit;
-    }
-    if (read (fd, node, 50) < 0) {
-        ALOGE("%s: read Model Name failed", __FUNCTION__);
-        goto exit;
-    }
+    ret = property_get("tv.model_name", node, NULL);
 
-    ret = 0;
-exit:
     if (ret < 0)
         snprintf(model_name, size, "DEFAULT");
     else
         snprintf(model_name, size, "%s", node);
     ALOGD("%s: Model Name -> %s", __FUNCTION__, model_name);
-    close(fd);
     return ret;
 }
 
-int HPEQ_get_ini_file(char *ini_name, int size)
+int TrebleBass_get_ini_file(char *ini_name, int size)
 {
     int result = -1;
     char model_name[50] = {0};
     IniParser* pIniParser = NULL;
     const char *ini_value = NULL;
-    const char *filename = "/tvconfig/model/model_sum.ini";
+    const char *filename = MODEL_SUM_DEFAULT_PATH;
 
-    HPEQ_get_model_name(model_name, sizeof(model_name));
+    TrebleBass_get_model_name(model_name, sizeof(model_name));
     pIniParser = new IniParser();
     if (pIniParser->parse(filename) < 0) {
         ALOGW("%s: Load INI file -> %s Failed", __FUNCTION__, filename);
         goto exit;
     }
 
-    ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", "/tvconfig/audio/AMLOGIC_AUDIO_EFFECT_DEFAULT.ini");
+    ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", AUDIO_EFFECT_DEFAULT_PATH);
     if (ini_value == NULL || access(ini_value, F_OK) == -1) {
         ALOGD("%s: INI File is not exist", __FUNCTION__);
         goto exit;
@@ -173,15 +126,16 @@ exit:
     return result;
 }
 
-int HPEQ_load_ini_file(HPEQContext *pContext)
+
+int TrebleBass_load_ini_file(TREBASSContext *pContext)
 {
     int result = -1;
     char ini_name[100] = {0};
     const char *ini_value = NULL;
-    HPEQdata *data = &pContext->gHPEQdata;
+    TreBassdata *data = &pContext->gTreBassdata;
     IniParser* pIniParser = NULL;
 
-    if (HPEQ_get_ini_file(ini_name, sizeof(ini_name)) < 0)
+    if (TrebleBass_get_ini_file(ini_name, sizeof(ini_name)) < 0)
         goto error;
 
     pIniParser = new IniParser();
@@ -203,9 +157,9 @@ error:
     return result;
 }
 
-int HPEQ_init(HPEQContext *pContext)
+int TrebleBass_init(TREBASSContext *pContext)
 {
-    HPEQdata *data = &pContext->gHPEQdata;
+    TreBassdata *data = &pContext->gTreBassdata;
     int32_t count = data->count;
 
     pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
@@ -224,32 +178,12 @@ int HPEQ_init(HPEQContext *pContext)
     pContext->config.outputCfg.bufferProvider.releaseBuffer = NULL;
     pContext->config.outputCfg.bufferProvider.cookie = NULL;
     pContext->config.outputCfg.mask = EFFECT_CONFIG_ALL;
-
-    /* default band is usr_cfg[(count>>LSR)+1] */
-    data->cfg.band1 = 0/*data->usr_cfg[(count >> LSR) + 1].band1*/;
-    data->cfg.band2 = 0/*data->usr_cfg[(count >> LSR) + 1].band2*/;
-    data->cfg.band3 = 0/*data->usr_cfg[(count >> LSR) + 1].band3*/;
-    data->cfg.band4 = 0/*data->usr_cfg[(count >> LSR) + 1].band4*/;
-    data->cfg.band5 = 0/*data->usr_cfg[(count >> LSR) + 1].band5*/;
-    data->tbcfg.bass_level = 0;
-    data->tbcfg.treble_level = 0;
-    data->tbcfg.bass_gain = 0;
-    data->tbcfg.treble_gain = 0;
-
-    HPEQ_init_api((void *)data);
-
     ALOGD("%s: sucessful", __FUNCTION__);
 
     return 0;
 }
 
-int HPEQ_reset(HPEQContext *pContext)
-{
-    HPEQ_reset_api();
-    return 0;
-}
-
-int HPEQ_configure(HPEQContext *pContext, effect_config_t *pConfig)
+int TrebleBass_configure(TREBASSContext *pContext, effect_config_t *pConfig)
 {
     if (pConfig->inputCfg.samplingRate != pConfig->outputCfg.samplingRate)
         return -EINVAL;
@@ -274,17 +208,15 @@ int HPEQ_configure(HPEQContext *pContext, effect_config_t *pConfig)
     return 0;
 }
 
-int HPEQ_getParameter(HPEQContext *pContext, void *pParam, size_t *pValueSize, void *pValue)
+int TrebleBass_getParameter(TREBASSContext *pContext, void *pParam, size_t *pValueSize, void *pValue)
 {
     int32_t param = *(int32_t *)pParam;
     int32_t value;
-    HPEQdata *data = &pContext->gHPEQdata;
-    HPEQcfg *cfg = &data->cfg;
+    TreBassdata *data = &pContext->gTreBassdata;
     TrebleBasscfg *tbcfg = &data->tbcfg;
 
     switch (param) {
-#ifdef FIREOS_AUDIOEFFECT
-    case HPEQ_PARAM_BASS_LEVEL:
+    case TREBASS_PARAM_BASS_LEVEL:
         if (*pValueSize < sizeof(int32_t)) {
             *pValueSize = 0;
             return -EINVAL;
@@ -292,7 +224,7 @@ int HPEQ_getParameter(HPEQContext *pContext, void *pParam, size_t *pValueSize, v
         *(int32_t *) pValue = tbcfg->bass_level;
         ALOGD("%s: Get Bass -> %d level", __FUNCTION__, tbcfg->bass_level);
         break;
-    case HPEQ_PARAM_TREBLE_LEVEL:
+    case TREBASS_PARAM_TREBLE_LEVEL:
         if (*pValueSize < sizeof(int32_t)) {
             *pValueSize = 0;
             return -EINVAL;
@@ -300,73 +232,14 @@ int HPEQ_getParameter(HPEQContext *pContext, void *pParam, size_t *pValueSize, v
         *(int32_t *) pValue = tbcfg->treble_level;
         ALOGD("%s: Get Treble -> %d level", __FUNCTION__, tbcfg->treble_level);
         break;
-#endif
-    case HPEQ_PARAM_ENABLE:
+    case TREBASS_PARAM_ENABLE:
         if (*pValueSize < sizeof(int32_t)) {
             *pValueSize = 0;
             return -EINVAL;
         }
         value = data->enable;
         *(int32_t *) pValue = value;
-        ALOGD("%s: Get status -> %s", __FUNCTION__, HPEQStatusstr[value]);
-        break;
-    case HPEQ_PARAM_BAND_1:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        HPEQ_getBand_api(&cfg->band1, 1);
-        value = cfg->band1;
-        *(int32_t *) pValue = value;
-        ALOGD("%s: Get Band1 -> %ddB", __FUNCTION__, value);
-        break;
-    case HPEQ_PARAM_BAND_2:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        HPEQ_getBand_api(&cfg->band2, 2);
-        value = cfg->band2;
-        *(int32_t *) pValue = value;
-        ALOGD("%s: Get Band2 -> %ddB", __FUNCTION__, value);
-        break;
-    case HPEQ_PARAM_BAND_3:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        HPEQ_getBand_api(&cfg->band3, 3);
-        value = cfg->band3;
-        *(int32_t *) pValue = value;
-        ALOGD("%s: Get Band3 -> %ddB", __FUNCTION__, value);
-        break;
-    case HPEQ_PARAM_BAND_4:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        HPEQ_getBand_api(&cfg->band4, 4);
-        value = cfg->band4;
-        *(int32_t *) pValue = value;
-        ALOGD("%s: Get Band4 -> %ddB", __FUNCTION__, value);
-        break;
-    case HPEQ_PARAM_BAND_5:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        HPEQ_getBand_api(&cfg->band5, 5);
-        value = cfg->band5;
-        *(int32_t *) pValue = value;
-        ALOGD("%s: Get Band5 -> %ddB", __FUNCTION__, value);
-        break;
-    case HPEQ_PARAM_BAND_COUNT:
-        if (*pValueSize < sizeof(int32_t)) {
-            *pValueSize = 0;
-            return -EINVAL;
-        }
-        value = data->count;
-        *(uint32_t *) pValue = value;
+        ALOGD("%s: Get status -> %s", __FUNCTION__, TREBASSStatusstr[value]);
         break;
     default:
         ALOGE("%s: unknown param %d", __FUNCTION__, param);
@@ -376,17 +249,15 @@ int HPEQ_getParameter(HPEQContext *pContext, void *pParam, size_t *pValueSize, v
     return 0;
 }
 
-int HPEQ_setParameter(HPEQContext *pContext, void *pParam, void *pValue)
+int TrebleBass_setParameter(TREBASSContext *pContext, void *pParam, void *pValue)
 {
     int32_t param = *(int32_t *)pParam;
     int32_t value;
-    HPEQdata *data = &pContext->gHPEQdata;
-    HPEQcfg *cfg = &data->cfg;
+    TreBassdata *data = &pContext->gTreBassdata;
     TrebleBasscfg *tbcfg = &data->tbcfg;
 
     switch (param) {
-#ifdef FIREOS_AUDIOEFFECT
-    case HPEQ_PARAM_BASS_LEVEL:
+    case TREBASS_PARAM_BASS_LEVEL:
         value = *(int32_t *)pValue;
         if (value < 0 || value > 100) {
             ALOGE("wrong parameter %d\n", value);
@@ -398,7 +269,7 @@ int HPEQ_setParameter(HPEQContext *pContext, void *pParam, void *pValue)
         ALOGD("%s: Set Bass -> %fdB, Treble -> %fdB, value %d",
                 __FUNCTION__, tbcfg->bass_gain, tbcfg->treble_gain, value);
         break;
-    case HPEQ_PARAM_TREBLE_LEVEL:
+    case TREBASS_PARAM_TREBLE_LEVEL:
         value = *(int32_t *)pValue;
         if (value < 0 || value > 100) {
             ALOGE("wrong parameter %d\n", value);
@@ -410,62 +281,11 @@ int HPEQ_setParameter(HPEQContext *pContext, void *pParam, void *pValue)
         ALOGD("%s: Set Bass -> %fdB, Treble -> %fdB, value %d",
                 __FUNCTION__, tbcfg->bass_gain, tbcfg->treble_gain, value);
         break;
-#endif
-    case HPEQ_PARAM_ENABLE:
+    case TREBASS_PARAM_ENABLE:
         value = *(int32_t *)pValue;
         data->enable = value;
 
-        ALOGD("%s: Set status -> %s", __FUNCTION__, HPEQStatusstr[value]);
-        break;
-    case HPEQ_PARAM_BAND_1:
-        value = *(int32_t *)pValue;
-        if (value < -12 || value > 12) {
-            ALOGE("wrong parameter %d\n", value);
-            return -EINVAL;
-        }
-        cfg->band1 = value;
-        HPEQ_setBand_api(cfg->band1, 1);
-        ALOGD("%s: Set Band1 -> %ddB", __FUNCTION__, cfg->band1);
-        break;
-    case HPEQ_PARAM_BAND_2:
-        value = *(int32_t *)pValue;
-        if (value < -12 || value > 12) {
-            ALOGE("wrong parameter %d\n", value);
-            return -EINVAL;
-        }
-        cfg->band2 = value;
-        HPEQ_setBand_api(cfg->band2, 2);
-        ALOGD("%s: Set Band2 -> %ddB", __FUNCTION__, cfg->band2);
-        break;
-    case HPEQ_PARAM_BAND_3:
-        value = *(int32_t *)pValue;
-        if (value < -12 || value > 12) {
-            ALOGE("wrong parameter %d\n", value);
-            return -EINVAL;
-        }
-        cfg->band3 = value;
-        HPEQ_setBand_api(cfg->band3, 3);
-        ALOGD("%s: Set Band3 -> %ddB", __FUNCTION__, cfg->band3);
-        break;
-    case HPEQ_PARAM_BAND_4:
-        value = *(int32_t *)pValue;
-        if (value < -12 || value > 12) {
-            ALOGE("wrong parameter %d\n", value);
-            return -EINVAL;
-        }
-        cfg->band4 = value;
-        HPEQ_setBand_api(cfg->band4, 4);
-        ALOGD("%s: Set Band4 -> %ddB", __FUNCTION__, cfg->band4);
-        break;
-    case HPEQ_PARAM_BAND_5:
-        value = *(int32_t *)pValue;
-        if (value < -12 || value > 12) {
-            ALOGE("wrong parameter %d\n", value);
-            return -EINVAL;
-        }
-        cfg->band5 = value;
-        HPEQ_setBand_api(cfg->band5, 5);
-        ALOGD("%s: Set Band5 -> %ddB", __FUNCTION__, cfg->band5);
+        ALOGD("%s: Set status -> %s", __FUNCTION__, TREBASSStatusstr[value]);
         break;
     default:
         ALOGE("%s: unknown param %08x", __FUNCTION__, param);
@@ -475,17 +295,16 @@ int HPEQ_setParameter(HPEQContext *pContext, void *pParam, void *pValue)
     return 0;
 }
 
-int HPEQ_release(HPEQContext *pContext)
+int TrebleBass_release(TREBASSContext *pContext)
 {
-    HPEQ_release_api();
     return 0;
 }
 
 //-------------------Effect Control Interface Implementation--------------------------
 
-int HPEQ_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t *outBuffer)
+int TrebleBass_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t *outBuffer)
 {
-    HPEQContext * pContext = (HPEQContext *)self;
+    TREBASSContext * pContext = (TREBASSContext *)self;
 
     if (pContext == NULL) {
         return -EINVAL;
@@ -498,14 +317,13 @@ int HPEQ_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t 
         return -EINVAL;
     }
 
-    if (pContext->state != HPEQ_STATE_ACTIVE) {
+    if (pContext->state != TREBASS_STATE_ACTIVE) {
         return -ENODATA;
     }
 
     int16_t *in  = (int16_t *)inBuffer->raw;
     int16_t *out = (int16_t *)outBuffer->raw;
-    HPEQdata *data = &pContext->gHPEQdata;
-
+    TreBassdata *data = &pContext->gTreBassdata;
     if (!data->enable) {
         for (size_t i = 0; i < inBuffer->frameCount; i++) {
             *out++ = *in++;
@@ -513,20 +331,18 @@ int HPEQ_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t 
         }
     } else {
         audio_Treble_Bass_process(in, in, inBuffer->frameCount);
-        //HPEQ_process_api(in, out, inBuffer->frameCount);
     }
-
     return 0;
 }
 
-int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
+int TrebleBass_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         void *pCmdData, uint32_t *replySize, void *pReplyData)
 {
-    HPEQContext * pContext = (HPEQContext *)self;
+    TREBASSContext * pContext = (TREBASSContext *)self;
     effect_param_t *p;
     int voffset;
 
-    if (pContext == NULL || pContext->state == HPEQ_STATE_UNINITIALIZED) {
+    if (pContext == NULL || pContext->state == TREBASS_STATE_UNINITIALIZED) {
         return -EINVAL;
     }
 
@@ -536,30 +352,30 @@ int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int)) {
             return -EINVAL;
         }
-        *(int *) pReplyData = HPEQ_init(pContext);
+        *(int *) pReplyData = TrebleBass_init(pContext);
         break;
     case EFFECT_CMD_SET_CONFIG:
         if (pCmdData == NULL || cmdSize != sizeof(effect_config_t) || pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
             return -EINVAL;
-        *(int *) pReplyData = HPEQ_configure(pContext, (effect_config_t *) pCmdData);
+        *(int *) pReplyData = TrebleBass_configure(pContext, (effect_config_t *) pCmdData);
         break;
     case EFFECT_CMD_RESET:
-        HPEQ_reset(pContext);
+        //HPEQ_reset(pContext);
         break;
     case EFFECT_CMD_ENABLE:
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
             return -EINVAL;
-        if (pContext->state != HPEQ_STATE_INITIALIZED)
+        if (pContext->state != TREBASS_STATE_INITIALIZED)
             return -ENOSYS;
-        pContext->state = HPEQ_STATE_ACTIVE;
+        pContext->state = TREBASS_STATE_ACTIVE;
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_DISABLE:
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
             return -EINVAL;
-        if (pContext->state != HPEQ_STATE_ACTIVE)
+        if (pContext->state != TREBASS_STATE_ACTIVE)
             return -ENOSYS;
-        pContext->state = HPEQ_STATE_INITIALIZED;
+        pContext->state = TREBASS_STATE_INITIALIZED;
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_GET_PARAM:
@@ -574,7 +390,7 @@ int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
 
         voffset = ((p->psize - 1) / sizeof(int32_t) + 1) * sizeof(int32_t);
 
-        p->status = HPEQ_getParameter(pContext, p->data, (size_t  *)&p->vsize, p->data + voffset);
+        p->status = TrebleBass_getParameter(pContext, p->data, (size_t  *)&p->vsize, p->data + voffset);
         *replySize = sizeof(effect_param_t) + voffset + p->vsize;
         break;
     case EFFECT_CMD_SET_PARAM:
@@ -587,7 +403,7 @@ int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
             *(int32_t *)pReplyData = -EINVAL;
             break;
         }
-        *(int *)pReplyData = HPEQ_setParameter(pContext, (void *)p->data, p->data + p->psize);
+        *(int *)pReplyData = TrebleBass_setParameter(pContext, (void *)p->data, p->data + p->psize);
         break;
     case EFFECT_CMD_OFFLOAD:
         *(int *)pReplyData = 0;
@@ -604,23 +420,23 @@ int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
     return 0;
 }
 
-int HPEQ_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
+int TrebleBass_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
 {
-    HPEQContext * pContext = (HPEQContext *) self;
+    TREBASSContext * pContext = (TREBASSContext *) self;
 
     if (pContext == NULL || pDescriptor == NULL) {
         ALOGE("%s: invalid param", __FUNCTION__);
         return -EINVAL;
     }
 
-    *pDescriptor = HPEQDescriptor;
+    *pDescriptor = TrebleBassDescriptor;
 
     return 0;
 }
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int HPEQLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, effect_handle_t *pHandle)
+int TrebleBassLib_Create(const effect_uuid_t * uuid, int32_t sessionId, int32_t ioId, effect_handle_t * pHandle)
 {
     int ret;
 
@@ -628,68 +444,68 @@ int HPEQLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, e
         return -EINVAL;
     }
 
-    if (memcmp(uuid, &HPEQDescriptor.uuid, sizeof(effect_uuid_t)) != 0) {
+    if (memcmp(uuid, &TrebleBassDescriptor.uuid, sizeof(effect_uuid_t)) != 0) {
         return -EINVAL;
     }
 
-    HPEQContext *pContext = new HPEQContext;
+    TREBASSContext *pContext = new TREBASSContext;
     if (!pContext) {
         ALOGE("%s: alloc HPEQContext failed", __FUNCTION__);
         return -EINVAL;
     }
-    memset(pContext, 0, sizeof(HPEQContext));
-    if (HPEQ_load_ini_file(pContext) < 0) {
+    memset(pContext, 0, sizeof(TREBASSContext));
+    if (TrebleBass_load_ini_file(pContext) < 0) {
         ALOGE("%s: Load INI File faied, use default param", __FUNCTION__);
-        pContext->gHPEQdata.enable = 1;
+        pContext->gTreBassdata.enable = 1;
     }
 
-    pContext->itfe = &HPEQInterface;
-    pContext->state = HPEQ_STATE_UNINITIALIZED;
+    pContext->itfe = &TrebleBassInterface;
+    pContext->state = TREBASS_STATE_UNINITIALIZED;
 
     *pHandle = (effect_handle_t)pContext;
 
-    pContext->state = HPEQ_STATE_INITIALIZED;
+    pContext->state = TREBASS_STATE_INITIALIZED;
 
     ALOGD("%s: %p", __FUNCTION__, pContext);
 
     return 0;
 }
 
-int HPEQLib_Release(effect_handle_t handle)
+int TrebleBassLib_Release(effect_handle_t handle)
 {
-    HPEQContext * pContext = (HPEQContext *)handle;
+    TREBASSContext * pContext = (TREBASSContext *)handle;
 
     if (pContext == NULL) {
         return -EINVAL;
     }
 
-    HPEQ_release(pContext);
-    pContext->state = HPEQ_STATE_UNINITIALIZED;
+    TrebleBass_release(pContext);
+    pContext->state = TREBASS_STATE_UNINITIALIZED;
     delete pContext;
 
     return 0;
 }
 
-int HPEQLib_GetDescriptor(const effect_uuid_t *uuid, effect_descriptor_t *pDescriptor)
+int TrebleBassLib_GetDescriptor(const effect_uuid_t *uuid, effect_descriptor_t *pDescriptor)
 {
     if (pDescriptor == NULL || uuid == NULL) {
         ALOGE("%s: called with NULL pointer", __FUNCTION__);
         return -EINVAL;
     }
 
-    if (memcmp(uuid, &HPEQDescriptor.uuid, sizeof(effect_uuid_t)) == 0) {
-        *pDescriptor = HPEQDescriptor;
+    if (memcmp(uuid, &TrebleBassDescriptor.uuid, sizeof(effect_uuid_t)) == 0) {
+        *pDescriptor = TrebleBassDescriptor;
         return 0;
     }
 
     return  -EINVAL;
 }
 
-// effect_handle_t interface implementation for HPEQ effect
-const struct effect_interface_s HPEQInterface = {
-        HPEQ_process,
-        HPEQ_command,
-        HPEQ_getDescriptor,
+// effect_handle_t interface implementation for TrebleBassInterface effect
+const struct effect_interface_s TrebleBassInterface = {
+        TrebleBass_process,
+        TrebleBass_command,
+        TrebleBass_getDescriptor,
         NULL,
 };
 
@@ -698,9 +514,9 @@ audio_effect_library_t AUDIO_EFFECT_LIBRARY_INFO_SYM = {
     .version = EFFECT_LIBRARY_API_VERSION,
     .name = "TrebleBass",
     .implementor = "Amlogic",
-    .create_effect = HPEQLib_Create,
-    .release_effect = HPEQLib_Release,
-    .get_descriptor = HPEQLib_GetDescriptor,
+    .create_effect = TrebleBassLib_Create,
+    .release_effect = TrebleBassLib_Release,
+    .get_descriptor = TrebleBassLib_GetDescriptor,
 };
 
 }; // extern "C"

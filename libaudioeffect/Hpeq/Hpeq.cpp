@@ -1,0 +1,620 @@
+/*
+ *
+ *  DESCRIPTION
+ *      This file implements a special EQ  from Amlogic.
+ *
+ */
+
+#define LOG_TAG "HPEQ_Effect"
+//#define LOG_NDEBUG 0
+
+#include <cutils/log.h>
+#include <utils/Log.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <hardware/audio_effect.h>
+#include <cutils/properties.h>
+
+#include "IniParser.h"
+#include "Hpeq.h"
+
+extern "C" {
+
+#include "libAmlHpeq.h"
+
+#define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
+#define AUDIO_EFFECT_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_AUDIO_EFFECT_DEFAULT.ini"
+
+// effect_handle_t interface implementation for HPEQ effect
+extern const struct effect_interface_s HPEQInterface;
+
+//HPEQ effect TYPE: 3337b21d-c8e6-4bbd-8f24-698ade8491b9
+//HPEQ effect UUID: 86cafba6-3ff3-485d-b8df-0de96b34b272
+const effect_descriptor_t HPEQDescriptor = {
+        {0x3337b21d, 0xc8e6, 0x4bbd, 0x8f24, {0x69, 0x8a, 0xde, 0x84, 0x91, 0xb9}}, // type
+        {0x86cafba6, 0x3ff3, 0x485d, 0xb8df, {0x0d, 0xe9, 0x6b, 0x34, 0xb2, 0x72}}, // uuid
+        EFFECT_CONTROL_API_VERSION,
+        EFFECT_FLAG_TYPE_POST_PROC | EFFECT_FLAG_DEVICE_IND | EFFECT_FLAG_NO_PROCESS | EFFECT_FLAG_OFFLOAD_SUPPORTED,
+        HPEQ_CUP_LOAD_ARM9E,
+        HPEQ_MEM_USAGE,
+        "Hpeq",
+        "Amlogic",
+};
+
+enum hpeq_state_e {
+    HPEQ_STATE_UNINITIALIZED,
+    HPEQ_STATE_INITIALIZED,
+    HPEQ_STATE_ACTIVE,
+};
+
+typedef enum {
+    HPEQ_PARAM_INVALID = -1,
+    HPEQ_PARAM_ENABLE,
+    HPEQ_PARAM_EFFECT_MODE,
+    HPEQ_PARAM_EFFECT_CUSTOM,
+} HPEQparams;
+
+typedef struct HPEQcfg_s {
+    int band1;
+    int band2;
+    int band3;
+    int band4;
+    int band5;
+} HPEQcfg;
+
+typedef struct HPEQcfg_8bit_s {
+    signed char band1;
+    signed char band2;
+    signed char band3;
+    signed char band4;
+    signed char band5;
+} HPEQcfg_8bit;
+
+typedef struct HPEQdata_s {
+    /* This struct is used to initialize HPEQ default config*/
+    HPEQcfg       cfg;
+    int32_t       *usr_cfg;
+    int32_t       count;
+    int32_t       enable;
+    int32_t       mode;
+    int32_t       mode_num;
+    int32_t       band_num;
+} HPEQdata;
+
+typedef struct HPEQContext_s {
+    const struct effect_interface_s *itfe;
+    effect_config_t                 config;
+    hpeq_state_e                    state;
+    HPEQdata                        gHPEQdata;
+} HPEQContext;
+
+const char *HPEQStatusstr[] = {"Disable", "Enable"};
+
+const int32_t default_usr_cfg[] = {
+     3,  0,  0,  0,  3,   /* standard */
+     8,  5, -3,  5,  6,   /* music */
+    12, -6,  7, 12, 10,   /* news */
+     0,  0,  0,  0,  0,   /* movie */
+     6, -2, -2,  6, -3,   /* game */
+     8, -8, 12, -1, -4,   /* user */
+};
+
+int HPEQ_get_model_name(char *model_name, int size)
+{
+     int ret = -1;
+    char node[PROPERTY_VALUE_MAX];
+
+    ret = property_get("tv.model_name", node, NULL);
+
+    if (ret < 0)
+        snprintf(model_name, size, "DEFAULT");
+    else
+        snprintf(model_name, size, "%s", node);
+    ALOGD("%s: Model Name -> %s", __FUNCTION__, model_name);
+    return ret;
+}
+
+int HPEQ_get_ini_file(char *ini_name, int size)
+{
+    int result = -1;
+    char model_name[50] = {0};
+    IniParser* pIniParser = NULL;
+    const char *ini_value = NULL;
+    const char *filename = MODEL_SUM_DEFAULT_PATH;
+
+    HPEQ_get_model_name(model_name, sizeof(model_name));
+    pIniParser = new IniParser();
+    if (pIniParser->parse(filename) < 0) {
+        ALOGW("%s: Load INI file -> %s Failed", __FUNCTION__, filename);
+        goto exit;
+    }
+
+    ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", AUDIO_EFFECT_DEFAULT_PATH);
+    if (ini_value == NULL || access(ini_value, F_OK) == -1) {
+        ALOGD("%s: INI File is not exist", __FUNCTION__);
+        goto exit;
+    }
+    ALOGD("%s: INI File -> %s", __FUNCTION__, ini_value);
+    strncpy(ini_name, ini_value, size);
+
+    result = 0;
+exit:
+    delete pIniParser;
+    pIniParser = NULL;
+    return result;
+}
+
+int HPEQ_parse_mode_config(HPEQContext *pContext, int mode_num, int band_num, const char *buffer)
+{
+    int i, j;
+    char *Rch = (char *)buffer;
+    HPEQdata *data = &pContext->gHPEQdata;
+
+    if (data->usr_cfg == NULL) {
+        data->usr_cfg = (int *)calloc(mode_num * band_num, sizeof(int));
+        if (!data->usr_cfg) {
+            ALOGE("%s: alloc failed", __FUNCTION__);
+            return -EINVAL;
+        }
+    }
+
+    for (i = 0; i < mode_num * band_num; i++) {
+        if (i == 0)
+            Rch = strtok(Rch, ",");
+        else
+            Rch = strtok(NULL, ",");
+        if (Rch == NULL) {
+            ALOGE("%s: Config Parse failed, using default config", __FUNCTION__);
+            return -1;
+        }
+        data->usr_cfg[i] = atoi(Rch);
+    }
+
+    return 0;
+}
+
+int HPEQ_load_ini_file(HPEQContext *pContext)
+{
+    int result = -1;
+    char ini_name[100] = {0};
+    const char *ini_value = NULL;
+    HPEQdata *data = &pContext->gHPEQdata;
+    IniParser* pIniParser = NULL;
+
+    if (HPEQ_get_ini_file(ini_name, sizeof(ini_name)) < 0)
+        goto error;
+
+    pIniParser = new IniParser();
+    if (pIniParser->parse((const char *)ini_name) < 0) {
+        ALOGD("%s: %s load failed", __FUNCTION__, ini_name);
+        goto error;
+    }
+    ini_value = pIniParser->GetString("Hpeq", "hpeq_enable", "1");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: enable -> %s", __FUNCTION__, ini_value);
+    data->enable = atoi(ini_value);
+
+
+    ini_value = pIniParser->GetString("Hpeq", "hpeq_modenum", "6");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: sound mode num -> %s", __FUNCTION__, ini_value);
+    data->mode_num = atoi(ini_value);
+    ini_value = pIniParser->GetString("Hpeq", "hpeq_bandnum", "5");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: sound mode num -> %s", __FUNCTION__, ini_value);
+    data->band_num = atoi(ini_value);
+    // level parse
+    ini_value = pIniParser->GetString("Hpeq", "hpeq_config", "NULL");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: condig -> %s", __FUNCTION__, ini_value);
+    result = HPEQ_parse_mode_config(pContext, data->mode_num, data->band_num, ini_value);
+
+    result = 0;
+error:
+    ALOGD("%s: %s", __FUNCTION__, result == 0 ? "sucessful" : "failed");
+    delete pIniParser;
+    pIniParser = NULL;
+    return result;
+}
+
+int HPEQ_init(HPEQContext *pContext)
+{
+    HPEQdata *data = &pContext->gHPEQdata;
+    int32_t count = data->count;
+
+    pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
+    pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    pContext->config.inputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    pContext->config.inputCfg.samplingRate = 48000;
+    pContext->config.inputCfg.bufferProvider.getBuffer = NULL;
+    pContext->config.inputCfg.bufferProvider.releaseBuffer = NULL;
+    pContext->config.inputCfg.bufferProvider.cookie = NULL;
+    pContext->config.inputCfg.mask = EFFECT_CONFIG_ALL;
+    pContext->config.outputCfg.accessMode = EFFECT_BUFFER_ACCESS_ACCUMULATE;
+    pContext->config.outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    pContext->config.outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    pContext->config.outputCfg.samplingRate = 48000;
+    pContext->config.outputCfg.bufferProvider.getBuffer = NULL;
+    pContext->config.outputCfg.bufferProvider.releaseBuffer = NULL;
+    pContext->config.outputCfg.bufferProvider.cookie = NULL;
+    pContext->config.outputCfg.mask = EFFECT_CONFIG_ALL;
+
+    /* default band is usr_cfg[(count>>LSR)+1] */
+    data->cfg.band1 = 0/*data->usr_cfg[(count >> LSR) + 1].band1*/;
+    data->cfg.band2 = 0/*data->usr_cfg[(count >> LSR) + 1].band2*/;
+    data->cfg.band3 = 0/*data->usr_cfg[(count >> LSR) + 1].band3*/;
+    data->cfg.band4 = 0/*data->usr_cfg[(count >> LSR) + 1].band4*/;
+    data->cfg.band5 = 0/*data->usr_cfg[(count >> LSR) + 1].band5*/;
+
+    HPEQ_init_api((void *)data);
+
+    ALOGD("%s: sucessful", __FUNCTION__);
+
+    return 0;
+}
+
+int HPEQ_reset(HPEQContext *pContext)
+{
+    HPEQ_reset_api();
+    return 0;
+}
+
+int HPEQ_configure(HPEQContext *pContext, effect_config_t *pConfig)
+{
+    if (pConfig->inputCfg.samplingRate != pConfig->outputCfg.samplingRate)
+        return -EINVAL;
+    if (pConfig->inputCfg.channels != pConfig->outputCfg.channels)
+        return -EINVAL;
+    if (pConfig->inputCfg.format != pConfig->outputCfg.format)
+        return -EINVAL;
+    if (pConfig->inputCfg.channels != AUDIO_CHANNEL_OUT_STEREO) {
+        ALOGW("%s: channels in = 0x%x channels out = 0x%x", __FUNCTION__, pConfig->inputCfg.channels, pConfig->outputCfg.channels);
+        pConfig->inputCfg.channels = pConfig->outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    }
+    if (pConfig->outputCfg.accessMode != EFFECT_BUFFER_ACCESS_WRITE &&
+            pConfig->outputCfg.accessMode != EFFECT_BUFFER_ACCESS_ACCUMULATE)
+        return -EINVAL;
+    if (pConfig->inputCfg.format != AUDIO_FORMAT_PCM_16_BIT) {
+        ALOGW("%s: format in = 0x%x format out = 0x%x", __FUNCTION__, pConfig->inputCfg.format, pConfig->outputCfg.format);
+        pConfig->inputCfg.format = pConfig->outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    }
+
+    memcpy(&pContext->config, pConfig, sizeof(effect_config_t));
+
+    return 0;
+}
+
+int HPEQ_getParameter(HPEQContext *pContext, void *pParam, size_t *pValueSize, void *pValue)
+{
+    int32_t param = *(int32_t *)pParam;
+    int32_t i, value;
+    HPEQcfg_8bit_s custom_value;
+    HPEQdata *data = &pContext->gHPEQdata;
+
+    switch (param) {
+    case HPEQ_PARAM_ENABLE:
+        if (*pValueSize < sizeof(int32_t)) {
+            *pValueSize = 0;
+            return -EINVAL;
+        }
+        value = data->enable;
+        *(int32_t *) pValue = value;
+        ALOGD("%s: Get status -> %s", __FUNCTION__, HPEQStatusstr[value]);
+        break;
+    case HPEQ_PARAM_EFFECT_MODE:
+        if (*pValueSize < sizeof(int32_t)) {
+            *pValueSize = 0;
+            return -EINVAL;
+        }
+        value = data->mode;
+        *(int32_t *) pValue = value;
+        ALOGD("%s: Get Mode -> %d", __FUNCTION__, value);
+        break;
+    case HPEQ_PARAM_EFFECT_CUSTOM:
+        if (*pValueSize < sizeof(HPEQcfg_8bit_s)) {
+            *pValueSize = 0;
+            return -EINVAL;
+        }
+        custom_value.band1 = (signed char)data->usr_cfg[(data->mode_num - 1) * data->band_num];
+        custom_value.band2 = (signed char)data->usr_cfg[(data->mode_num - 1) * data->band_num + 1];
+        custom_value.band3 = (signed char)data->usr_cfg[(data->mode_num - 1) * data->band_num + 2];
+        custom_value.band4 = (signed char)data->usr_cfg[(data->mode_num - 1) * data->band_num + 3];
+        custom_value.band5 = (signed char)data->usr_cfg[(data->mode_num - 1) * data->band_num + 4];
+        *(HPEQcfg_8bit_s *) pValue = custom_value;
+        for (i = 0; i < data->band_num; i++) {
+            ALOGD("%s: Get band[%d] -> %d", __FUNCTION__, i + 1, data->usr_cfg[(data->mode_num - 1) * data->band_num + i]);
+        }
+    break;
+    default:
+        ALOGE("%s: unknown param %d", __FUNCTION__, param);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+int HPEQ_setParameter(HPEQContext *pContext, void *pParam, void *pValue)
+{
+    int32_t param = *(int32_t *)pParam;
+    int32_t i, value;
+    HPEQcfg_8bit_s custom_value;
+    HPEQdata *data = &pContext->gHPEQdata;
+
+    switch (param) {
+    case HPEQ_PARAM_ENABLE:
+        value = *(int32_t *)pValue;
+        data->enable = value;
+        ALOGD("%s: Set status -> %s", __FUNCTION__, HPEQStatusstr[value]);
+        break;
+    case HPEQ_PARAM_EFFECT_MODE:
+        value = *(int32_t *)pValue;
+	if (value < 0 || value > data->mode_num) {
+          ALOGE("%s: incorrect mode value %d", __FUNCTION__, value);
+          return -EINVAL;
+	}
+        data->mode = value;
+        ALOGD("%s: Set Mode -> %d", __FUNCTION__, value);
+        for (i = 0; i < data->band_num; i++) {
+            ALOGD("%s: Set band[%d] -> %d", __FUNCTION__, i + 1, data->usr_cfg[value * data->band_num + i]);
+            HPEQ_setBand_api(data->usr_cfg[data->mode * data->band_num + i], i + 1);
+        }
+        break;
+    case HPEQ_PARAM_EFFECT_CUSTOM:
+        custom_value = *(HPEQcfg_8bit_s *)pValue;
+        data->usr_cfg[(data->mode_num - 1) * data->band_num] = (signed int)custom_value.band1;
+        data->usr_cfg[(data->mode_num - 1) * data->band_num + 1] = (signed int)custom_value.band2;
+        data->usr_cfg[(data->mode_num - 1) * data->band_num + 2] = (signed int)custom_value.band3;
+        data->usr_cfg[(data->mode_num - 1) * data->band_num + 3] = (signed int)custom_value.band4;
+        data->usr_cfg[(data->mode_num - 1) * data->band_num + 4] = (signed int)custom_value.band5;
+        for (i = 0; i < data->band_num; i++) {
+            ALOGD("%s: Set band[%d] -> %d", __FUNCTION__, i + 1, data->usr_cfg[(data->mode_num - 1) * data->band_num + i]);
+            HPEQ_setBand_api(data->usr_cfg[(data->mode_num - 1) * data->band_num + i], i + 1);
+        }
+    break;
+    default:
+        ALOGE("%s: unknown param %08x", __FUNCTION__, param);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+int HPEQ_release(HPEQContext *pContext)
+{
+    HPEQdata *data = &pContext->gHPEQdata;
+    HPEQ_release_api();
+    if (data->usr_cfg != NULL) {
+        free(data->usr_cfg);
+        data->usr_cfg = NULL;
+    }
+    return 0;
+}
+
+//-------------------Effect Control Interface Implementation--------------------------
+
+int HPEQ_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t *outBuffer)
+{
+    HPEQContext * pContext = (HPEQContext *)self;
+    if (pContext == NULL) {
+        return -EINVAL;
+    }
+
+   if (inBuffer == NULL || inBuffer->raw == NULL ||
+        outBuffer == NULL || outBuffer->raw == NULL ||
+        inBuffer->frameCount != outBuffer->frameCount ||
+        inBuffer->frameCount == 0) {
+        return -EINVAL;
+    }
+    if (pContext->state != HPEQ_STATE_ACTIVE) {
+        return -ENODATA;
+    }
+    int16_t *in  = (int16_t *)inBuffer->raw;
+    int16_t *out = (int16_t *)outBuffer->raw;
+    HPEQdata *data = &pContext->gHPEQdata;
+    if (!data->enable) {
+        for (size_t i = 0; i < inBuffer->frameCount; i++) {
+            *out++ = *in++;
+            *out++ = *in++;
+        }
+    } else {
+        HPEQ_process_api(in, out, inBuffer->frameCount);
+    }
+    return 0;
+}
+
+int HPEQ_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
+        void *pCmdData, uint32_t *replySize, void *pReplyData)
+{
+    HPEQContext * pContext = (HPEQContext *)self;
+    effect_param_t *p;
+    int voffset;
+
+    if (pContext == NULL || pContext->state == HPEQ_STATE_UNINITIALIZED) {
+        return -EINVAL;
+    }
+
+    ALOGD("%s: cmd = %u", __FUNCTION__, cmdCode);
+    switch (cmdCode) {
+    case EFFECT_CMD_INIT:
+        if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int)) {
+            return -EINVAL;
+        }
+        *(int *) pReplyData = HPEQ_init(pContext);
+        break;
+    case EFFECT_CMD_SET_CONFIG:
+        if (pCmdData == NULL || cmdSize != sizeof(effect_config_t) || pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
+            return -EINVAL;
+        *(int *) pReplyData = HPEQ_configure(pContext, (effect_config_t *) pCmdData);
+        break;
+    case EFFECT_CMD_RESET:
+        HPEQ_reset(pContext);
+        break;
+    case EFFECT_CMD_ENABLE:
+        if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
+            return -EINVAL;
+        if (pContext->state != HPEQ_STATE_INITIALIZED)
+            return -ENOSYS;
+        pContext->state = HPEQ_STATE_ACTIVE;
+        *(int *)pReplyData = 0;
+        break;
+    case EFFECT_CMD_DISABLE:
+        if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))
+            return -EINVAL;
+        if (pContext->state != HPEQ_STATE_ACTIVE)
+            return -ENOSYS;
+        pContext->state = HPEQ_STATE_INITIALIZED;
+        *(int *)pReplyData = 0;
+        break;
+    case EFFECT_CMD_GET_PARAM:
+        if (pCmdData == NULL ||
+            cmdSize != (int)(sizeof(effect_param_t) + sizeof(uint32_t)) ||
+            pReplyData == NULL || replySize == NULL ||
+            (*replySize < (int)(sizeof(effect_param_t) + sizeof(uint32_t) + sizeof(uint32_t)) &&
+            *replySize < (int)(sizeof(effect_param_t) + sizeof(uint32_t) + sizeof(HPEQcfg_8bit_s))))
+            return -EINVAL;
+        p = (effect_param_t *)pCmdData;
+        memcpy(pReplyData, pCmdData, sizeof(effect_param_t) + p->psize);
+        p = (effect_param_t *)pReplyData;
+
+        voffset = ((p->psize - 1) / sizeof(int32_t) + 1) * sizeof(int32_t);
+
+        p->status = HPEQ_getParameter(pContext, p->data, (size_t  *)&p->vsize, p->data + voffset);
+        *replySize = sizeof(effect_param_t) + voffset + p->vsize;
+        break;
+    case EFFECT_CMD_SET_PARAM:
+        if (pCmdData == NULL ||
+            (cmdSize != (int)(sizeof(effect_param_t) + sizeof(uint32_t) + sizeof(uint32_t)) &&
+            cmdSize != (int)(sizeof(effect_param_t) + sizeof(uint32_t) + sizeof(HPEQcfg_8bit_s)))||
+            pReplyData == NULL || replySize == NULL || *replySize != sizeof(int32_t))
+            return -EINVAL;
+        p = (effect_param_t *)pCmdData;
+        if (p->psize != sizeof(uint32_t) && p->vsize != sizeof(HPEQcfg_8bit_s)) {
+            *(int32_t *)pReplyData = -EINVAL;
+            break;
+        }
+        *(int *)pReplyData = HPEQ_setParameter(pContext, (void *)p->data, p->data + p->psize);
+        break;
+    case EFFECT_CMD_OFFLOAD:
+        *(int *)pReplyData = 0;
+        break;
+    case EFFECT_CMD_SET_DEVICE:
+    case EFFECT_CMD_SET_VOLUME:
+    case EFFECT_CMD_SET_AUDIO_MODE:
+        break;
+    default:
+        ALOGE("%s: invalid command %d", __FUNCTION__, cmdCode);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+int HPEQ_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
+{
+    HPEQContext * pContext = (HPEQContext *) self;
+
+    if (pContext == NULL || pDescriptor == NULL) {
+        ALOGE("%s: invalid param", __FUNCTION__);
+        return -EINVAL;
+    }
+
+    *pDescriptor = HPEQDescriptor;
+
+    return 0;
+}
+
+//-------------------- Effect Library Interface Implementation------------------------
+
+int HPEQLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, effect_handle_t *pHandle)
+{
+    int ret;
+
+    if (pHandle == NULL || uuid == NULL) {
+        return -EINVAL;
+    }
+
+    if (memcmp(uuid, &HPEQDescriptor.uuid, sizeof(effect_uuid_t)) != 0) {
+        return -EINVAL;
+    }
+
+    HPEQContext *pContext = new HPEQContext;
+    if (!pContext) {
+        ALOGE("%s: alloc HPEQContext failed", __FUNCTION__);
+        return -EINVAL;
+    }
+    memset(pContext, 0, sizeof(HPEQContext));
+    if (HPEQ_load_ini_file(pContext) < 0) {
+        ALOGE("%s: Load INI File faied, use default param", __FUNCTION__);
+        pContext->gHPEQdata.enable = 1;
+    }
+
+    pContext->itfe = &HPEQInterface;
+    pContext->state = HPEQ_STATE_UNINITIALIZED;
+
+    *pHandle = (effect_handle_t)pContext;
+
+    pContext->state = HPEQ_STATE_INITIALIZED;
+
+    ALOGD("%s: %p", __FUNCTION__, pContext);
+
+    return 0;
+}
+
+int HPEQLib_Release(effect_handle_t handle)
+{
+    HPEQContext * pContext = (HPEQContext *)handle;
+
+    if (pContext == NULL) {
+        return -EINVAL;
+    }
+
+    HPEQ_release(pContext);
+    pContext->state = HPEQ_STATE_UNINITIALIZED;
+    delete pContext;
+
+    return 0;
+}
+
+int HPEQLib_GetDescriptor(const effect_uuid_t *uuid, effect_descriptor_t *pDescriptor)
+{
+    if (pDescriptor == NULL || uuid == NULL) {
+        ALOGE("%s: called with NULL pointer", __FUNCTION__);
+        return -EINVAL;
+    }
+
+    if (memcmp(uuid, &HPEQDescriptor.uuid, sizeof(effect_uuid_t)) == 0) {
+        *pDescriptor = HPEQDescriptor;
+        return 0;
+    }
+
+    return  -EINVAL;
+}
+
+// effect_handle_t interface implementation for HPEQ effect
+const struct effect_interface_s HPEQInterface = {
+        HPEQ_process,
+        HPEQ_command,
+        HPEQ_getDescriptor,
+        NULL,
+};
+
+audio_effect_library_t AUDIO_EFFECT_LIBRARY_INFO_SYM = {
+    .tag = AUDIO_EFFECT_LIBRARY_TAG,
+    .version = EFFECT_LIBRARY_API_VERSION,
+    .name = "Hpeq",
+    .implementor = "Amlogic",
+    .create_effect = HPEQLib_Create,
+    .release_effect = HPEQLib_Release,
+    .get_descriptor = HPEQLib_GetDescriptor,
+};
+
+}; // extern "C"

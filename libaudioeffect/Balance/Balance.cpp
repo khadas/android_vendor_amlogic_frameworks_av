@@ -22,13 +22,16 @@
 #include <string.h>
 #include <math.h>
 #include <hardware/audio_effect.h>
+#include <cutils/properties.h>
 
 #include "IniParser.h"
 #include "Balance.h"
 
 extern "C" {
 
-#define DEFAULT_INI_FILE_PATH "/tvconfig/audio/amlogic_audio_effect_default.ini"
+#define MODEL_SUM_DEFAULT_PATH "/vendor/etc/tvconfig/model/model_sum.ini"
+#define AUDIO_EFFECT_DEFAULT_PATH "/vendor/etc/tvconfig/audio/AMLOGIC_AUDIO_EFFECT_DEFAULT.ini"
+
 // effect_handle_t interface implementation for Balance effect
 extern const struct effect_interface_s BalanceInterface;
 
@@ -108,30 +111,18 @@ int16_t clamp16(int32_t sample)
 
 int Balance_get_model_name(char *model_name, int size)
 {
-    int fd;
     int ret = -1;
-    char node[50] = {0};
-    const char *filename = "/proc/idme/model_name";
+    char node[PROPERTY_VALUE_MAX];
 
-    fd = open(filename, O_RDONLY);
-    if (fd < 0) {
-        ALOGE("%s: open %s failed", __FUNCTION__, filename);
-        goto exit;
-    }
-    if (read (fd, node, 50) < 0) {
-        ALOGE("%s: read Model Name failed", __FUNCTION__);
-        goto exit;
-    }
+    ret = property_get("tv.model_name", node, NULL);
 
-    ret = 0;
-exit:
     if (ret < 0)
         snprintf(model_name, size, "DEFAULT");
     else
         snprintf(model_name, size, "%s", node);
     ALOGD("%s: Model Name -> %s", __FUNCTION__, model_name);
-    close(fd);
     return ret;
+
 }
 
 int Balance_get_ini_file(char *ini_name, int size)
@@ -140,7 +131,7 @@ int Balance_get_ini_file(char *ini_name, int size)
     char model_name[50] = {0};
     IniParser* pIniParser = NULL;
     const char *ini_value = NULL;
-    const char *filename = "/tvconfig/model/model_sum.ini";
+    const char *filename = MODEL_SUM_DEFAULT_PATH;
 
     Balance_get_model_name(model_name, sizeof(model_name));
     pIniParser = new IniParser();
@@ -149,7 +140,7 @@ int Balance_get_ini_file(char *ini_name, int size)
         goto exit;
     }
 
-    ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", "/tvconfig/audio/AMLOGIC_AUDIO_EFFECT_DEFAULT.ini");
+    ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", AUDIO_EFFECT_DEFAULT_PATH);
     if (ini_value == NULL || access(ini_value, F_OK) == -1) {
         ALOGD("%s: INI File is not exist", __FUNCTION__);
         goto exit;
@@ -216,7 +207,7 @@ int Balance_load_ini_file(BalanceContext *pContext)
     ALOGD("%s: enable -> %s", __FUNCTION__, ini_value);
     data->enable = atoi(ini_value);
 
-    ini_value = pIniParser->GetString("Balance", "balance_level_num", "51");
+    ini_value = pIniParser->GetString("Balance", "balance_num", "51");
     if (ini_value == NULL)
         goto error;
     ALOGD("%s: num -> %s", __FUNCTION__, ini_value);

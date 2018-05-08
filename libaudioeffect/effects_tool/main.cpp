@@ -6,7 +6,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
+//#include <syslog.h>
+#include <utils/Log.h>
 #include <errno.h>
 #include <media/AudioEffect.h>
 

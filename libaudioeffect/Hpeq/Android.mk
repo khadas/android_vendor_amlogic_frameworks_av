@@ -6,7 +6,7 @@ LOCAL_MODULE_TAGS := optional
 
 LOCAL_ARM_MODE := arm
 
-LOCAL_MODULE:= libtreblebasswrapper
+LOCAL_MODULE:= libhpeqwrapper
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
@@ -18,9 +18,9 @@ LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
     hardware/amlogic/audio/utils/ini/include
 
-LOCAL_SRC_FILES += TrebleBass.cpp
+LOCAL_SRC_FILES += Hpeq.cpp
 
-LOCAL_LDFLAGS_arm  += $(LOCAL_PATH)/libAmlTrebleBass.a
+LOCAL_LDFLAGS_arm  += $(LOCAL_PATH)/libAmlHpeq.a
 
 LOCAL_PRELINK_MODULE := false
 

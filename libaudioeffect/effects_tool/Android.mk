@@ -12,6 +12,7 @@ LOCAL_SRC_FILES := main.cpp
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libutils \
+    libaudioclient \
     libmedia
 
 include $(BUILD_EXECUTABLE)
