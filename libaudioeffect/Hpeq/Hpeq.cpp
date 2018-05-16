@@ -33,11 +33,11 @@ extern "C" {
 // effect_handle_t interface implementation for HPEQ effect
 extern const struct effect_interface_s HPEQInterface;
 
-//HPEQ effect TYPE: 3337b21d-c8e6-4bbd-8f24-698ade8491b9
-//HPEQ effect UUID: 86cafba6-3ff3-485d-b8df-0de96b34b272
+//HPEQ effect TYPE: ce2c14af-84df-4c36-acf5-87e428ed05fc
+//HPEQ effect UUID: 049754aa-c4cf-439f-897e-37dd0c381120
 const effect_descriptor_t HPEQDescriptor = {
-        {0x3337b21d, 0xc8e6, 0x4bbd, 0x8f24, {0x69, 0x8a, 0xde, 0x84, 0x91, 0xb9}}, // type
-        {0x86cafba6, 0x3ff3, 0x485d, 0xb8df, {0x0d, 0xe9, 0x6b, 0x34, 0xb2, 0x72}}, // uuid
+        {0xce2c14af, 0x84df, 0x4c36, 0xacf5, {0x87, 0xe4, 0x28, 0xed, 0x05, 0xfc}}, // type
+        {0x049754aa, 0xc4cf, 0x439f, 0x897e, {0x37, 0xdd, 0x0c, 0x38, 0x11, 0x20}}, // uuid
         EFFECT_CONTROL_API_VERSION,
         EFFECT_FLAG_TYPE_POST_PROC | EFFECT_FLAG_DEVICE_IND | EFFECT_FLAG_NO_PROCESS | EFFECT_FLAG_OFFLOAD_SUPPORTED,
         HPEQ_CUP_LOAD_ARM9E,
