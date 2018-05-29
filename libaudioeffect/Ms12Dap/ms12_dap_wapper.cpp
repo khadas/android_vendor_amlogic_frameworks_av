@@ -490,12 +490,12 @@ extern "C" {
         .mi_de_enable = 0,
         .mi_surround_enable = 0,
         .calibration_boost = 0,
-        .leveler_amount = 7,
+        .leveler_amount = 4,
         .leveler_input = -384,
         .leveler_output = -384,
         .modeler_enable = 0,
         .modeler_calibration = 0,
-        .ieq_enable = 0,
+        .ieq_enable = 1,
         .ieq_amount = 10,
         .ieq_nb_bands = 20,
         .a_ieq_band_center = {
@@ -516,34 +516,136 @@ extern "C" {
         },
         .ao_band_gains = {
             {
-                0, 0, 70, -50, 75, 87, 37, 12, -30, -33,
-                109, 175, -9, -43, 20, 72, 80, 112, 78, 81
+                2, -1, 27, -38, -43, -5, 35, 24, -18, -70,
+                //-35, 26, 54, -1, -9, 60, 158, 141, 120, 173
+                -35, 26, 54, -1, -9, 97, 110, 96, 97, 93
             },
             {
-                0, 0, 59, -50, 75, 87, 23, 12, -30, -33,
-                109, 175, -9, -64, -4, 37, 80, 112, 78, 81
+                2, -1, 10, -43, -12, 25, 12, 10, -16, -60,
+                //-27, 28, 53, 21, 70, 187, 192, 192, 189, 173
+                -27, 28, 53, 21, 70, 97, 110, 96, 97, 93
             },
             {
-                0, 0, 0, -50, 75, 87, 0, 12, -30, -33,
-                109, 175, -9, 0, 0, 0, 80, 112, 78, 81
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             },
             {
-                0, 0, 0, -50, 75, 87, 0, 12, -30, -33,
-                109, 175, -9, 0, 0, 0, 80, 112, 78, 81
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             },
             {
-                0, 0, 0, -50, 75, 87, 0, 12, -30, -33,
-                109, 175, -9, 0, 0, 0, 80, 112, 78, 81
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             },
             {
-                0, 0, 0, -50, 75, 87, 0, 12, -30, -33,
-                109, 175, -9, 0, 0, 0, 80, 112, 78, 81
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             },
         },
         .bass_enable = 1,
-        .bass_boost = 111,
-        .bass_cutoff = 209,
-        .bass_width = 5,
+        .bass_boost = 87,
+        .bass_cutoff = 234,
+        .bass_width = 8,
+        .ar_bands = 20,
+        .ar_band_center_freq = {
+            47, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
+            2250, 3000, 3750, 4688, 5813, 7125, 9000, 11250, 13875, 19688
+        },
+        .ar_low_thresholds = {
+            -769, -365, -278, -208, -208, -192, -192, -283, -192, -192,
+            -192, -192, -192, -192, -192, -192, -192, -192, -192, -192
+        },
+        .ar_high_thresholds = {
+            -577, -173, -86, -16, -16, 0, 0, -91, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        },
+        .ar_isolated_bands = {
+            1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        },
+        .regulator_overdrive = 0,
+        .regulator_timbre = 12,
+        .regulator_distortion = 96,
+        .regulator_mode = 1,
+        .regulator_enable = 1,
+        .virtual_bass_mode = 2,
+        .virtual_bass_low_src_freq = 90,
+        .virtual_bass_high_src_freq = 234,
+        .virtual_bass_overall_gain = -213,
+        .virtual_bass_slope_gain = 0,
+        .virtual_bass_subgain = { -32, -156, -192},
+        .virtual_bass_mix_low_freq = 234,
+        .virtual_bass_mix_high_freq = 400,
+    };
+
+
+
+    dolby_base dap_dolby_base_standard = {
+        .pregain = 0,
+        .postgain = 0,
+        .systemgain = 0,
+        .headphone_reverb = 0,
+        .speaker_angle = 10,
+        .speaker_start = 200,
+        .mi_ieq_enable = 0,
+        .mi_dv_enable = 0,
+        .mi_de_enable = 0,
+        .mi_surround_enable = 0,
+        .calibration_boost = 0,
+        .leveler_amount = 0,
+        .leveler_input = -384,
+        .leveler_output = -384,
+        .modeler_enable = 0,
+        .modeler_calibration = 0,
+        .ieq_enable = 0,
+        .ieq_amount = 10,
+        .ieq_nb_bands = 20,
+        .a_ieq_band_center = {
+            65, 136, 223, 332, 467, 634, 841, 1098, 1416, 1812,
+            2302, 2909, 3663, 4598, 5756, 7194, 8976, 11186, 13927, 17326
+        },
+        .a_ieq_band_target = {
+            117, 133, 188, 176, 141, 149, 175, 185, 185, 200,
+            236, 242, 228, 213, 182, 132, 110, 68, -27, -240
+        },
+        .de_ducking = 0,
+        .volmax_boost = 0,
+        .optimizer_enable = 0,
+        .ao_bands = 20,
+        .ao_band_center_freq = {
+            47, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
+            2250, 3000, 3750, 4688, 5813, 7125, 9000, 11250, 13875, 19688
+        },
+        .ao_band_gains = {
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,  0, 0, 0, 0, 0, 0
+            },
+        },
+        .bass_enable = 0,
+        .bass_boost = 0,
+        .bass_cutoff = 0,
+        .bass_width = 0,
         .ar_bands = 20,
         .ar_band_center_freq = {
             47, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
@@ -566,18 +668,125 @@ extern "C" {
         .regulator_distortion = 96,
         .regulator_mode = 0,
         .regulator_enable = 0,
-        .virtual_bass_mode = 1,
-        .virtual_bass_low_src_freq = 90,
-        .virtual_bass_high_src_freq = 200,
+        .virtual_bass_mode = 0,
+        .virtual_bass_low_src_freq = 35,
+        .virtual_bass_high_src_freq = 160,
         .virtual_bass_overall_gain = 0,
         .virtual_bass_slope_gain = 0,
-        .virtual_bass_subgain = { -160, -144, -192},
-        .virtual_bass_mix_low_freq = 181,
-        .virtual_bass_mix_high_freq = 399,
+        .virtual_bass_subgain = {0, 0, 0},
+        .virtual_bass_mix_low_freq = 0,
+        .virtual_bass_mix_high_freq = 0,
+    };//done
+
+    dolby_base dap_dolby_base_news = {
+        .pregain = 0,
+        .postgain = 0,
+        .systemgain = 0,
+
+        .headphone_reverb = 0,
+
+        .speaker_angle = 10,
+        .speaker_start = 200,
+
+        .mi_ieq_enable = 0,
+        .mi_dv_enable = 0,
+        .mi_de_enable = 0,
+        .mi_surround_enable = 0,
+
+        .calibration_boost = 0,
+
+        .leveler_amount = 7,
+        .leveler_input = -384,
+        .leveler_output = -384,
+
+        .modeler_enable = 0,
+        .modeler_calibration = 0,
+
+        .ieq_enable = 0,
+        .ieq_amount = 10,
+        .ieq_nb_bands = 20,
+        .a_ieq_band_center = {
+            65, 136, 223, 332, 467, 634, 841, 1098, 1416, 1812,
+            2302, 2909, 3663, 4598, 5756, 7194, 8976, 11186, 13927, 17326
+        },
+        .a_ieq_band_target = {
+            67, 95, 172, 163, 168, 201, 189, 242, 196, 221,
+            192, 186, 168, 139, 102, 57, 35, 9, -55, -235
+        },
+
+        .de_ducking = 0,
+        .volmax_boost = 0,
+        .optimizer_enable = 1,
+        .ao_bands = 20,
+        .ao_band_center_freq = {
+            47, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
+            2250, 3000, 3750, 4688, 5813, 7125, 9000, 11250, 13875, 19688
+        },
+        .ao_band_gains = {
+            {
+                0, 0, -8, 0, 16, 14, 20, -1, -3, 44,
+                64, 24, -25, -31, -32, -30, -18, -30, -36, -19
+            },
+            {
+                0, 0, -6, 0, 16, 14, 20, 5, 3, 42,
+                51, 23, -25, -31, -32, -23, -26, -30, -36, -19
+            },
+            {
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            },
+            {
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            },
+        },
+        .bass_enable = 1,
+        .bass_boost = 54,
+        .bass_cutoff = 70,
+        .bass_width = 2,
+        .ar_bands = 20,
+        .ar_band_center_freq = {
+            47, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
+            2250, 3000, 3750, 4688, 5813, 7125, 9000, 11250, 13875, 19688
+        },
+        .ar_low_thresholds = {
+            -576, -576, -576, -576, -384, -576, -384, -448, -448, -448,
+            -384, -384, -384, -384, -384, -384, -389, -381, -400, -400
+        },
+        .ar_high_thresholds = {
+            -384, -384, -384, -384, -192, -384, -192, -256, -256, -256,
+            -192, -192, -192, -192, -192, -192, -197, -189, -208, -208
+        },
+        .ar_isolated_bands = {
+            1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        },
+        .regulator_overdrive = 0,
+        .regulator_timbre = 12,
+        .regulator_distortion = 96,
+        .regulator_mode = 1,
+        .regulator_enable = 1,
+        .virtual_bass_mode = 1,
+        .virtual_bass_low_src_freq = 35,
+        .virtual_bass_high_src_freq = 90,
+        .virtual_bass_overall_gain = 0,
+        .virtual_bass_slope_gain = 0,
+        .virtual_bass_subgain = { -240, -144, -192},
+        .virtual_bass_mix_low_freq = 90,
+        .virtual_bass_mix_high_freq = 281,
     };
 
 
-    dolby_base dap_dolby_base_standard = {
+
+    dolby_base dap_dolby_base_custom = {
         .pregain = 0,
         .postgain = 0,
         .systemgain = 0,
@@ -2270,13 +2479,13 @@ extern "C" {
         } else if (eMode == DAP_MODE_MUSIC) {
             dap_load_user_param(pContext, &dap_dolby_base_music);
         } else if (eMode == DAP_MODE_NEWS) {
-            dap_load_user_param(pContext, &dap_dolby_base_standard);
+            dap_load_user_param(pContext, &dap_dolby_base_news);
         } else if (eMode == DAP_MODE_THEATER) {
             dap_load_user_param(pContext, &dap_dolby_base_movie);
         } else if (eMode == DAP_MODE_GAME) {
-            dap_load_user_param(pContext, &dap_dolby_base_standard);
+            dap_load_user_param(pContext, &dap_dolby_base_custom); //JUST FOR DEBUG
         } else if (eMode == DAP_MODE_CUSTOM) {
-            dap_load_user_param(pContext, &dap_dolby_base_standard);
+            dap_load_user_param(pContext, &dap_dolby_base_custom);
         } else {
             dap_load_user_param(pContext, &dap_dolby_base_standard);
             pDapData->eDapEffectMode = DAP_MODE_STANDARD;
@@ -2351,6 +2560,139 @@ exit:
     }
 #endif
 
+    int DAP_print_base_setting(dolby_base* pDapBaseSets)
+    {
+        int i;
+        int *pInt;
+
+        ALOGD("%s: DAP_print_base_setting", __FUNCTION__);
+
+        ALOGD("pregain = %d", pDapBaseSets->pregain);
+        ALOGD("postgain = %d", pDapBaseSets->postgain);
+        ALOGD("systemgain = %d", pDapBaseSets->systemgain);
+
+        ALOGD("headphone_reverb = %d", pDapBaseSets->headphone_reverb);
+        ALOGD("speaker_angle = %d", pDapBaseSets->speaker_angle);
+        ALOGD("speaker_start = %d", pDapBaseSets->speaker_start);
+        ALOGD("mi_ieq_enable = %d", pDapBaseSets->mi_ieq_enable);
+        ALOGD("mi_dv_enable = %d", pDapBaseSets->mi_dv_enable);
+        ALOGD("mi_de_enable = %d", pDapBaseSets->mi_de_enable);
+        ALOGD("mi_surround_enable = %d", pDapBaseSets->mi_surround_enable);
+
+        ALOGD("calibration_boost = %d", pDapBaseSets->calibration_boost);
+        ALOGD("leveler_amount = %d", pDapBaseSets->leveler_amount);
+        ALOGD("leveler_input = %d", pDapBaseSets->leveler_input);
+        ALOGD("leveler_output = %d", pDapBaseSets->leveler_output);
+        ALOGD("modeler_enable = %d", pDapBaseSets->modeler_enable);
+        ALOGD("modeler_calibration = %d", pDapBaseSets->modeler_calibration);
+
+        ALOGD("ieq_enable = %d", pDapBaseSets->ieq_enable);
+        ALOGD("ieq_amount = %d", pDapBaseSets->ieq_amount);
+        ALOGD("ieq_nb_bands = %d", pDapBaseSets->ieq_nb_bands);
+        pInt = pDapBaseSets->a_ieq_band_center;
+        ALOGD("a_ieq_band_center = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        pInt = pDapBaseSets->a_ieq_band_target;
+        ALOGD("a_ieq_band_target = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        ALOGD("de_ducking = %d", pDapBaseSets->de_ducking);
+        ALOGD("volmax_boost = %d", pDapBaseSets->volmax_boost);
+
+        ALOGD("optimizer_enable = %d", pDapBaseSets->optimizer_enable);
+        ALOGD("ao_bands = %d", pDapBaseSets->ao_bands);
+        pInt = pDapBaseSets->ao_band_center_freq;
+        ALOGD("ao_band_center_freq = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        ALOGD("ao_band_gains = TODO");
+        ALOGD("bass_enable = %d", pDapBaseSets->bass_enable);
+        ALOGD("bass_boost = %d", pDapBaseSets->bass_boost);
+        ALOGD("bass_cutoff = %d", pDapBaseSets->bass_cutoff);
+        ALOGD("bass_width = %d", pDapBaseSets->bass_width);
+
+        ALOGD("ar_bands = %d", pDapBaseSets->ar_bands);
+        pInt = pDapBaseSets->ar_band_center_freq;
+        ALOGD("ar_band_center_freq = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        pInt = pDapBaseSets->ar_low_thresholds;
+        ALOGD("ar_low_thresholds = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        pInt = pDapBaseSets->ar_high_thresholds;
+        ALOGD("ar_high_thresholds = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        pInt = pDapBaseSets->ar_isolated_bands;
+        ALOGD("ar_isolated_bands = \n[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,\n %d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+              pInt[0], pInt[1], pInt[2], pInt[3], pInt[4],
+              pInt[5], pInt[6], pInt[7], pInt[8], pInt[9],
+              pInt[10], pInt[11], pInt[12], pInt[13], pInt[14],
+              pInt[15], pInt[16], pInt[17], pInt[18], pInt[19]);
+        ALOGD("regulator_overdrive = %d", pDapBaseSets->regulator_overdrive);
+        ALOGD("regulator_timbre = %d", pDapBaseSets->regulator_timbre);
+        ALOGD("regulator_distortion = %d", pDapBaseSets->regulator_distortion);
+        ALOGD("regulator_mode = %d", pDapBaseSets->regulator_mode);
+        ALOGD("regulator_enable = %d", pDapBaseSets->regulator_enable);
+
+        ALOGD("virtual_bass_mode = %d", pDapBaseSets->virtual_bass_mode);
+        ALOGD("virtual_bass_low_src_freq = %d", pDapBaseSets->virtual_bass_low_src_freq);
+        ALOGD("virtual_bass_high_src_freq = %d", pDapBaseSets->virtual_bass_high_src_freq);
+        ALOGD("virtual_bass_overall_gain = %d", pDapBaseSets->virtual_bass_overall_gain);
+        ALOGD("virtual_bass_slope_gain = %d", pDapBaseSets->virtual_bass_slope_gain);
+        pInt = pDapBaseSets->virtual_bass_subgain;
+        ALOGD("virtual_bass_subgain = \n[%d,%d,%d]", pInt[0], pInt[1], pInt[2]);
+        ALOGD("virtual_bass_mix_low_freq = %d", pDapBaseSets->virtual_bass_mix_low_freq);
+        ALOGD("virtual_bass_mix_high_freq = %d", pDapBaseSets->virtual_bass_mix_high_freq);
+        return 0;
+    }
+
+    int DAP_ini_parse_array(int* pIntArr, int num, const char *buffer)
+    {
+        int i;
+        char *Rch = NULL;
+        int result = -1;
+
+        if (pIntArr == NULL || buffer == NULL) {
+            ALOGE("%s: NULL pointer", __FUNCTION__);
+            return DAP_RET_FAIL;
+        }
+
+        Rch = (char *)buffer;
+        for (i = 0; i < num; i++) {
+            if (i == 0) {
+                Rch = strtok(Rch, ",");
+            } else {
+                Rch = strtok(NULL, ",");
+            }
+            if (Rch == NULL) {
+                ALOGE("%s: get arrry value failed", __FUNCTION__);
+                goto error;
+            }
+            pIntArr[i] = atoi(Rch);
+            //*(pIntArr+i] = atoi(Rch);
+            ALOGD("%s: data[%d] = %s -> %d", __FUNCTION__, i, Rch, pIntArr[i]);
+        }
+        return DAP_RET_SUCESS;
+error:
+        result = DAP_RET_FAIL;
+        ALOGD("%s: %s", __FUNCTION__, result == 0 ? "sucessful" : "failed");
+        return result;
+    }
 
     int DAP_get_model_name(char *model_name, int size)
     {
@@ -2433,14 +2775,6 @@ exit:
         ALOGD("%s: dap_effect_mode -> %s", __FUNCTION__, ini_value);
         pDAPdata->eDapEffectMode = (DAPmode)atoi(ini_value);
 
-        // dap_post_gain = 0
-        ini_value = pIniParser->GetString("DAP", "dap_post_gain", "0");
-        if (ini_value == NULL) {
-            goto error;
-        }
-        ALOGD("%s: dap_post_gain -> %s", __FUNCTION__, ini_value);
-        pDAPdata->dapPostGain = atoi(ini_value);
-
         // dap_vol_leveler = 1 , 0
         ini_value = pIniParser->GetString("DAP", "dap_vol_leveler", "NULL");
         if (ini_value == NULL) {
@@ -2476,6 +2810,480 @@ exit:
         }
         pDAPdata->dapDialogEnhance.de_amount = atoi(Rch);
         ALOGD("%s: dap dialog enhancer <enable> = %d <amount> = %d", __FUNCTION__, pDAPdata->dapDialogEnhance.de_enable, pDAPdata->dapDialogEnhance.de_enable);
+
+        // pregain = 0
+        ini_value = pIniParser->GetString("DAP", "pregain", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: pregain -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.pregain = atoi(ini_value);
+
+        // postgain = 0
+        ini_value = pIniParser->GetString("DAP", "postgain", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: postgain -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.postgain = atoi(ini_value);
+
+        // systemgain = 0
+        ini_value = pIniParser->GetString("DAP", "systemgain", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: systemgain -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.systemgain = atoi(ini_value);
+
+        // headphone_reverb = 0
+        ini_value = pIniParser->GetString("DAP", "headphone_reverb", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: headphone_reverb -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.headphone_reverb = atoi(ini_value);
+
+        // speaker_angle = 10
+        ini_value = pIniParser->GetString("DAP", "speaker_angle", "10");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: speaker_angle -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.speaker_angle = atoi(ini_value);
+
+        // speaker_start = 20
+        ini_value = pIniParser->GetString("DAP", "speaker_start", "20");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: speaker_start -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.speaker_start = atoi(ini_value);
+
+        // mi_ieq_enable = 0
+        ini_value = pIniParser->GetString("DAP", "mi_ieq_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: mi_ieq_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.mi_ieq_enable = atoi(ini_value);
+
+        // mi_dv_enable = 0
+        ini_value = pIniParser->GetString("DAP", "mi_dv_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: mi_dv_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.mi_dv_enable = atoi(ini_value);
+
+        // mi_de_enable = 0
+        ini_value = pIniParser->GetString("DAP", "mi_de_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: mi_de_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.mi_de_enable = atoi(ini_value);
+
+        // mi_surround_enable = 0
+        ini_value = pIniParser->GetString("DAP", "mi_surround_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: mi_surround_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.mi_surround_enable = atoi(ini_value);
+
+        // calibration_boost = 0
+        ini_value = pIniParser->GetString("DAP", "calibration_boost", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: calibration_boost -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.calibration_boost = atoi(ini_value);
+
+        // leveler_amount = 0
+        ini_value = pIniParser->GetString("DAP", "leveler_amount", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: leveler_amount -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.leveler_amount = atoi(ini_value);
+
+        // leveler_input = -384
+        ini_value = pIniParser->GetString("DAP", "leveler_input", "-384");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: leveler_input -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.leveler_input = atoi(ini_value);
+
+        // leveler_output = -384
+        ini_value = pIniParser->GetString("DAP", "leveler_output", "-384");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: leveler_output -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.leveler_output = atoi(ini_value);
+
+        // modeler_enable = 0
+        ini_value = pIniParser->GetString("DAP", "modeler_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: modeler_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.modeler_enable = atoi(ini_value);
+
+        // modeler_calibration = 0
+        ini_value = pIniParser->GetString("DAP", "modeler_calibration", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: modeler_calibration -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.modeler_calibration = atoi(ini_value);
+
+        // ieq_enable = 0
+        ini_value = pIniParser->GetString("DAP", "ieq_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ieq_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.ieq_enable = atoi(ini_value);
+
+        // ieq_amount = 10
+        ini_value = pIniParser->GetString("DAP", "ieq_amount", "10");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ieq_amount -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.ieq_amount = atoi(ini_value);
+
+        // ieq_nb_bands = 20
+        ini_value = pIniParser->GetString("DAP", "ieq_nb_bands", "20");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ieq_nb_bands -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.ieq_nb_bands = atoi(ini_value);
+
+        // a_ieq_band_center
+        ini_value = pIniParser->GetString("DAP", "a_ieq_band_center", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: a_ieq_band_center -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.a_ieq_band_center, pDAPdata->dapBaseSetting.ieq_nb_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // a_ieq_band_target
+        ini_value = pIniParser->GetString("DAP", "a_ieq_band_target", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: a_ieq_band_target -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.a_ieq_band_target, pDAPdata->dapBaseSetting.ieq_nb_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // de_ducking = 0
+        ini_value = pIniParser->GetString("DAP", "de_ducking", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: de_ducking -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.de_ducking = atoi(ini_value);
+
+        // volmax_boost = 0
+        ini_value = pIniParser->GetString("DAP", "volmax_boost", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: volmax_boost -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.volmax_boost = atoi(ini_value);
+
+        // optimizer_enable = 0
+        ini_value = pIniParser->GetString("DAP", "optimizer_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: optimizer_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.optimizer_enable = atoi(ini_value);
+
+        // ao_bands = 20
+        ini_value = pIniParser->GetString("DAP", "ao_bands", "20");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_bands -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.ao_bands = atoi(ini_value);
+
+        // ao_band_center_freq
+        ini_value = pIniParser->GetString("DAP", "ao_band_center_freq", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: a_ieq_band_center -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_center_freq, pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch1
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch1", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch1 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[0], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch2
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch2", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch2 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[1], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch3
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch3", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch3 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[2], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch4
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch4", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch4 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[3], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch5
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch5", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch5 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[4], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ao_band_gains_ch6
+        ini_value = pIniParser->GetString("DAP", "ao_band_gains_ch6", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ao_band_gains_ch6 -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ao_band_gains[5], pDAPdata->dapBaseSetting.ao_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // bass_enable = 0
+        ini_value = pIniParser->GetString("DAP", "bass_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: bass_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.bass_enable = atoi(ini_value);
+
+        // bass_boost = 0
+        ini_value = pIniParser->GetString("DAP", "bass_boost", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: bass_boost -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.bass_boost = atoi(ini_value);
+
+        // bass_cutoff = 0
+        ini_value = pIniParser->GetString("DAP", "bass_cutoff", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: bass_cutoff -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.bass_cutoff = atoi(ini_value);
+
+        // bass_width = 0
+        ini_value = pIniParser->GetString("DAP", "bass_width", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: bass_width -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.bass_width = atoi(ini_value);
+
+        // ar_bands = 20
+        ini_value = pIniParser->GetString("DAP", "ar_bands", "20");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ar_bands -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.ar_bands = atoi(ini_value);
+
+        // ar_band_center_freq
+        ini_value = pIniParser->GetString("DAP", "ar_band_center_freq", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ar_band_center_freq -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ar_band_center_freq, pDAPdata->dapBaseSetting.ar_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ar_low_thresholds
+        ini_value = pIniParser->GetString("DAP", "ar_low_thresholds", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ar_low_thresholds -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ar_low_thresholds, pDAPdata->dapBaseSetting.ar_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ar_high_thresholds
+        ini_value = pIniParser->GetString("DAP", "ar_high_thresholds", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ar_high_thresholds -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ar_high_thresholds, pDAPdata->dapBaseSetting.ar_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // ar_isolated_bands
+        ini_value = pIniParser->GetString("DAP", "ar_isolated_bands", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: ar_isolated_bands -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.ar_isolated_bands, pDAPdata->dapBaseSetting.ar_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // regulator_overdrive = 0
+        ini_value = pIniParser->GetString("DAP", "regulator_overdrive", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: regulator_overdrive -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.regulator_overdrive = atoi(ini_value);
+
+        // regulator_timbre = 12
+        ini_value = pIniParser->GetString("DAP", "regulator_timbre", "12");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: regulator_timbre -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.regulator_timbre = atoi(ini_value);
+
+        // regulator_distortion = 96
+        ini_value = pIniParser->GetString("DAP", "regulator_distortion", "96");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: regulator_distortion -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.regulator_distortion = atoi(ini_value);
+
+        // regulator_mode = 0
+        ini_value = pIniParser->GetString("DAP", "regulator_mode", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: regulator_mode -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.regulator_mode = atoi(ini_value);
+
+        // regulator_enable = 0
+        ini_value = pIniParser->GetString("DAP", "regulator_enable", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: regulator_enable -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.regulator_enable = atoi(ini_value);
+
+        // virtual_bass_mode = 0
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_mode", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_mode -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_mode = atoi(ini_value);
+
+        // virtual_bass_low_src_freq = 35
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_low_src_freq", "35");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_low_src_freq -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_mode = atoi(ini_value);
+
+        // virtual_bass_high_src_freq = 160
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_high_src_freq", "160");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_high_src_freq -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_high_src_freq = atoi(ini_value);
+
+        // virtual_bass_overall_gain = 0
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_overall_gain", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_overall_gain -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_overall_gain = atoi(ini_value);
+
+        // virtual_bass_slope_gain = 0
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_slope_gain", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_slope_gain -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_slope_gain = atoi(ini_value);
+
+        // virtual_bass_subgain
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_subgain", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_subgain -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapBaseSetting.virtual_bass_subgain, 3, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
+
+        // virtual_bass_mix_low_freq = 0
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_mix_low_freq", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_mix_low_freq -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_mix_low_freq = atoi(ini_value);
+
+        // virtual_bass_mix_high_freq = 0
+        ini_value = pIniParser->GetString("DAP", "virtual_bass_mix_high_freq", "0");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: virtual_bass_mix_high_freq -> %s", __FUNCTION__, ini_value);
+        pDAPdata->dapBaseSetting.virtual_bass_mix_high_freq = atoi(ini_value);
 
         result = 0;
 error:
@@ -3231,6 +4039,7 @@ Error:
         pContext->config.outputCfg.bufferProvider.cookie = NULL;
         pContext->config.outputCfg.mask = EFFECT_CONFIG_ALL;
 
+        DAP_print_base_setting(&pDapData->dapBaseSetting);
 
         /*
             ALOGI("%s, InputCfg: accessMode[0x%x],channels[0x%x](%d chs),format[0x%x],SampleRate[0x%x]\n",__FUNCTION__,
@@ -4005,6 +4814,9 @@ Exit_DAP:
         if (DAP_load_ini_file(pContext) < 0) {
             ALOGE("%s: Load INI File faied, all use default param", __FUNCTION__);
         }
+
+        // after loading dapBaseSetting from ini file , make it as custom settings.
+        memcpy((void *)&dap_dolby_base_custom, (void *) & (pContext->gDAPdata.dapBaseSetting) , sizeof(dolby_base));
 
         if (DAP_load_lib(pContext) < 0) {
             ALOGE("%s: Load Library File faied", __FUNCTION__);
