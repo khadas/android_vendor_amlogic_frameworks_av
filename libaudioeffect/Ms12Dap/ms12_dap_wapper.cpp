@@ -4400,11 +4400,29 @@ Error:
             break;
         case DAP_PARAM_GEQ_GAINS:
             custom_value = *(DAPcfg_8bit_s *)pValue;
-            pDapData->dapEQ.eq_params.a_geq_band_target[0] = (signed int)custom_value.band1;
-            pDapData->dapEQ.eq_params.a_geq_band_target[1] = (signed int)custom_value.band2;
-            pDapData->dapEQ.eq_params.a_geq_band_target[2] = (signed int)custom_value.band3;
-            pDapData->dapEQ.eq_params.a_geq_band_target[3] = (signed int)custom_value.band4;
-            pDapData->dapEQ.eq_params.a_geq_band_target[4] = (signed int)custom_value.band5;
+            int a_tmp[5];
+            int i;
+
+            // In current design, HPEQ and DAP shares same UI
+            // HPEQ's gain value range is [-10 , 10]
+            // DAP's  gain value range is [-576,576]
+            // Here we need to do mapping of value.
+            a_tmp[0] = (signed int)custom_value.band1;
+            a_tmp[1] = (signed int)custom_value.band2;
+            a_tmp[2] = (signed int)custom_value.band3;
+            a_tmp[3] = (signed int)custom_value.band4;
+            a_tmp[4] = (signed int)custom_value.band5;
+            for (i = 0; i < 5; i++) {
+                a_tmp[i] = a_tmp[i] * 55;
+                if (a_tmp[i] > DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MAX) {
+                    a_tmp[i] = DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MAX;
+                }
+                if (a_tmp[i] < DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MIN) {
+                    a_tmp[i] = DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MIN;
+                }
+                pDapData->dapEQ.eq_params.a_geq_band_target[i] = a_tmp[i];
+            }
+
             pDapData->dapEQ.eq_params.geq_nb_bands = 5;
             pDapData->dapEQ.eq_enable.geq_enable = 1;
             dap_set_eq_params(pContext, (dolby_eq_t *) & (pDapData->dapEQ));
