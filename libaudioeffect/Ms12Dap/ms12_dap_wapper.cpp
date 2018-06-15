@@ -352,7 +352,7 @@ extern "C" {
     const char *DapEnableStr[] = {"Disable", "Enable"};
     const char *DapEffectModeStr[] = {"Standard", "Music", "News", "Movie", "Game", "Custom"};
 
-    dolby_virtual_surround_t default_dap_virtual_surround = {
+    const dolby_virtual_surround_t default_dap_virtual_surround = {
         .enable = {
             .surround_decoder_enable = 1,
             .virtualizer_enable = DAP_CPDP_OUTPUT_2_SPEAKER,
@@ -360,18 +360,18 @@ extern "C" {
         .surround_boost = 2,
     };
 
-    dolby_dialog_enhance_t default_dap_dialog_enhance = {
+    const dolby_dialog_enhance_t default_dap_dialog_enhance = {
         .de_enable = 1,
         .de_amount = DAP_CPDP_DE_AMOUNT_DEFAULT,
     };
 
 
-    dolby_vol_leveler_t default_dap_vol_leveler = {
+    const dolby_vol_leveler_t default_dap_vol_leveler = {
         .vl_enable = 1,
         .vl_amount = DAP_CPDP_VOLUME_LEVELER_AMOUNT_DEFAULT,
     };
 
-    dolby_eq default_dap_eq = {
+    const dolby_eq default_dap_eq = {
         .eq_enable = { .geq_enable = 1, },
         .eq_params = {
             .geq_nb_bands = 5,
@@ -380,7 +380,7 @@ extern "C" {
         },
     };
 
-    dolby_base dap_dolby_base_movie = {
+    const dolby_base dap_dolby_base_movie = {
         .pregain = 0,
         .postgain = 0,
         .systemgain = 0,
@@ -478,7 +478,7 @@ extern "C" {
         .virtual_bass_mix_high_freq = 399,
     };
 
-    dolby_base dap_dolby_base_music = {
+    const dolby_base dap_dolby_base_music = {
         .pregain = 0,
         .postgain = 0,
         .systemgain = 0,
@@ -580,7 +580,7 @@ extern "C" {
 
 
 
-    dolby_base dap_dolby_base_standard = {
+    const dolby_base dap_dolby_base_standard = {
         .pregain = 0,
         .postgain = 0,
         .systemgain = 0,
@@ -678,7 +678,7 @@ extern "C" {
         .virtual_bass_mix_high_freq = 0,
     };//done
 
-    dolby_base dap_dolby_base_news = {
+    const dolby_base dap_dolby_base_news = {
         .pregain = 0,
         .postgain = 0,
         .systemgain = 0,
@@ -785,7 +785,7 @@ extern "C" {
     };
 
 
-
+    // custom data can be modified, no "const" needed. or system will crash.
     dolby_base dap_dolby_base_custom = {
         .pregain = 0,
         .postgain = 0,
@@ -2475,19 +2475,19 @@ extern "C" {
         pDapData->eDapEffectMode = eMode;
 
         if (eMode == DAP_MODE_STANDARD) {
-            dap_load_user_param(pContext, &dap_dolby_base_standard);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
         } else if (eMode == DAP_MODE_MUSIC) {
-            dap_load_user_param(pContext, &dap_dolby_base_music);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_music);
         } else if (eMode == DAP_MODE_NEWS) {
-            dap_load_user_param(pContext, &dap_dolby_base_news);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_news);
         } else if (eMode == DAP_MODE_THEATER) {
-            dap_load_user_param(pContext, &dap_dolby_base_movie);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_movie);
         } else if (eMode == DAP_MODE_GAME) {
-            dap_load_user_param(pContext, &dap_dolby_base_custom); //JUST FOR DEBUG
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_custom); //JUST FOR DEBUG
         } else if (eMode == DAP_MODE_CUSTOM) {
-            dap_load_user_param(pContext, &dap_dolby_base_custom);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
         } else {
-            dap_load_user_param(pContext, &dap_dolby_base_standard);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
             pDapData->eDapEffectMode = DAP_MODE_STANDARD;
         }
 
@@ -4339,9 +4339,23 @@ Error:
             value = *(uint32_t *)pValue;
             ALOGD("%s: Set value %d", __FUNCTION__, value);
             if (value > DAP_MODE_CUSTOM) {
-                value = 0;
+                value = DAP_MODE_STANDARD;
             }
             dap_set_effect_mode(pContext, (DAPmode)value);
+
+            // To compatible with UI design.
+            // Need to disable EQ bands setting to default value
+            // otherwise audio will enhance or impire in standard/music/movie... mode.
+            if (value != DAP_MODE_CUSTOM) {
+                dolby_eq_t dapEQTmp;
+                // default setting.
+                memcpy((void *) & (dapEQTmp), (void *)&default_dap_eq, sizeof(dolby_eq));
+                // disable GEQ
+                dapEQTmp.eq_enable.geq_enable = 0;
+                dap_set_eq_params(pContext, (dolby_eq_t *) & dapEQTmp);
+                ALOGD("%s: Disable GEQ", __FUNCTION__);
+            }
+
             ALOGD("%s: Set DAP effect -> %s", __FUNCTION__, DapEffectModeStr[value]);
             break;
         case DAP_PARAM_POST_GAIN:
@@ -4403,6 +4417,9 @@ Error:
             int a_tmp[5];
             int i;
 
+            // get needed parameters like freq/bands
+            memcpy((void *) & (pDapData->dapEQ), (void *)&default_dap_eq, sizeof(dolby_eq));
+
             // In current design, HPEQ and DAP shares same UI
             // HPEQ's gain value range is [-10 , 10]
             // DAP's  gain value range is [-576,576]
@@ -4413,7 +4430,7 @@ Error:
             a_tmp[3] = (signed int)custom_value.band4;
             a_tmp[4] = (signed int)custom_value.band5;
             for (i = 0; i < 5; i++) {
-                a_tmp[i] = a_tmp[i] * 55;
+                a_tmp[i] = a_tmp[i] * 57;
                 if (a_tmp[i] > DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MAX) {
                     a_tmp[i] = DAP_CPDP_GRAPHIC_EQUALIZER_GAIN_MAX;
                 }
@@ -4422,10 +4439,21 @@ Error:
                 }
                 pDapData->dapEQ.eq_params.a_geq_band_target[i] = a_tmp[i];
             }
-
             pDapData->dapEQ.eq_params.geq_nb_bands = 5;
             pDapData->dapEQ.eq_enable.geq_enable = 1;
+
+            // apply standard DAP audio effect when tuning EQ bands
+            // custom request
+            value = DAP_MODE_STANDARD;
+            dap_set_effect_mode(pContext, (DAPmode)value);
+
+            // apply eq setting
             dap_set_eq_params(pContext, (dolby_eq_t *) & (pDapData->dapEQ));
+
+            // java set wrong value when it [user]=DAP_MODE_CUSTOM, we have to modify it here
+            // TODO: Ask java application to fix it
+            pDapData->eDapEffectMode = DAP_MODE_CUSTOM;
+
             for (i = 0; i < pDapData->dapEQ.eq_params.geq_nb_bands; i++) {
                 ALOGD("%s: Set band[%d] -> %d", __FUNCTION__, i + 1, pDapData->dapEQ.eq_params.a_geq_band_target[i]);
             }
