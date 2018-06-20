@@ -66,8 +66,8 @@ extern "C" {
 
 #define DAP_RET_SUCESS 0
 #define DAP_RET_FAIL -1
+#define DAP_GEQ_NB_BANDS_DEFAULT 5
 #define DEFAULT_POSTGAIN     0
-
 
     enum DAP_state_e {
         DAP_STATE_UNINITIALIZED,
@@ -95,6 +95,7 @@ extern "C" {
         DAP_PARAM_DE_ENABLE,
         DAP_PARAM_DE_AMOUNT,
         DAP_PARAM_SUROUND_ENABLE,
+        DAP_PARAM_SURROUND_BOOST,
         DAP_PARAM_VIRTUALIZER_ENABLE
     } DAPparams;
 
@@ -357,7 +358,7 @@ extern "C" {
             .surround_decoder_enable = 1,
             .virtualizer_enable = DAP_CPDP_OUTPUT_2_SPEAKER,
         },
-        .surround_boost = 2,
+        .surround_boost = DAP_CPDP_SURROUND_BOOST_DEFAULT,
     };
 
     const dolby_dialog_enhance_t default_dap_dialog_enhance = {
@@ -2303,8 +2304,8 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: surround_decoder_enable\n");
         } else {
-            pDapData->dapVirtualSrnd.enable.surround_decoder_enable =
-                aml_virtual_surround->enable.surround_decoder_enable;
+            //pDapData->dapVirtualSrnd.enable.surround_decoder_enable =
+            //    aml_virtual_surround->enable.surround_decoder_enable;
         }
 
         ret = aml_dap_cpdp_output_mode_set(pDAPapi, dap_cpdp,
@@ -2312,8 +2313,8 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: virtualizer_enable\n");
         } else {
-            pDapData->dapVirtualSrnd.enable.virtualizer_enable =
-                aml_virtual_surround->enable.virtualizer_enable;
+            //pDapData->dapVirtualSrnd.enable.virtualizer_enable =
+            //    aml_virtual_surround->enable.virtualizer_enable;
         }
 
         ret = aml_dap_cpdp_surround_boost_set(pDAPapi, dap_cpdp,
@@ -2321,8 +2322,11 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: surround_boost\n");
         } else {
-            pDapData->dapVirtualSrnd.surround_boost = aml_virtual_surround->surround_boost;
+            //pDapData->dapVirtualSrnd.surround_boost = aml_virtual_surround->surround_boost;
         }
+
+        ALOGD("%s: dap dap_virtual_surround <enable> = %d <boost> = %d", __FUNCTION__, aml_virtual_surround->enable.surround_decoder_enable, aml_virtual_surround->surround_boost);
+
         return ret;
     }
 
@@ -2376,7 +2380,7 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: de_enable\n");
         } else {
-            pDapData->dapDialogEnhance.de_enable = aml_dialog_enhance->de_enable;
+            //pDapData->dapDialogEnhance.de_enable = aml_dialog_enhance->de_enable;
         }
 
         if (aml_dialog_enhance->de_amount > DAP_CPDP_DE_AMOUNT_MAX) {
@@ -2390,8 +2394,12 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: de_amount\n");
         } else {
-            pDapData->dapDialogEnhance.de_amount = aml_dialog_enhance->de_amount;
+            //pDapData->dapDialogEnhance.de_amount = aml_dialog_enhance->de_amount;
         }
+
+        ALOGD("%s: dap dialog enhancer <enable> = %d <amount> = %d", __FUNCTION__, aml_dialog_enhance->de_enable, aml_dialog_enhance->de_amount);
+
+
         return ret;
     }
 
@@ -2412,7 +2420,7 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: vol leveler_enable\n");
         } else {
-            pDapData->dapVolLeveler.vl_enable = aml_vol_leveler->vl_enable;
+            //pDapData->dapVolLeveler.vl_enable = aml_vol_leveler->vl_enable;
         }
 
         if (aml_vol_leveler->vl_amount > DAP_CPDP_VOLUME_LEVELER_AMOUNT_MAX) {
@@ -2426,8 +2434,10 @@ extern "C" {
         if (ret < 0) {
             ALOGE("Error: vol amount\n");
         } else {
-            pDapData->dapVolLeveler.vl_amount = aml_vol_leveler->vl_amount;
+            //pDapData->dapVolLeveler.vl_amount = aml_vol_leveler->vl_amount;
         }
+
+        ALOGD("%s: dap volume leveler <enable> = %d <amount> = %d", __FUNCTION__, aml_vol_leveler->vl_enable, aml_vol_leveler->vl_amount);
 
         return ret;
     }
@@ -2470,26 +2480,88 @@ extern "C" {
     int dap_set_effect_mode(DAPContext *pContext, DAPmode eMode)
     {
         //ALOGE("<%s::%d>--[mode:%d]", __FUNCTION__, __LINE__, mode);
+        dolby_virtual_surround_t dapVirtualSrnd;
+        dolby_dialog_enhance_t   dapDialogEnhance;
+        dolby_vol_leveler_t      dapVolLeveler;
+        //dolby_eq_t               dapEQ;
 
         DAPdata *pDapData = &pContext->gDAPdata;
         pDapData->eDapEffectMode = eMode;
 
+        memcpy((void *) & (dapDialogEnhance), (void *)&default_dap_dialog_enhance, sizeof(dolby_dialog_enhance_t));
+        memcpy((void *) & (dapVolLeveler), (void *)&default_dap_vol_leveler, sizeof(dolby_vol_leveler_t));
+        memcpy((void *) & (dapVirtualSrnd), (void *)&default_dap_virtual_surround, sizeof(dolby_virtual_surround_t));
+        //memcpy((void *) & (dapEQ), (void *)&default_dap_eq, sizeof(dolby_eq));
+
         if (eMode == DAP_MODE_STANDARD) {
+            //Standard: vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 0;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 0;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *) & (dapVolLeveler));
+            // base settings.
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
         } else if (eMode == DAP_MODE_MUSIC) {
+            //Music: vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 0;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 0;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *) & (dapVolLeveler));
+
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_music);
         } else if (eMode == DAP_MODE_NEWS) {
+            //News:  vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 0;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 0;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *) & (dapVolLeveler));
+
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_news);
         } else if (eMode == DAP_MODE_THEATER) {
+            //Movie: vitrual surround(80) Dialog Enhance(7) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 80;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 7;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *) & (dapVolLeveler));
+
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_movie);
         } else if (eMode == DAP_MODE_GAME) {
+            //Game: vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 0;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 0;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *) & (dapVolLeveler));
+
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_custom); //JUST FOR DEBUG
         } else if (eMode == DAP_MODE_CUSTOM) {
-            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
+            // set to user defined values
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *)&pDapData->dapVirtualSrnd);
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *)&pDapData->dapDialogEnhance);
+            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_music);
         } else {
-            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_standard);
-            pDapData->eDapEffectMode = DAP_MODE_STANDARD;
+            //Music: vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
+            dapVirtualSrnd.surround_boost = 0;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (dapVirtualSrnd));
+            dapDialogEnhance.de_amount = 0;
+            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (dapDialogEnhance));
+            dapVolLeveler.vl_amount = 0;
+
+            dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_music);
+            // default value should be DAP_MODE_MUSIC
+            pDapData->eDapEffectMode = DAP_MODE_MUSIC;
         }
+        ALOGD("%s: dap_effect_mode -> %s", __FUNCTION__, DapEffectModeStr[pDapData->eDapEffectMode]);
 
         return 0;
     }
@@ -2809,7 +2881,36 @@ exit:
             goto error;
         }
         pDAPdata->dapDialogEnhance.de_amount = atoi(Rch);
-        ALOGD("%s: dap dialog enhancer <enable> = %d <amount> = %d", __FUNCTION__, pDAPdata->dapDialogEnhance.de_enable, pDAPdata->dapDialogEnhance.de_enable);
+        ALOGD("%s: dap dialog enhancer <enable> = %d <amount> = %d", __FUNCTION__, pDAPdata->dapDialogEnhance.de_enable, pDAPdata->dapDialogEnhance.de_amount);
+
+        // dap_dialog_enhance = 1 , 0
+        ini_value = pIniParser->GetString("DAP", "dap_virtual_surround", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        Rch = (char *)ini_value;
+        Rch = strtok(Rch, ",");
+        if (Rch == NULL) {
+            goto error;
+        }
+        pDAPdata->dapVirtualSrnd.enable.surround_decoder_enable = atoi(Rch);
+        Rch = strtok(NULL, ",");
+        if (Rch == NULL) {
+            goto error;
+        }
+        pDAPdata->dapVirtualSrnd.surround_boost = atoi(Rch);
+        ALOGD("%s: dap dap_virtual_surround <enable> = %d <boost> = %d", __FUNCTION__, pDAPdata->dapVirtualSrnd.enable.surround_decoder_enable, pDAPdata->dapVirtualSrnd.surround_boost);
+
+        // dap_GEQ_gain
+        ini_value = pIniParser->GetString("DAP", "dap_GEQ_gain", "NULL");
+        if (ini_value == NULL) {
+            goto error;
+        }
+        ALOGD("%s: dap_GEQ_gain -> %s", __FUNCTION__, ini_value);
+        result = DAP_ini_parse_array(pDAPdata->dapEQ.eq_params.a_geq_band_target, pDAPdata->dapEQ.eq_params.geq_nb_bands, ini_value);
+        if (result == DAP_RET_FAIL) {
+            goto error;
+        }
 
         // pregain = 0
         ini_value = pIniParser->GetString("DAP", "pregain", "0");
@@ -4346,7 +4447,7 @@ Error:
             // To compatible with UI design.
             // Need to disable EQ bands setting to default value
             // otherwise audio will enhance or impire in standard/music/movie... mode.
-            if (value != DAP_MODE_CUSTOM) {
+            if (pDapData->eDapEffectMode != DAP_MODE_CUSTOM) {
                 dolby_eq_t dapEQTmp;
                 // default setting.
                 memcpy((void *) & (dapEQTmp), (void *)&default_dap_eq, sizeof(dolby_eq));
@@ -4355,6 +4456,7 @@ Error:
                 dap_set_eq_params(pContext, (dolby_eq_t *) & dapEQTmp);
                 ALOGD("%s: Disable GEQ", __FUNCTION__);
             }
+
 
             ALOGD("%s: Set DAP effect -> %s", __FUNCTION__, DapEffectModeStr[value]);
             break;
@@ -4372,6 +4474,7 @@ Error:
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            value = (value == 0) ? 0 : 1;
             pDapData->dapVolLeveler.vl_enable = value;
             dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
             ALOGD("%s: Set Volume Leveler enable -> %s", __FUNCTION__, DapEnableStr[value]);
@@ -4381,6 +4484,12 @@ Error:
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            if (value > DAP_CPDP_VOLUME_LEVELER_AMOUNT_MAX) {
+                value = DAP_CPDP_VOLUME_LEVELER_AMOUNT_MAX;
+            }
+            if (value < DAP_CPDP_VOLUME_LEVELER_AMOUNT_MIN) {
+                value = DAP_CPDP_VOLUME_LEVELER_AMOUNT_MIN;
+            }
             pDapData->dapVolLeveler.vl_amount = value;
             dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
             ALOGD("%s: Set Volume Leveler amount -> %d", __FUNCTION__, value);
@@ -4390,6 +4499,7 @@ Error:
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            value = (value == 0) ? 0 : 1;
             pDapData->dapDialogEnhance.de_enable = value;
             dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (pDapData->dapDialogEnhance));
             ALOGD("%s: Set Dialog Enhance Enable -> %s", __FUNCTION__, DapEnableStr[value]);
@@ -4400,6 +4510,12 @@ Error:
             }
             value = *(uint32_t *)pValue;
             pDapData->dapDialogEnhance.de_amount = value;
+            if (value > DAP_CPDP_DE_AMOUNT_MAX) {
+                value = DAP_CPDP_DE_AMOUNT_MAX;
+            }
+            if (value < DAP_CPDP_DE_AMOUNT_MIN) {
+                value = DAP_CPDP_DE_AMOUNT_MIN;
+            }
             dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *) & (pDapData->dapDialogEnhance));
             ALOGD("%s: Set Dialog Enhance amount -> %d", __FUNCTION__, value);
             break;
@@ -4408,6 +4524,7 @@ Error:
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            value = (value == 0) ? 0 : 1;
             pDapData->dapEQ.eq_enable.geq_enable = value;
             dap_set_eq_params(pContext, (dolby_eq_t *) & (pDapData->dapEQ));
             ALOGD("%s: Set EQ enable -> %s", __FUNCTION__, DapEnableStr[value]);
@@ -4439,12 +4556,12 @@ Error:
                 }
                 pDapData->dapEQ.eq_params.a_geq_band_target[i] = a_tmp[i];
             }
-            pDapData->dapEQ.eq_params.geq_nb_bands = 5;
+            pDapData->dapEQ.eq_params.geq_nb_bands = DAP_GEQ_NB_BANDS_DEFAULT;
             pDapData->dapEQ.eq_enable.geq_enable = 1;
 
             // apply standard DAP audio effect when tuning EQ bands
-            // custom request
-            value = DAP_MODE_STANDARD;
+            // customer request
+            value = DAP_MODE_CUSTOM;
             dap_set_effect_mode(pContext, (DAPmode)value);
 
             // apply eq setting
@@ -4463,19 +4580,38 @@ Error:
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            value = (value == 0) ? 0 : 1;
             pDapData->dapVirtualSrnd.enable.virtualizer_enable = value;
             dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (pDapData->dapVirtualSrnd));
-            ALOGD("%s: Set Virtual Surround enable -> %s", __FUNCTION__, DapEnableStr[value]);
+            ALOGD("%s: Set virtualizer enable -> %s", __FUNCTION__, DapEnableStr[value]);
             break;
         case DAP_PARAM_SUROUND_ENABLE:
             if (!pContext->gDAPLibHandler) {
                 return 0;
             }
             value = *(uint32_t *)pValue;
+            value = (value == 0) ? 0 : 1;
             pDapData->dapVirtualSrnd.enable.surround_decoder_enable = value;
             dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (pDapData->dapVirtualSrnd));
-            ALOGD("%s: Set Virtual Surround enable -> %s", __FUNCTION__, DapEnableStr[value]);
+            ALOGD("%s: Set surround_decoder enable -> %s", __FUNCTION__, DapEnableStr[value]);
             break;
+        case DAP_PARAM_SURROUND_BOOST:
+            if (!pContext->gDAPLibHandler) {
+                return 0;
+            }
+            value = *(uint32_t *)pValue;
+            if (value > DAP_CPDP_SURROUND_BOOST_MAX) {
+                value = DAP_CPDP_SURROUND_BOOST_MAX;
+            }
+            if (value < DAP_CPDP_SURROUND_BOOST_MIN) {
+                value = DAP_CPDP_SURROUND_BOOST_MIN;
+            }
+            pDapData->dapVirtualSrnd.surround_boost = value;
+            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *) & (pDapData->dapVirtualSrnd));
+            ALOGD("%s: Set Surround Boost value -> %d", __FUNCTION__, value);
+            break;
+
+
         default:
             ALOGE("%s: unknown param %08x", __FUNCTION__, param);
             return -EINVAL;
@@ -4547,11 +4683,10 @@ Error:
             // Initializing all parameers
             aml_dap_cpdp_output_mode_set(pDAPapi, pDapData->dap_cpdp, pDapData->dapCPDPOutputMode);
             dap_set_effect_mode(pContext, pDapData->eDapEffectMode);
-            dap_set_postgain(pContext, pDapData->dapPostGain);
-            dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
-            dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *)&pDapData->dapDialogEnhance);
-            dap_set_eq_params(pContext, (dolby_eq_t *)&pDapData->dapEQ);
-            dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *)&pDapData->dapVirtualSrnd);
+            //dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
+            //dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *)&pDapData->dapDialogEnhance);
+            //dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *)&pDapData->dapVirtualSrnd);
+            //dap_set_eq_params(pContext, (dolby_eq_t *)&pDapData->dapEQ);
             dap_set_enable(pContext, pDapData->bDapEnabled);
         }
 
@@ -4845,7 +4980,7 @@ Exit_DAP:
         }
         memset(pContext, 0, sizeof(DAPContext));
 
-        // set DAP default value
+        // MUST first set DAP default value, then load from ini file.
         pContext->gDAPdata.bDapEnabled = 1;
         pContext->gDAPdata.dapCPDPOutputMode = DAP_CPDP_OUTPUT_2_SPEAKER;
         pContext->gDAPdata.dapPostGain = DEFAULT_POSTGAIN;
