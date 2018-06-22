@@ -314,6 +314,7 @@ extern "C" {
         void *dap_cpdp;
         // audioInTmp16 for DLB buffer usage for dap process
         short audioInTmp16[DAP_CPDP_MAX_NUM_CHANNELS][DAP_CPDP_PCM_SAMPLES_PER_BLOCK];
+        unsigned int curInfrmCnts;
         unsigned long totalFrmCnts;
 
         /* DAP configuration */
@@ -2172,11 +2173,10 @@ extern "C" {
         DAPapi *pDAPapi = (DAPapi *) & (pContext->gDAPapi);
 
         pDapData = &(pContext->gDAPdata);
-        dap_cpdp = pDapData->dap_cpdp;
 
-        if (dap_cpdp) {
-            aml_dap_cpdp_shutdown(pDAPapi, dap_cpdp);
-            dap_cpdp = NULL;
+        if (pDapData->dap_cpdp) {
+            aml_dap_cpdp_shutdown(pDAPapi, pDapData->dap_cpdp);
+            pDapData->dap_cpdp = NULL;
         }
 
         /* Note that the dap_cpdp pointer is likely to be different to the
@@ -4627,7 +4627,11 @@ Error:
     }
 
     //-------------------Effect Control Interface Implementation--------------------------
-
+    /* In current design, in audio_hw.c,  audio_hal_data_processing()->audio_post_process()
+     *  audio_post_process() call DAP_process() with "inBuffer" and "outBuffer" share same memory address
+     *  to couple with this use case, DAP_process() copy "inBuffer" into "input_storage_buf"
+     *  to assure input data un touched
+     */
     int DAP_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t *outBuffer)
     {
         DAPContext *pContext = (DAPContext *)self;
@@ -4659,7 +4663,18 @@ Error:
             return -ENODATA;
         }
 
-        if (!pDapData->bDapCPDPInited) {
+        /* normally, we don't need this condiftion "(pDapData->curInfrmCnts != inBuffer->frameCount)"
+           * In test field, when audio source switching from local DD/DDP file playing to system key sound
+           * The last fragment form DD/DDP file will output together with system key sound.
+           * In this case, the inBuffer->frameCount change from 2046 to 1536
+           * Here we assume the inBuffer->frameCount means input source change
+           * If we re-initliaze the DAP core in this case, then this issue can be resolved
+           */
+        //if (!pDapData->bDapCPDPInited) {
+        if (!pDapData->bDapCPDPInited || (pDapData->curInfrmCnts != inBuffer->frameCount)) {
+
+            dap_release_api(pContext);
+
             ret = dap_init_api(pContext);
             if (ret == DAP_RET_FAIL) {
                 ALOGE("%s, dap_init_api() fail!!", __FUNCTION__);
@@ -4703,6 +4718,8 @@ Error:
             ALOGE("<%s::%d>--[dap_cpdp is illegal]", __FUNCTION__, __LINE__);
             return -EINVAL;
         }
+
+        pDapData->curInfrmCnts = inBuffer->frameCount;
 
         // read input / output data format from configurations
         inSampleSize = audioFormat2sampleSize((audio_format_t)pContext->config.inputCfg.format);
@@ -4985,6 +5002,8 @@ Exit_DAP:
         pContext->gDAPdata.dapCPDPOutputMode = DAP_CPDP_OUTPUT_2_SPEAKER;
         pContext->gDAPdata.dapPostGain = DEFAULT_POSTGAIN;
         pContext->gDAPdata.eDapEffectMode = DAP_MODE_STANDARD;
+        pContext->gDAPdata.curInfrmCnts = 0;
+        pContext->gDAPdata.totalFrmCnts = 0;
         memcpy((void *) & (pContext->gDAPdata.dapBaseSetting), (void *)&dap_dolby_base_standard, sizeof(dolby_base));
         memcpy((void *) & (pContext->gDAPdata.dapDialogEnhance), (void *)&default_dap_dialog_enhance, sizeof(dolby_dialog_enhance_t));
         memcpy((void *) & (pContext->gDAPdata.dapVolLeveler), (void *)&default_dap_vol_leveler, sizeof(dolby_vol_leveler_t));
