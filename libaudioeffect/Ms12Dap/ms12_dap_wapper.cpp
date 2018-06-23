@@ -26,6 +26,7 @@
 #include "IniParser.h"
 #include "dolby_audio_processing_control.h"
 #include "ms12_dap_wapper.h"
+#include <utils/CallStack.h>
 
 extern "C" {
 
@@ -67,6 +68,7 @@ extern "C" {
 #define DAP_RET_SUCESS 0
 #define DAP_RET_FAIL -1
 #define DAP_GEQ_NB_BANDS_DEFAULT 5
+#define DAP_INPUT_STORE_SIZE 8192 // 2048 samples * 2ch * 2 bytes
 #define DEFAULT_POSTGAIN     0
 
     enum DAP_state_e {
@@ -100,6 +102,7 @@ extern "C" {
     } DAPparams;
 
     typedef struct DAPapi_s {
+        int (*DAP_get_chip_ms12_license)(void);
         unsigned(*DAP_cpdp_get_latency)(void *);
         int (*DAP_cpdp_pvt_device_processing_supported)(int);
         int (*DAP_cpdp_pvt_dual_virtualizer_supported)(int);
@@ -118,8 +121,7 @@ extern "C" {
          * It must never block. */
         unsigned(*DAP_cpdp_prepare)(void *, const dlb_buffer *, const dap_cpdp_metadata *, const dap_cpdp_mix_data *);
 
-        dap_cpdp_metadata(*DAP_cpdp_process)(void *, const dlb_buffer *, void *);
-        //dap_cpdp_metadata (*DAP_cpdp_process_api) (void *, const dlb_buffer *, void *);
+        dap_cpdp_metadata(*dap_cpdp_process_api)(void *, const dlb_buffer *, void *, int *);
         /* Output channel count */
         void (*DAP_cpdp_output_mode_set)(void *, int);
         /*Dialog Enhancer enable setting */
@@ -311,11 +313,19 @@ extern "C" {
         dolby_base dapBase;
         void *pPersistMem;
         size_t uPersistMemSize;
+        void *pScratchMem;
+        size_t uScratchSize;
+
         void *dap_cpdp;
         // audioInTmp16 for DLB buffer usage for dap process
         short audioInTmp16[DAP_CPDP_MAX_NUM_CHANNELS][DAP_CPDP_PCM_SAMPLES_PER_BLOCK];
+        // should copy input data into "inStorgeBuf" for legacy reason
+        void *inStorgeBuf;
+        unsigned int inStorgeBufSize;
         unsigned int curInfrmCnts;
         unsigned long totalFrmCnts;
+        unsigned int islicenseOK;
+        unsigned int is_passthrough;
 
         /* DAP configuration */
         unsigned int bDapCPDPInited;
@@ -886,6 +896,19 @@ extern "C" {
         .virtual_bass_mix_high_freq = 0,
     };//done
 
+    //  int (*DAP_get_chip_ms12_license)(void);
+    int aml_get_chip_ms12_license(DAPapi *pDAPapi)
+    {
+        int ret = 0;
+
+        if (pDAPapi->DAP_get_chip_ms12_license == NULL) {
+            ALOGE("%s, pls load lib first.\n", __FUNCTION__);
+            return -1;
+        }
+
+        ret = (*pDAPapi->DAP_get_chip_ms12_license)();
+        return ret;
+    }
 
 
     //unsigned (*DAP_cpdp_get_latency)(void *);
@@ -1159,16 +1182,18 @@ extern "C" {
         return ret;
     }
 
-    dap_cpdp_metadata aml_dap_cpdp_process
+
+    dap_cpdp_metadata aml_dap_cpdp_process_api
     (DAPapi *pDAPapi
      , void *p_dap_cpdp
      , const dlb_buffer *p_output
      , void *scratch
+     , int *err
     )
     {
         dap_cpdp_metadata ret;
 
-        if (pDAPapi->DAP_cpdp_process == NULL) {
+        if (pDAPapi->dap_cpdp_process_api == NULL) {
             ALOGE("%s, pls load lib first.\n", __FUNCTION__);
             return ret;
         }
@@ -1180,10 +1205,12 @@ extern "C" {
             ALOGE("%s, p_dap_cpdp == NULL.\n", __FUNCTION__);
             return ret;
         }
-        ret = (*pDAPapi->DAP_cpdp_process)(p_dap_cpdp, p_output, scratch);
+        ret = (*pDAPapi->dap_cpdp_process_api)(p_dap_cpdp, p_output, scratch, err);
 
         return ret;
     }
+
+
 
     /* Output channel count */
     //void (*DAP_cpdp_output_mode_set)(void *, int);
@@ -2139,11 +2166,45 @@ extern "C" {
             return DAP_RET_FAIL;
         }
 
+
+        // Query DAP scratch memory usage
+        pDapData->uScratchSize = aml_dap_cpdp_query_scratch(pDAPapi, (const dap_cpdp_init_info *)pDapInitInfo);
+        if (pDapData->uScratchSize <= 0) {
+            ALOGE("<%s::%d>--[aml_dap_cpdp_query_scratch return size illegal]", __FUNCTION__, __LINE__);
+            if (pDapData->pPersistMem) {
+                free(pDapData->pPersistMem);
+                pDapData->pPersistMem = NULL;
+            }
+            //return -EINVAL;
+            return DAP_RET_FAIL;
+        }
+        //ALOGV("%s, scratch_size = %d\n", __FUNCTION__,scratch_size);
+
+        // prepare scratch memory
+        if (pDapData->pScratchMem) {
+            free(pDapData->pScratchMem);
+            pDapData->pScratchMem = NULL;
+        }
+
+        // malloc scratch  memory
+        pDapData->pScratchMem = malloc(pDapData->uScratchSize);
+        if (pDapData->pScratchMem == NULL) {
+            ALOGE("<%s::%d>--[aml_dap_cpdp_query_scratch return size illegal]", __FUNCTION__, __LINE__);
+            if (pDapData->pPersistMem) {
+                free(pDapData->pPersistMem);
+                pDapData->pPersistMem = NULL;
+            }
+            //return -EINVAL;
+            return DAP_RET_FAIL;
+        }
+        memset(pDapData->pScratchMem, 0, pDapData->uScratchSize);
+
         // just in case dap_cpdp is not closed before
         if (pDapData->dap_cpdp) {
             aml_dap_cpdp_shutdown(pDAPapi, pDapData->dap_cpdp);
             pDapData->dap_cpdp = NULL;
         }
+        //ALOGE("<%s::%d>--aml_dap_cpdp_shutdown done", __FUNCTION__, __LINE__);
 
         /* The dap_cpdp_init_info struct passed here must be the same as the one
          * passed to dap_cpdp_query_memory(). */
@@ -2152,6 +2213,10 @@ extern "C" {
             if (pDapData->pPersistMem != NULL) {
                 free(pDapData->pPersistMem);
                 pDapData->pPersistMem = NULL;
+            }
+            if (pDapData->pScratchMem) {
+                free(pDapData->pScratchMem);
+                pDapData->pScratchMem = NULL;
             }
             ALOGE("<%s::%d>--[aml_dap_cpdp_init init error]", __FUNCTION__, __LINE__);
             return DAP_RET_FAIL;
@@ -2186,6 +2251,12 @@ extern "C" {
             free(pDapData->pPersistMem);
             pDapData->pPersistMem = NULL;
         }
+
+        if (pDapData->pScratchMem) {
+            free(pDapData->pScratchMem);
+            pDapData->pScratchMem = NULL;
+        }
+
         pDapData->bDapCPDPInited = 0;
 
         ALOGI("<%s::%d>--[dap_release end]", __FUNCTION__, __LINE__);
@@ -3431,6 +3502,13 @@ error:
             ALOGD("<%s::%d>--%s[gDAPLibHandler:0x%x]", __FUNCTION__, __LINE__, LIBDAP_PATH_A, (unsigned int)pContext->gDAPLibHandler);
         }
 
+        //int (*DAP_get_chip_ms12_license)(void);
+        pDAPapi->DAP_get_chip_ms12_license = (int(*)(void))dlsym(pContext->gDAPLibHandler, "dap_get_chip_ms12_license");
+        if (!pDAPapi->DAP_get_chip_ms12_license) {
+            ALOGE("%s: find func get_chip_ms12_license() failed\n", __FUNCTION__);
+            goto Error;
+        }
+
         //unsigned (*DAP_cpdp_get_latency)(void *);
         pDAPapi->DAP_cpdp_get_latency = (unsigned(*)(void *))dlsym(pContext->gDAPLibHandler, "dap_cpdp_get_latency");
         if (!pDAPapi->DAP_cpdp_get_latency) {
@@ -3444,7 +3522,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_device_processing_supported:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->cpdp_pvt_device_processing_supported);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_device_processing_supported:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_device_processing_supported);
         }
 
         //int (*DAP_cpdp_pvt_dual_virtualizer_supported)(int);
@@ -3453,7 +3531,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dual_virtualizer_supported:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->cpdp_pvt_dual_virtualizer_supported);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dual_virtualizer_supported:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_dual_virtualizer_supported);
         }
 
         //int (*DAP_cpdp_pvt_dual_stereo_enabled)(unsigned , int);
@@ -3462,7 +3540,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dual_stereo_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->cpdp_pvt_dual_stereo_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dual_stereo_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_dual_stereo_enabled);
         }
 
         //unsigned (*DAP_cpdp_pvt_post_upmixer_channels)(const void *);
@@ -3471,7 +3549,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_post_upmixer_channels:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_post_upmixer_channels);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_post_upmixer_channels:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_post_upmixer_channels);
         }
 
         //unsigned (*DAP_cpdp_pvt_content_sidechain_channels)(const void *);
@@ -3480,7 +3558,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_content_sidechain_channels:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_content_sidechain_channels);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_content_sidechain_channels:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_content_sidechain_channels);
         }
 
         //int (*DAP_cpdp_pvt_surround_compressor_enabled)(const void *);
@@ -3489,7 +3567,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_surround_compressor_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_surround_compressor_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_surround_compressor_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_surround_compressor_enabled);
         }
 
         //int (*DAP_cpdp_pvt_content_sidechain_enabled)(const void *);
@@ -3498,7 +3576,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_content_sidechain_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_content_sidechain_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_content_sidechain_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_content_sidechain_enabled);
         }
 
         //int (*DAP_cpdp_pvt_ngcs_enabled)(const void *);
@@ -3507,7 +3585,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_ngcs_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_ngcs_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_ngcs_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_ngcs_enabled);
         }
 
         //int (*DAP_cpdp_pvt_audio_optimizer_enabled)(const void *);
@@ -3516,7 +3594,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_audio_optimizer_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_audio_optimizer_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_audio_optimizer_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_audio_optimizer_enabled);
         }
 
         //size_t (*DAP_cpdp_query_memory)(const dap_cpdp_init_info *);
@@ -3525,7 +3603,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_query_memory:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_query_memory);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_query_memory:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_query_memory);
         }
 
         //size_t (*DAP_cpdp_query_scratch)(const dap_cpdp_init_info *);
@@ -3534,7 +3612,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_query_scratch:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_query_scratch);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_query_scratch:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_query_scratch);
         }
 
 
@@ -3544,7 +3622,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_init:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_init);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_init:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_init);
         }
 
 
@@ -3554,7 +3632,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_shutdown:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_shutdown);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_shutdown:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_shutdown);
         }
 
         /* This function will be called from the same thread as the process function.
@@ -3565,18 +3643,19 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_prepare:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_prepare);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_prepare:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_prepare);
         }
 
         //dap_cpdp_metadata (*DAP_cpdp_process) (void *, const dlb_buffer *, void *);
 
-        pDAPapi->DAP_cpdp_process = (dap_cpdp_metadata(*)(void *, const dlb_buffer *, void *))dlsym(pContext->gDAPLibHandler, "dap_cpdp_process");
-        if (pDAPapi->DAP_cpdp_process == NULL) {
-            ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
+        pDAPapi->dap_cpdp_process_api = (dap_cpdp_metadata(*)(void *, const dlb_buffer *, void *, int *))dlsym(pContext->gDAPLibHandler, "dap_cpdp_process_api");
+        if (pDAPapi->dap_cpdp_process_api == NULL) {
+            ALOGE("%s,cant find dap_cpdp_process_api,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_process:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_process);
+            LOGFUNC("<%s::%d>--[dap_cpdp_process_api:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->dap_cpdp_process_api);
         }
+
 
         /* Output channel count */
         //void (*DAP_cpdp_output_mode_set)(void *, int);
@@ -3585,7 +3664,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_output_mode_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_output_mode_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_output_mode_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_output_mode_set);
         }
 
         /*Dialog Enhancer enable setting */
@@ -3595,7 +3674,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_de_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_de_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_de_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_de_enable_set);
         }
 
         /* Dialog Enhancer amount setting */
@@ -3605,7 +3684,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_de_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_de_amount_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_de_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_de_amount_set);
         }
 
         /* Dialog Enhancement ducking setting */
@@ -3615,7 +3694,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_de_ducking_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_de_ducking_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_de_ducking_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_de_ducking_set);
         }
 
         /* Surround boost setting */
@@ -3625,7 +3704,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_surround_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_surround_boost_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_surround_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_surround_boost_set);
         }
 
         /* Surround Decoder enable setting */
@@ -3635,7 +3714,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_surround_decoder_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_surround_decoder_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_surround_decoder_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_surround_decoder_enable_set);
         }
 
         /* Graphic Equalizer enable setting */
@@ -3645,7 +3724,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_graphic_equalizer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_graphic_equalizer_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_graphic_equalizer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_graphic_equalizer_enable_set);
         }
 
         /* Graphic Equalizer bands setting */
@@ -3655,7 +3734,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_graphic_equalizer_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_graphic_equalizer_bands_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_graphic_equalizer_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_graphic_equalizer_bands_set);
         }
 
         /* Audio optimizer enable setting */
@@ -3665,7 +3744,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_audio_optimizer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_audio_optimizer_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_audio_optimizer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_audio_optimizer_enable_set);
         }
 
         /* Audio optimizer bands setting */
@@ -3675,7 +3754,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_audio_optimizer_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_audio_optimizer_bands_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_audio_optimizer_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_audio_optimizer_bands_set);
         }
 
         /* Bass enhancer enable setting */
@@ -3685,7 +3764,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_bass_enhancer_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_bass_enhancer_enable_set);
         }
 
         //void (*DAP_cpdp_bass_enhancer_boost_set)(void *, int);
@@ -3694,7 +3773,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_bass_enhancer_boost_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_bass_enhancer_boost_set);
         }
 
         /* Bass enhancer cutoff frequency setting */
@@ -3704,7 +3783,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_cutoff_frequency_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_bass_enhancer_cutoff_frequency_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_cutoff_frequency_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_bass_enhancer_cutoff_frequency_set);
         }
 
         /* Bass enhancer width setting */
@@ -3714,7 +3793,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_width_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_bass_enhancer_width_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_bass_enhancer_width_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_bass_enhancer_width_set);
         }
 
         /* Visualizer bands get */
@@ -3724,7 +3803,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_vis_bands_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_vis_bands_get);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_vis_bands_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_vis_bands_get);
         }
 
         /* Visualizer custom bands get */
@@ -3734,7 +3813,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_vis_custom_bands_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_vis_custom_bands_get);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_vis_custom_bands_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_vis_custom_bands_get);
         }
 
         /* Audio Regulator Overdrive setting */
@@ -3744,7 +3823,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_overdrive_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_overdrive_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_overdrive_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_overdrive_set);
         }
 
         /* Audio Regulator Timbre Preservation setting */
@@ -3754,7 +3833,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_timbre_preservation_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_timbre_preservation_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_timbre_preservation_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_timbre_preservation_set);
         }
 
         /* Audio Regulator Distortion Relaxation Amount setting */
@@ -3764,7 +3843,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_relaxation_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_relaxation_amount_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_relaxation_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_relaxation_amount_set);
         }
 
         /* Audio Regulator Distortion Operating Mode setting */
@@ -3774,7 +3853,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_speaker_distortion_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_speaker_distortion_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_speaker_distortion_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_speaker_distortion_enable_set);
         }
 
         /* Audio Regulator Enable setting */
@@ -3784,7 +3863,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_enable_set);
         }
 
         /* Audio Regulator tuning setting */
@@ -3794,7 +3873,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_tuning_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_tuning_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_tuning_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_tuning_set);
         }
 
         /* Audio Regulator tuning info get */
@@ -3804,7 +3883,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_tuning_info_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_regulator_tuning_info_get);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_regulator_tuning_info_get:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_regulator_tuning_info_get);
         }
 
         /* Virtual Bass mode setting */
@@ -3814,7 +3893,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_mode_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_mode_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_mode_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_mode_set);
         }
 
         /* Virtual Bass source frequency boundaries setting */
@@ -3824,7 +3903,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_src_freqs_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_src_freqs_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_src_freqs_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_src_freqs_set);
         }
 
         //void (*DAP_cpdp_virtual_bass_overall_gain_set)(void *, int);
@@ -3833,7 +3912,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_overall_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_overall_gain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_overall_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_overall_gain_set);
         }
 
         //void (*DAP_cpdp_virtual_bass_slope_gain_set)(void *, int);
@@ -3842,7 +3921,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_slope_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_slope_gain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_slope_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_slope_gain_set);
         }
 
         //void (*DAP_cpdp_virtual_bass_subgains_set)(void *, unsigned, int *);
@@ -3851,7 +3930,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_subgains_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_subgains_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_subgains_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_subgains_set);
         }
 
         //void (*DAP_cpdp_virtual_bass_mix_freqs_set)(void *, unsigned, unsigned);
@@ -3860,7 +3939,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_mix_freqs_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtual_bass_mix_freqs_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtual_bass_mix_freqs_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtual_bass_mix_freqs_set);
         }
 
         //int (*DAP_cpdp_ieq_bands_set)(void *, unsigned int, const unsigned int *, const int *);
@@ -3869,7 +3948,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_ieq_bands_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_bands_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_ieq_bands_set);
         }
         //int (*DAP_cpdp_ieq_enable_set)(void *, int);
         pDAPapi->DAP_cpdp_ieq_enable_set = (int (*)(void *, int))dlsym(pContext->gDAPLibHandler, "dap_cpdp_ieq_enable_set");
@@ -3877,7 +3956,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_ieq_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_ieq_enable_set);
         }
         //int (*DAP_cpdp_volume_leveler_enable_set)(void *, int);
         pDAPapi->DAP_cpdp_volume_leveler_enable_set = (int (*)(void *, int))dlsym(pContext->gDAPLibHandler, "dap_cpdp_volume_leveler_enable_set");
@@ -3885,7 +3964,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_leveler_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_leveler_enable_set);
         }
         //int (*DAP_cpdp_volume_modeler_enable_set)(void *, int);
         pDAPapi->DAP_cpdp_volume_modeler_enable_set = (int (*)(void *, int))dlsym(pContext->gDAPLibHandler, "dap_cpdp_volume_modeler_enable_set");
@@ -3893,7 +3972,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_modeler_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_modeler_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_modeler_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_modeler_enable_set);
         }
 
         /*---------------------------------------------------------------------------------*/
@@ -3905,7 +3984,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_params_query_memory:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_dv_params_query_memory);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_params_query_memory:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_dv_params_query_memory);
         }
 
         //void (*DAP_cpdp_pvt_dv_params_init)(void *, const unsigned, unsigned, void);
@@ -3914,7 +3993,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_params_init:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_dv_params_init);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_params_init:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_dv_params_init);
         }
 
         //void (*DAP_cpdp_pvt_volume_and_ieq_update_control)(void *, unsigned);
@@ -3923,7 +4002,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_volume_and_ieq_update_control:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_volume_and_ieq_update_control);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_volume_and_ieq_update_control:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_volume_and_ieq_update_control);
         }
 
         //int (*DAP_cpdp_pvt_dv_enabled)(const void *);
@@ -3932,7 +4011,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_dv_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_dv_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_dv_enabled);
         }
 
         //int (*DAP_cpdp_pvt_async_dv_enabled)(const void *);
@@ -3941,7 +4020,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_async_dv_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_async_dv_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_async_dv_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_async_dv_enabled);
         }
 
         //int (*DAP_cpdp_pvt_async_leveler_or_modeler_enabled)(const void *);
@@ -3950,7 +4029,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_async_leveler_or_modeler_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pvt_async_leveler_or_modeler_enabled);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pvt_async_leveler_or_modeler_enabled:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pvt_async_leveler_or_modeler_enabled);
         }
 
         //void (*DAP_cpdp_volume_modeler_enable_set)(void *, int);
@@ -3959,7 +4038,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_system_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_system_gain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_system_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_system_gain_set);
         }
 
         //int (*DAP_cpdp_virtualizer_headphone_reverb_gain_set)(void *, int);
@@ -3968,7 +4047,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_headphone_reverb_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtualizer_headphone_reverb_gain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_headphone_reverb_gain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtualizer_headphone_reverb_gain_set);
         }
 
         //int (*DAP_cpdp_volume_leveler_amount_set)(void *, int);
@@ -3977,7 +4056,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_leveler_amount_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_leveler_amount_set);
         }
 
         //int (*DAP_cpdp_ieq_amount_set)(void *, int);
@@ -3986,7 +4065,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_ieq_amount_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_ieq_amount_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_ieq_amount_set);
         }
 
         //void (*DAP_cpdp_virtualizer_speaker_angle_set)(void *,unsigned int);
@@ -3995,7 +4074,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_speaker_angle_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtualizer_speaker_angle_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_speaker_angle_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtualizer_speaker_angle_set);
         }
 
         //void (*DAP_cpdp_virtualizer_speaker_start_freq_set)(void *,unsigned int);
@@ -4004,7 +4083,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_speaker_start_freq_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_virtualizer_speaker_start_freq_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_virtualizer_speaker_start_freq_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_virtualizer_speaker_start_freq_set);
         }
 
         //void (*DAP_cpdp_mi2ieq_steering_enable_set)(void *, int);
@@ -4013,7 +4092,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2ieq_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_mi2ieq_steering_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2ieq_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_mi2ieq_steering_enable_set);
         }
 
         //void (*DAP_cpdp_mi2dv_leveler_steering_enable_set)(void *, int);
@@ -4022,7 +4101,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2dv_leveler_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_mi2dv_leveler_steering_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2dv_leveler_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_mi2dv_leveler_steering_enable_set);
         }
 
         //void (*DAP_cpdp_mi2dialog_enhancer_steering_enable_set)(void *, int);
@@ -4031,7 +4110,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2dialog_enhancer_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_mi2dialog_enhancer_steering_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2dialog_enhancer_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_mi2dialog_enhancer_steering_enable_set);
         }
 
         //void (*DAP_cpdp_mi2surround_compressor_steering_enable_set)(void *, int);
@@ -4040,7 +4119,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2surround_compressor_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_mi2surround_compressor_steering_enable_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_mi2surround_compressor_steering_enable_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_mi2surround_compressor_steering_enable_set);
         }
 
         //void (*DAP_cpdp_calibration_boost_set)(void *, int);
@@ -4049,7 +4128,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_calibration_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_calibration_boost_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_calibration_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_calibration_boost_set);
         }
 
         //void (*DAP_cpdp_volume_leveler_in_target_set)(void *, int);
@@ -4058,7 +4137,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_in_target_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_leveler_in_target_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_in_target_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_leveler_in_target_set);
         }
 
         //void (*DAP_cpdp_volume_leveler_out_target_set)(void *, int);
@@ -4067,7 +4146,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_out_target_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_leveler_out_target_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_leveler_out_target_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_leveler_out_target_set);
         }
 
         //void (*DAP_cpdp_volume_modeler_calibration_set)(void *, int);
@@ -4076,7 +4155,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_modeler_calibration_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volume_modeler_calibration_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volume_modeler_calibration_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volume_modeler_calibration_set);
         }
 
         //void (*DAP_cpdp_pregain_set)(void *, int);
@@ -4085,7 +4164,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_pregain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_pregain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_pregain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_pregain_set);
         }
 
         //void (*DAP_cpdp_postgain_set)(void *, int);
@@ -4094,7 +4173,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_postgain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_postgain_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_postgain_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_postgain_set);
         }
 
         //void (*DAP_cpdp_volmax_boost_set)(void   *, int);
@@ -4103,7 +4182,7 @@ error:
             ALOGE("%s,cant find decoder lib,%s\n", __FUNCTION__, dlerror());
             goto Error;
         } else {
-            LOGFUNC("<%s::%d>--[DAP_cpdp_volmax_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->_cpdp_volmax_boost_set);
+            LOGFUNC("<%s::%d>--[DAP_cpdp_volmax_boost_set:0x%x]", __FUNCTION__, __LINE__, (unsigned int)pDAPapi->DAP_cpdp_volmax_boost_set);
         }
 
 
@@ -4638,6 +4717,7 @@ Error:
         int inSampleSize, outSampleSize;
         int inChannels, outChannels, inFormat, outFormat;
         int ret;
+        unsigned int tmpSize;
         unsigned int i;
         int status = EXIT_SUCCESS;
         DAPdata *pDapData = &(pContext->gDAPdata);
@@ -4663,6 +4743,27 @@ Error:
             return -ENODATA;
         }
 
+        // read input / output data format from configurations
+        inSampleSize = audioFormat2sampleSize((audio_format_t)pContext->config.inputCfg.format);
+        //if (-1 == inSampleSize) {
+        if (2 != inSampleSize) {
+            ALOGE("%s, invalid input sample size to process %d\n", __FUNCTION__, inSampleSize);
+            return -EINVAL;
+        }
+        outSampleSize = audioFormat2sampleSize((audio_format_t)pContext->config.outputCfg.format);
+        //if (-1 == outSampleSize) {
+        if (2 != outSampleSize) {
+            ALOGE("%s, invalid output sample size to process %d\n", __FUNCTION__, outSampleSize);
+            return -EINVAL;
+        }
+
+        inChannels = popcount(pContext->config.inputCfg.channels);
+        outChannels = popcount(pContext->config.outputCfg.channels);
+
+        // TODO: out channel num not match with DAP returned size???s
+        ALOGV("%s, inSampleSize = %d, outSampleSize = %d, inChannels = %d, outChannels = %d, inFrameCnt = %d\n",
+              __FUNCTION__, inSampleSize, outSampleSize, inChannels, outChannels, inBuffer->frameCount);
+
         /* normally, we don't need this condiftion "(pDapData->curInfrmCnts != inBuffer->frameCount)"
            * In test field, when audio source switching from local DD/DDP file playing to system key sound
            * The last fragment form DD/DDP file will output together with system key sound.
@@ -4673,8 +4774,20 @@ Error:
         //if (!pDapData->bDapCPDPInited) {
         if (!pDapData->bDapCPDPInited || (pDapData->curInfrmCnts != inBuffer->frameCount)) {
 
-            dap_release_api(pContext);
+            if (NULL == pDapData->inStorgeBuf) {
+                tmpSize = inBuffer->frameCount * inChannels * inSampleSize;
+                pDapData->inStorgeBuf = malloc(tmpSize);
+                if (pDapData->inStorgeBuf == NULL) {
+                    ALOGE("%s,no memory for headphone output buffer", __FUNCTION__);
+                    //ret = -ENOMEM;
+                    return -EINVAL;
+                }
+                pDapData->inStorgeBufSize = tmpSize;
+                pDapData->curInfrmCnts = inBuffer->frameCount;
+                ALOGE("%s,malloc inStorgeBufSize [%p], size = %d", __FUNCTION__, pDapData->inStorgeBuf, pDapData->inStorgeBufSize);
+            }
 
+            dap_release_api(pContext);
             ret = dap_init_api(pContext);
             if (ret == DAP_RET_FAIL) {
                 ALOGE("%s, dap_init_api() fail!!", __FUNCTION__);
@@ -4704,12 +4817,14 @@ Error:
             //dap_set_eq_params(pContext, (dolby_eq_t *)&pDapData->dapEQ);
             dap_set_enable(pContext, pDapData->bDapEnabled);
         }
+        pDapData->curInfrmCnts = inBuffer->frameCount;
 
         // pass through data
-        if (!pDapData->bDapEnabled || !pContext->gDAPLibHandler) {
+        if (!pDapData->bDapEnabled || !pContext->gDAPLibHandler || !pDapData->islicenseOK) {
             // TODO: different sample size support
-            ALOGD("%s, do_passthrough()\n", __FUNCTION__);
+            ALOGD("%s, do_passthrough() ,bLicense = %d, bDapEnabled= %d\n", __FUNCTION__, pDapData->islicenseOK, pDapData->bDapEnabled);
             ret = do_passthrough(inBuffer, outBuffer);
+            pDapData->is_passthrough = 1;
             return ret;
         }
 
@@ -4718,59 +4833,16 @@ Error:
             ALOGE("<%s::%d>--[dap_cpdp is illegal]", __FUNCTION__, __LINE__);
             return -EINVAL;
         }
-
-        pDapData->curInfrmCnts = inBuffer->frameCount;
-
-        // read input / output data format from configurations
-        inSampleSize = audioFormat2sampleSize((audio_format_t)pContext->config.inputCfg.format);
-        //if (-1 == inSampleSize) {
-        if (2 != inSampleSize) {
-            ALOGE("%s, invalid input sample size to process %d\n", __FUNCTION__, inSampleSize);
-            return -EINVAL;
-        }
-        outSampleSize = audioFormat2sampleSize((audio_format_t)pContext->config.outputCfg.format);
-        //if (-1 == outSampleSize) {
-        if (2 != outSampleSize) {
-            ALOGE("%s, invalid output sample size to process %d\n", __FUNCTION__, outSampleSize);
-            return -EINVAL;
-        }
-
-        inChannels = popcount(pContext->config.inputCfg.channels);
-        outChannels = popcount(pContext->config.outputCfg.channels);
-
-        // TODO: out channel num not match with DAP returned size???s
-        ALOGV("%s, inSampleSize = %d, outSampleSize = %d, inChannels = %d, outChannels = %d, inFrameCnt = %d\n",
-              __FUNCTION__, inSampleSize, outSampleSize, inChannels, outChannels, inBuffer->frameCount);
-
-        // Query DAP scratch memory usage
-        size_t scratch_size = aml_dap_cpdp_query_scratch(pDAPapi, (dap_cpdp_init_info *) & (pDapData->init_info));
-        if (scratch_size <= 0) {
-            ALOGE("<%s::%d>--[aml_dap_cpdp_query_scratch return size illegal]", __FUNCTION__, __LINE__);
-            return -EINVAL;
-        }
-        //ALOGV("%s, scratch_size = %d\n", __FUNCTION__,scratch_size);
-
-        // malloc scratch  memory
-        void *scratch_memory = malloc(scratch_size);
-        if (scratch_memory == NULL) {
-            ALOGE("<%s::%d>--[aml_dap_cpdp_query_scratch return size illegal]", __FUNCTION__, __LINE__);
+        if (pDapData->pScratchMem == NULL) {
+            ALOGE("<%s::%d>--[!pDapData->pScratchMem]", __FUNCTION__, __LINE__);
             return -EINVAL;
         }
 
         dlb_buffer inDlbBuf;
         dlb_buffer outDlbBuf;
-        short *pBlkBuf16 = NULL;
+        short *pBlkBuf16In = NULL;
+        short *pBlkBuf16Out = NULL;
         void *channel_pointers[DAP_CPDP_MAX_NUM_CHANNELS];
-
-        int inLength = inBuffer->frameCount * inChannels * inSampleSize;
-        char *input_storage_buf = (char *)malloc(inLength);
-        if (input_storage_buf == NULL) {
-            ALOGE("<%s::%d>--[input_storage_buf is NULL]", __FUNCTION__, __LINE__);
-            if (scratch_memory) {
-                free(scratch_memory);
-            }
-            return -EINVAL;
-        }
 
         /* Audio input and output is done using dlb_buffer structures. These have
          * an array of channel pointers, and a stride. We create two dlb_buffer
@@ -4794,9 +4866,22 @@ Error:
         unsigned char *pInChar = (unsigned char *)inBuffer->raw;
         unsigned char *pOutChar = (unsigned char *)outBuffer->raw;
 
-        memcpy((void *)input_storage_buf, (const void *)pInChar, inLength);
+        tmpSize = inBuffer->frameCount * inChannels * inSampleSize;
+        if (pDapData->inStorgeBufSize < tmpSize) {
+            ALOGI("%s,realloc pDapData->inStorgeBuf size from %zu to %zu", __FUNCTION__, pDapData->inStorgeBufSize, tmpSize);
+            pDapData->inStorgeBuf = realloc(pDapData->inStorgeBuf, tmpSize);
+            if (pDapData->inStorgeBuf == NULL) {
+                ALOGE("%s,no memory for inStorgeBuf buffer", __FUNCTION__);
+                //ret = -ENOMEM;
+                return -EINVAL;
+            }
+            pDapData->inStorgeBufSize = tmpSize;
+        }
 
-        int cnt = 0;
+        memset(pDapData->inStorgeBuf, 0, pDapData->inStorgeBufSize);
+        char *input_storage_buf = (char *)pDapData->inStorgeBuf;
+        memcpy((void *)input_storage_buf, (const void *)pInChar, tmpSize);
+
         for (i = 0; i < DAP_CPDP_MAX_NUM_CHANNELS; i++) {
             // we don't have malloc these data,we use .DATA area.
             channel_pointers[i] = pDapData->audioInTmp16[i];
@@ -4806,24 +4891,29 @@ Error:
 
         pDapData->totalFrmCnts += inBuffer->frameCount;
         if (!(pDapData->totalFrmCnts & 0x7fff)) {
-            ALOGI("%s, FrmCnts = %lu,inSampleSize = %d, outSampleSize = %d, inChannels = %d, outChannels = %d, perInFrameCnt = %d\n",
-                  __FUNCTION__, pDapData->totalFrmCnts, inSampleSize, outSampleSize, inChannels, outChannels, inBuffer->frameCount);
+            ALOGI("%s, FrmCnts = %lu,inSampleSize = %d, outSampleSize = %d, inChs = %d, outChs = %d, perInFrameCnt = %d licenseOK = %d, pass = %d\n",
+                  __FUNCTION__, pDapData->totalFrmCnts, inSampleSize, outSampleSize, inChannels, outChannels, inBuffer->frameCount, pDapData->islicenseOK, pDapData->is_passthrough);
+            //android::CallStack stack;
+            //stack.update();
+            //stack.log("MS12DAP_Effect_callstack");
         }
 
         if (inBuffer->frameCount % DAP_CPDP_PCM_SAMPLES_PER_BLOCK != 0) {
             ALOGE("%s,frameCount(%d) not muliplier of %d", __FUNCTION__, inBuffer->frameCount, DAP_CPDP_PCM_SAMPLES_PER_BLOCK);
         }
 
+        int cnt = 0;
         for (i = 0; i < inBuffer->frameCount / DAP_CPDP_PCM_SAMPLES_PER_BLOCK; i++) {
             int offset = i * DAP_CPDP_PCM_SAMPLES_PER_BLOCK * inChannels * sizeof(short);
-            pBlkBuf16 = (short *)(input_storage_buf + offset);
+            pBlkBuf16In = (short *)(input_storage_buf + offset);
             unsigned ch_id = 0;
             unsigned nch = inDlbBuf.nchannel;
 
             /* Interleave data into DLB buffer structure */
             for (cnt = 0; cnt < DAP_CPDP_PCM_SAMPLES_PER_BLOCK; cnt++) {
                 for (ch_id = 0; ch_id < nch; ch_id++) {
-                    pDapData->audioInTmp16[ch_id][cnt] = pBlkBuf16[cnt * nch + ch_id];
+                    //NOTE: inDlbBuf.ppdata[i] = pDapData->audioInTmp16[i];
+                    pDapData->audioInTmp16[ch_id][cnt] = pBlkBuf16In[cnt * nch + ch_id];
                     //ALOGE("[%x]", audio[ch_id][cnt]);
                 }
             }
@@ -4831,33 +4921,48 @@ Error:
             outDlbBuf.nchannel = aml_dap_cpdp_prepare(pDAPapi, pDapData->dap_cpdp, &inDlbBuf, NULL, NULL);
             outDlbBuf.nstride = 1;
 
-            /* The call to dap_cpdp_process() requires scratch memory. This memory
-             * does not need to persist between calls to dap_cpdp_process() and
+            /* The call to aml_dap_cpdp_process_api() requires scratch memory. This memory
+             * does not need to persist between calls to aml_dap_cpdp_process_api() and
              * can be allocated on the stack if convenient. */
-            aml_dap_cpdp_process(pDAPapi, pDapData->dap_cpdp, &outDlbBuf, scratch_memory);
+            int errDAP;
+            memset(pDapData->pScratchMem, 0, pDapData->uScratchSize);
+            aml_dap_cpdp_process_api(pDAPapi, pDapData->dap_cpdp, &outDlbBuf, pDapData->pScratchMem, &errDAP);
 
-            offset = i * DAP_CPDP_PCM_SAMPLES_PER_BLOCK * outDlbBuf.nchannel * (sizeof(short)) ;
-            pBlkBuf16 = (short *)(pOutChar + offset);
-            ch_id = 0;
-            nch = outDlbBuf.nchannel;
+            if (errDAP) {
+                offset = i * DAP_CPDP_PCM_SAMPLES_PER_BLOCK * outDlbBuf.nchannel * (sizeof(short)) ;
+                pBlkBuf16Out = (short *)(pOutChar + offset);
+                ch_id = 0;
+                nch = outDlbBuf.nchannel;
 
-            // output data also point to inplace memory
-            for (cnt = 0; cnt < DAP_CPDP_PCM_SAMPLES_PER_BLOCK; cnt++) {
-                for (ch_id = 0; ch_id < nch; ch_id++) {
-                    /* Write the resulting data to the array */
-                    pBlkBuf16[cnt * nch + ch_id] = pDapData->audioInTmp16[ch_id][cnt];
-                    //ALOGE("[%x]", audio[ch_id][cnt]);
+                // output data also point to inplace memory
+                for (cnt = 0; cnt < DAP_CPDP_PCM_SAMPLES_PER_BLOCK; cnt++) {
+                    for (ch_id = 0; ch_id < nch; ch_id++) {
+                        /* pass through mode */
+                        pBlkBuf16Out[cnt * nch + ch_id] = pBlkBuf16In[cnt * nch + ch_id];
+                        //pBlkBuf16Out[cnt * nch + ch_id] = 0;
+                        //ALOGE("[%x]", audio[ch_id][cnt]);
+                    }
+                }
+
+                pDapData->is_passthrough = 1;
+                //ALOGI("%s, errDAP = [%d], passthrough case",__FUNCTION__, errDAP);
+            } else {
+                offset = i * DAP_CPDP_PCM_SAMPLES_PER_BLOCK * outDlbBuf.nchannel * (sizeof(short)) ;
+                pBlkBuf16Out = (short *)(pOutChar + offset);
+                ch_id = 0;
+                nch = outDlbBuf.nchannel;
+
+                // output data also point to inplace memory
+                for (cnt = 0; cnt < DAP_CPDP_PCM_SAMPLES_PER_BLOCK; cnt++) {
+                    for (ch_id = 0; ch_id < nch; ch_id++) {
+                        /* Write the resulting data to the array */
+                        pBlkBuf16Out[cnt * nch + ch_id] = pDapData->audioInTmp16[ch_id][cnt];
+                        //ALOGE("[%x]", audio[ch_id][cnt]);
+                    }
                 }
             }
         }
 
-Exit_DAP:
-        if (scratch_memory) {
-            free(scratch_memory);
-        }
-        if (input_storage_buf) {
-            free(input_storage_buf);
-        }
         return status;
     }
 
@@ -5004,6 +5109,9 @@ Exit_DAP:
         pContext->gDAPdata.eDapEffectMode = DAP_MODE_STANDARD;
         pContext->gDAPdata.curInfrmCnts = 0;
         pContext->gDAPdata.totalFrmCnts = 0;
+        pContext->gDAPdata.is_passthrough = 0;
+        pContext->gDAPdata.islicenseOK = 0;
+
         memcpy((void *) & (pContext->gDAPdata.dapBaseSetting), (void *)&dap_dolby_base_standard, sizeof(dolby_base));
         memcpy((void *) & (pContext->gDAPdata.dapDialogEnhance), (void *)&default_dap_dialog_enhance, sizeof(dolby_dialog_enhance_t));
         memcpy((void *) & (pContext->gDAPdata.dapVolLeveler), (void *)&default_dap_vol_leveler, sizeof(dolby_vol_leveler_t));
@@ -5015,6 +5123,7 @@ Exit_DAP:
             ALOGE("%s: Load INI File faied, all use default param", __FUNCTION__);
         }
 
+
         // after loading dapBaseSetting from ini file , make it as custom settings.
         memcpy((void *)&dap_dolby_base_custom, (void *) & (pContext->gDAPdata.dapBaseSetting) , sizeof(dolby_base));
 
@@ -5023,6 +5132,20 @@ Exit_DAP:
             delete pContext;
             return -EINVAL;
         }
+
+        // first try to get DAP license, then all other function can work normally
+        // authorized chip can get valid license
+        pContext->gDAPdata.islicenseOK = aml_get_chip_ms12_license((DAPapi *)&pContext->gDAPapi);
+        ALOGI("%s,islicenseOK = %d", __FUNCTION__, pContext->gDAPdata.islicenseOK);
+
+        pContext->gDAPdata.inStorgeBufSize = DAP_INPUT_STORE_SIZE;
+        pContext->gDAPdata.inStorgeBuf = malloc(pContext->gDAPdata.inStorgeBufSize);
+        if (pContext->gDAPdata.inStorgeBuf == NULL) {
+            ALOGE("%s,no memory for inStorgeBuf buffer", __FUNCTION__);
+            delete pContext;
+            return -EINVAL;
+        }
+        ALOGI("%s,malloc inStorgeBufSize [%p], size = %d", __FUNCTION__, pContext->gDAPdata.inStorgeBuf, pContext->gDAPdata.inStorgeBufSize);
 
         pContext->itfe = &DAPInterface;
         pContext->state = DAP_STATE_UNINITIALIZED;
@@ -5041,6 +5164,12 @@ Exit_DAP:
         DAPContext * pContext = (DAPContext *)handle;
 
         if (pContext == NULL) {
+            return -EINVAL;
+        }
+
+        if (pContext->gDAPdata.inStorgeBuf) {
+            free(pContext->gDAPdata.inStorgeBuf);
+            pContext->gDAPdata.inStorgeBuf = NULL;
             return -EINVAL;
         }
 
