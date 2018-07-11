@@ -4734,6 +4734,27 @@ Error:
             outBuffer == NULL || outBuffer->raw == NULL ||
             inBuffer->frameCount != outBuffer->frameCount ||
             inBuffer->frameCount == 0) {
+
+            // per customer's request to add log info
+            if (inBuffer == NULL) {
+                ALOGE("%s, inBuffer == NULL", __FUNCTION__);
+            }
+            if (inBuffer->raw == NULL) {
+                ALOGE("%s, inBuffer->raw == NULL", __FUNCTION__);
+            }
+            if (outBuffer == NULL) {
+                ALOGE("%s, outBuffer == NULL", __FUNCTION__);
+            }
+            if (outBuffer->raw == NULL) {
+                ALOGE("%s, outBuffer->raw == NULL", __FUNCTION__);
+            }
+            if (inBuffer->frameCount != outBuffer->frameCount) {
+                ALOGE("%s, inBuffer->frameCount = %d,outBuffer->frameCount = %d", __FUNCTION__, inBuffer->frameCount, outBuffer->frameCount);
+            }
+            if (inBuffer->frameCount == 0) {
+                ALOGE("%s, inBuffer->frameCount == 0", __FUNCTION__);
+            }
+
             ALOGE("%s, invalid buffer config", __FUNCTION__);
             return -EINVAL;
         }
@@ -4764,16 +4785,7 @@ Error:
         ALOGV("%s, inSampleSize = %d, outSampleSize = %d, inChannels = %d, outChannels = %d, inFrameCnt = %d\n",
               __FUNCTION__, inSampleSize, outSampleSize, inChannels, outChannels, inBuffer->frameCount);
 
-        /* normally, we don't need this condiftion "(pDapData->curInfrmCnts != inBuffer->frameCount)"
-           * In test field, when audio source switching from local DD/DDP file playing to system key sound
-           * The last fragment form DD/DDP file will output together with system key sound.
-           * In this case, the inBuffer->frameCount change from 2046 to 1536
-           * Here we assume the inBuffer->frameCount means input source change
-           * If we re-initliaze the DAP core in this case, then this issue can be resolved
-           */
-        //if (!pDapData->bDapCPDPInited) {
-        if (!pDapData->bDapCPDPInited || (pDapData->curInfrmCnts != inBuffer->frameCount)) {
-
+        if (!pDapData->bDapCPDPInited) {
             if (NULL == pDapData->inStorgeBuf) {
                 tmpSize = inBuffer->frameCount * inChannels * inSampleSize;
                 pDapData->inStorgeBuf = malloc(tmpSize);
