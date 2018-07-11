@@ -2619,6 +2619,8 @@ extern "C" {
             dap_set_virtual_surround(pContext, (dolby_virtual_surround_t *)&pDapData->dapVirtualSrnd);
             dap_set_dialog_enhance(pContext, (dolby_dialog_enhance_t *)&pDapData->dapDialogEnhance);
             dap_set_vol_leveler(pContext, (dolby_vol_leveler_t *)&pDapData->dapVolLeveler);
+            // apply eq setting
+            dap_set_eq_params(pContext, (dolby_eq_t *) & (pDapData->dapEQ));
             dap_load_user_param(pContext, (dolby_base *)&dap_dolby_base_music);
         } else {
             //Music: vitrual surround(0) Dialog Enhance(0) Volumeleveler(0)
