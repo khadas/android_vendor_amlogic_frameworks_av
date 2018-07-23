@@ -4,7 +4,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_ARM_MODE := arm
+#LOCAL_ARM_MODE := arm
 
 LOCAL_MODULE:= libtreblebasswrapper
 
@@ -21,6 +21,9 @@ LOCAL_C_INCLUDES := \
 LOCAL_SRC_FILES += TrebleBass.cpp
 
 LOCAL_LDFLAGS_arm  += $(LOCAL_PATH)/libAmlTrebleBass.a
+LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/libAmlTrebleBass64.a
+
+LOCAL_MULTILIB := both
 
 LOCAL_PRELINK_MODULE := false
 

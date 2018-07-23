@@ -2224,8 +2224,8 @@ extern "C" {
 
         pDapData->bDapCPDPInited = 1;
 
-        ALOGI("<%s::%d>--[persistent_size:%d]--[persistent_memory:0x%x]--[dap_cpdp:0x%x]",
-              __FUNCTION__, __LINE__, pDapData->uPersistMemSize, (unsigned int)pDapData->pPersistMem, (unsigned int)pDapData->dap_cpdp);
+        ALOGI("<%s::%d>--[persistent_size:%d]--[persistent_memory:0x%p]--[dap_cpdp:0x%p]",
+              __FUNCTION__, __LINE__, pDapData->uPersistMemSize, pDapData->pPersistMem, pDapData->dap_cpdp);
 
         return DAP_RET_SUCESS;
     }
@@ -3499,9 +3499,9 @@ error:
                 ALOGE("%s, failed to load DAP lib %s err = %s\n", __FUNCTION__, LIBDAP_PATH_B, dlerror());
                 goto Error;
             }
-            ALOGD("<%s::%d>--%s[gDAPLibHandler:0x%x]", __FUNCTION__, __LINE__, LIBDAP_PATH_B, (unsigned int)pContext->gDAPLibHandler);
+            ALOGD("<%s::%d>--%s[gDAPLibHandler:0x%p]", __FUNCTION__, __LINE__, LIBDAP_PATH_B, pContext->gDAPLibHandler);
         } else {
-            ALOGD("<%s::%d>--%s[gDAPLibHandler:0x%x]", __FUNCTION__, __LINE__, LIBDAP_PATH_A, (unsigned int)pContext->gDAPLibHandler);
+            ALOGD("<%s::%d>--%s[gDAPLibHandler:0x%p]", __FUNCTION__, __LINE__, LIBDAP_PATH_A, pContext->gDAPLibHandler);
         }
 
         //int (*DAP_get_chip_ms12_license)(void);
