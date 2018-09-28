@@ -25,7 +25,8 @@
 #include <math.h>
 #include <dlfcn.h>
 #include <hardware/audio_effect.h>
-
+#include <stdio.h>
+#include <unistd.h>
 #include "IniParser.h"
 #include "tshd_wrapper.h"
 
@@ -1389,9 +1390,9 @@ int SRS_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int SRSLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, effect_handle_t *pHandle)
+int SRSLib_Create(const effect_uuid_t *uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t *pHandle)
 {
-    int ret;
+    //int ret;
 
     if (pHandle == NULL || uuid == NULL)
         return -EINVAL;

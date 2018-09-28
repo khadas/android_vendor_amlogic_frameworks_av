@@ -16,9 +16,11 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <math.h>
 #include <hardware/audio_effect.h>
 #include <cutils/properties.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "IniParser.h"
 #include "Hpeq.h"
@@ -95,7 +97,7 @@ typedef struct HPEQContext_s {
 
 const char *HPEQStatusstr[] = {"Disable", "Enable"};
 
-const int32_t default_usr_cfg[] = {
+const int32_t default_usr_cfg[] __unused = {
      3,  0,  0,  0,  3,   /* standard */
      8,  5, -3,  5,  6,   /* music */
     12, -6,  7, 12, 10,   /* news */
@@ -151,7 +153,7 @@ exit:
 
 int HPEQ_parse_mode_config(HPEQContext *pContext, int mode_num, int band_num, const char *buffer)
 {
-    int i, j;
+    int i;
     char *Rch = (char *)buffer;
     HPEQdata *data = &pContext->gHPEQdata;
 
@@ -229,7 +231,7 @@ error:
 int HPEQ_init(HPEQContext *pContext)
 {
     HPEQdata *data = &pContext->gHPEQdata;
-    int32_t count = data->count;
+    //int32_t count = data->count;
 
     pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
     pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
@@ -262,7 +264,7 @@ int HPEQ_init(HPEQContext *pContext)
     return 0;
 }
 
-int HPEQ_reset(HPEQContext *pContext)
+int HPEQ_reset(HPEQContext *pContext __unused)
 {
     HPEQ_reset_api();
     return 0;
@@ -534,9 +536,9 @@ int HPEQ_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int HPEQLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, effect_handle_t *pHandle)
+int HPEQLib_Create(const effect_uuid_t *uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t *pHandle)
 {
-    int ret;
+    //int ret;
 
     if (pHandle == NULL || uuid == NULL) {
         return -EINVAL;

@@ -19,6 +19,8 @@
 
 #include <hardware/audio_effect.h>
 #include <cutils/properties.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "IniParser.h"
 #include "TrebleBass.h"
@@ -159,8 +161,8 @@ error:
 
 int TrebleBass_init(TREBASSContext *pContext)
 {
-    TreBassdata *data = &pContext->gTreBassdata;
-    int32_t count = data->count;
+    //TreBassdata *data = &pContext->gTreBassdata;
+    //int32_t count = data->count;
 
     pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
     pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
@@ -295,7 +297,7 @@ int TrebleBass_setParameter(TREBASSContext *pContext, void *pParam, void *pValue
     return 0;
 }
 
-int TrebleBass_release(TREBASSContext *pContext)
+int TrebleBass_release(TREBASSContext *pContext __unused)
 {
     return 0;
 }
@@ -436,9 +438,9 @@ int TrebleBass_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescrip
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int TrebleBassLib_Create(const effect_uuid_t * uuid, int32_t sessionId, int32_t ioId, effect_handle_t * pHandle)
+int TrebleBassLib_Create(const effect_uuid_t * uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t * pHandle)
 {
-    int ret;
+    //int ret;
 
     if (pHandle == NULL || uuid == NULL) {
         return -EINVAL;

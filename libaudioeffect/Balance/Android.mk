@@ -16,7 +16,10 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
-    hardware/amlogic/audio/utils/ini/include
+    hardware/amlogic/audio/utils/ini/include \
+    hardware/libhardware/include/hardware \
+    hardware/libhardware/include \
+    system/media/audio/include
 
 LOCAL_SRC_FILES := Balance.cpp
 LOCAL_PRELINK_MODULE := false

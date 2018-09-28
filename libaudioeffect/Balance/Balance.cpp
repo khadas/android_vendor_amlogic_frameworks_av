@@ -23,6 +23,8 @@
 #include <math.h>
 #include <hardware/audio_effect.h>
 #include <cutils/properties.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "IniParser.h"
 #include "Balance.h"
@@ -259,7 +261,7 @@ int Balance_init(BalanceContext *pContext)
     return 0;
 }
 
-int Balance_reset(BalanceContext *pContext)
+int Balance_reset(BalanceContext *pContext __unused)
 {
     return 0;
 }
@@ -514,9 +516,9 @@ int Balance_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int BalanceLib_Create(const effect_uuid_t *uuid, int32_t sessionId, int32_t ioId, effect_handle_t *pHandle)
+int BalanceLib_Create(const effect_uuid_t *uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t *pHandle)
 {
-    int i, ret;
+    int i;
 
     if (pHandle == NULL || uuid == NULL)
         return -EINVAL;

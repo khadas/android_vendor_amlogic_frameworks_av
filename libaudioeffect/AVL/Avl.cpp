@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include <hardware/audio_effect.h>
 #include <cutils/properties.h>
@@ -302,7 +304,7 @@ int Avl_getParameter(AvlContext*pContext, void *pParam, size_t *pValueSize, void
             *pValueSize = 0;
             return -EINVAL;
         }
-        *(float*)pValue=tbcfg->peak_level;
+        *(int*)pValue=(int)tbcfg->peak_level;
         ALOGD("%s: Get peak_level -> %f ", __FUNCTION__, tbcfg->peak_level);
         break;
 
@@ -372,8 +374,6 @@ int Avl_release(AvlContext *pContext)
 int Avl_process(effect_handle_t self, audio_buffer_t *inBuffer, audio_buffer_t *outBuffer)
 {
     AvlContext* pContext = ( AvlContext *)self;
-    int channel =2;
-    int sampleWidth = 2;
 
     if (pContext == NULL)
         return -EINVAL;
@@ -501,10 +501,8 @@ int Avl_getDescriptor(effect_handle_t self, effect_descriptor_t *pDescriptor)
 
 //-------------------- Effect Library Interface Implementation------------------------
 
-int AvlLib_Create(const effect_uuid_t * uuid, int32_t sessionId, int32_t ioId, effect_handle_t * pHandle)
+int AvlLib_Create(const effect_uuid_t * uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t * pHandle)
 {
-    int ret;
-
     if (pHandle == NULL || uuid == NULL) {
         return -EINVAL;
     }
