@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <hardware/audio_effect.h>
 #include <cutils/properties.h>
+#include <unistd.h>
 
 #include "IniParser.h"
 #include "dolby_audio_processing_control.h"
@@ -2119,7 +2120,6 @@ extern "C" {
 
     int dap_init_api(DAPContext *pContext)
     {
-        int status = 0;
         DAPdata *pDapData = NULL;
         dap_cpdp_init_info *pDapInitInfo;
         DAPapi *pDAPapi = (DAPapi *) & (pContext->gDAPapi);
@@ -2707,7 +2707,6 @@ exit:
 
     int DAP_print_base_setting(dolby_base* pDapBaseSets)
     {
-        int i;
         int *pInt;
 
         ALOGD("%s: DAP_print_base_setting", __FUNCTION__);
@@ -4202,7 +4201,6 @@ Error:
     {
         DAPdata *pDapData = &pContext->gDAPdata;
         DAPapi *pDAPapi = (DAPapi *) & (pContext->gDAPapi);
-        int ret;
 
         pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
         pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
@@ -4499,7 +4497,7 @@ Error:
     int DAP_setParameter(DAPContext *pContext, void *pParam, void *pValue)
     {
         uint32_t param = *(uint32_t *)pParam;
-        int32_t value, i;
+        int32_t value;
         DAPcfg_8bit_s custom_value;
         //float scale;
         DAPdata *pDapData = &pContext->gDAPdata;
@@ -4717,7 +4715,7 @@ Error:
     {
         DAPContext *pContext = (DAPContext *)self;
         int inSampleSize, outSampleSize;
-        int inChannels, outChannels, inFormat, outFormat;
+        int inChannels, outChannels;
         int ret;
         unsigned int tmpSize;
         unsigned int i;
@@ -4875,8 +4873,6 @@ Error:
         outDlbBuf.ppdata = channel_pointers;
         outDlbBuf.data_type = 4;//DLB_BUFFER_SHORT_16;
 
-        int16_t   *pIn16  = (int16_t *)inBuffer->raw;
-        int16_t   *pOut16 = (int16_t *)outBuffer->raw;
         unsigned char *pInChar = (unsigned char *)inBuffer->raw;
         unsigned char *pOutChar = (unsigned char *)outBuffer->raw;
 
@@ -5099,8 +5095,6 @@ Error:
 
     int DAPLib_Create(const effect_uuid_t *uuid, int32_t sessionId __unused, int32_t ioId __unused, effect_handle_t *pHandle)
     {
-        int ret;
-
         if (pHandle == NULL || uuid == NULL) {
             return -EINVAL;
         }

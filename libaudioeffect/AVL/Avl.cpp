@@ -75,6 +75,7 @@ typedef enum {
     AVL_PARAM_NOISE_THRESHOLD,
     AVL_PARAM_RESPONSE_TIME,
     AVL_PARAM_RELEASE_TIME,
+    AVL_PARAM_SOURCE_IN,
 
 } Avlparams;
 
@@ -89,9 +90,13 @@ typedef struct Avlcfg_s{
 typedef struct Avldata_s {
 
    /* avl API needed data */
-   AmlAGC       *agc;
-    Avlcfg        tbcfg;
-    int32_t       enable;
+    AmlAGC      *agc;
+    Avlcfg      tbcfg;
+    int32_t     enable;
+    int32_t     *usr_cfg;
+    int32_t     mode_num;
+    int32_t     band_num;
+    int32_t     soure_id;
 } Avldata;
 
 typedef struct AvlContext_s {
@@ -148,6 +153,36 @@ exit:
     return result;
 }
 
+int Avl_parse_mode_config(AvlContext *pContext, int mode_num, int band_num, const char *buffer)
+{
+    int i;
+    char *Rch = (char *)buffer;
+    Avldata *data = &pContext->gAvldata;
+
+    if (data->usr_cfg == NULL) {
+        data->usr_cfg = (int *)calloc(mode_num * band_num, sizeof(int));
+        data->usr_cfg = (int *)calloc(mode_num * band_num, sizeof(int));
+        if (!data->usr_cfg) {
+            ALOGE("%s: alloc failed", __FUNCTION__);
+            return -EINVAL;
+        }
+    }
+
+    for (i = 0; i < mode_num * band_num; i++) {
+        if (i == 0)
+            Rch = strtok(Rch, ",");
+        else
+            Rch = strtok(NULL, ",");
+        if (Rch == NULL) {
+            ALOGE("%s: Config Parse failed, using default config", __FUNCTION__);
+            return -1;
+        }
+        data->usr_cfg[i] = atoi(Rch);
+    }
+
+    return 0;
+}
+
 int Avl_load_ini_file(AvlContext *pContext)
 {
     int result = -1;
@@ -163,11 +198,29 @@ int Avl_load_ini_file(AvlContext *pContext)
         ALOGD("%s: %s load failed", __FUNCTION__, ini_name);
         goto error;
     }
+    /*
     ini_value = pIniParser->GetString("Avl", "Avl_enable", "1");
     if (ini_value == NULL)
         goto error;
     ALOGD("%s: enable -> %s", __FUNCTION__, ini_value);
     data->enable = atoi(ini_value);
+    */
+    ini_value = pIniParser->GetString("Avl", "avl_modenum", "6");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: sound mode num -> %s", __FUNCTION__, ini_value);
+    data->mode_num = atoi(ini_value);
+    ini_value = pIniParser->GetString("Avl", "avl_bandnum", "5");
+    if (ini_value == NULL)
+        goto error;
+    ALOGD("%s: sound band num -> %s", __FUNCTION__, ini_value);
+    data->band_num = atoi(ini_value);
+    //record different source init value
+    ini_value = pIniParser->GetString("Avl", "avl_config", "NULL");
+    if (ini_value == NULL)
+         goto error;
+     ALOGD("%s: condig -> %s", __FUNCTION__, ini_value);
+     result = Avl_parse_mode_config(pContext, data->mode_num, data->band_num, ini_value);
 
     result = 0;
 error:
@@ -244,7 +297,7 @@ int Avl_configure(AvlContext *pContext, effect_config_t *pConfig)
 int Avl_setParameter(AvlContext *pContext, void *pParam, void *pValue)
 {
     int32_t param = *(int32_t *)pParam;
-    int32_t value;
+    int32_t i, value;
     Avldata *data=&pContext->gAvldata;
     Avlcfg *tbcfg=&data->tbcfg;
 
@@ -283,6 +336,24 @@ int Avl_setParameter(AvlContext *pContext, void *pParam, void *pValue)
             tbcfg->release_time=value;
             SetAmlAGC(data->agc,tbcfg->peak_level, tbcfg->dynamic_threshold, tbcfg->noise_threshold, tbcfg->response_time,tbcfg->release_time);
             ALOGD("%s: set release_time-> %d ", __FUNCTION__, tbcfg->release_time);
+            break;
+       case AVL_PARAM_SOURCE_IN:
+            value = *(int32_t *)pValue;
+            if (value < 0 || value > data->mode_num) {
+            ALOGE("%s: incorrect mode value %d", __FUNCTION__, value);
+            return -EINVAL;
+            }
+            data->soure_id = value;
+            ALOGD("%s: Set source_id -> %d", __FUNCTION__, value);
+            for (i = 0; i < data->band_num; i++) {
+            ALOGD("%s: Set band[%d] -> %d", __FUNCTION__, i + 1, data->usr_cfg[value * data->band_num + i]);
+            }
+            tbcfg->peak_level =data->usr_cfg[value * data->band_num];
+            tbcfg->dynamic_threshold =data->usr_cfg[value * data->band_num + 1];
+            tbcfg->noise_threshold =data->usr_cfg[value * data->band_num + 2];
+            tbcfg->response_time =data->usr_cfg[value * data->band_num + 3];
+            tbcfg->release_time =data->usr_cfg[value * data->band_num + 4];
+            SetAmlAGC(data->agc,tbcfg->peak_level, tbcfg->dynamic_threshold, tbcfg->noise_threshold, tbcfg->response_time,tbcfg->release_time);
             break;
        default:
             ALOGE("%s: unknown param %08x", __FUNCTION__, param);
@@ -352,8 +423,17 @@ int Avl_getParameter(AvlContext*pContext, void *pParam, size_t *pValueSize, void
          *(int32_t *) pValue = tbcfg->release_time;
          ALOGD("%s: Get release_time-> %d ", __FUNCTION__, tbcfg->release_time);
          break;
-    default:
-       ALOGE("%s: unknown param %d", __FUNCTION__, param);
+      case AVL_PARAM_SOURCE_IN:
+          if (*pValueSize < sizeof(int32_t)) {
+              *pValueSize = 0;
+               return -EINVAL;
+          }
+           value = data->soure_id;
+           *(int32_t *) pValue = value;
+           ALOGD("%s: Get aource_id -> %d", __FUNCTION__, value);
+           break;
+      default:
+        ALOGE("%s: unknown param %d", __FUNCTION__, param);
         return -EINVAL;
     }
     return 0;
