@@ -1,0 +1,7 @@
+#ifndef ANDROID_VIRTUALSURROUND_H_
+#define ANDROID_VIRTUALSURROUND_H_
+
+#define VIRTUALSURROUND_CUP_LOAD_ARM9E 100  //Expressed in 0.1 MIPS
+#define VIRTUALSURROUND_MEM_USAGE      50   // Expressed in kB
+
+#endif
