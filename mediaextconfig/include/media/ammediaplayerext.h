@@ -23,6 +23,7 @@ namespace android {
 		AMLOGIC_PLAYER = 110,
 		AMSUPER_PLAYER = 111,
 		AMNUPLAYER = 112,
+		DRMPLAYER = 113,
 	};
 
 

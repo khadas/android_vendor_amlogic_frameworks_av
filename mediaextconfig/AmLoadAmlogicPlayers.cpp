@@ -27,7 +27,7 @@ namespace android
 
 static sp<AmSharedLibrary> gLibAmlMedia;
 static sp<AmSharedLibrary> gLibAmNuPlayer;
-
+static sp<AmSharedLibrary> gLibDrmPlayer;
 bool  LoadAndInitAmlogicMediaFactory(void)
 {
     int err;
@@ -82,7 +82,31 @@ bool  LoadAndInitAmlogicMediaFactory(void)
         ALOGE("load AmlogicNuPlayerFactory.so for amlogicmedia failed:%s", gLibAmNuPlayer->lastError());
         gLibAmNuPlayer.clear();
     }
+////////////////////////////gLibDrmPlayer
+    String8 name_drmplayer("libDrmPlayer.so");
+    gLibDrmPlayer = new AmSharedLibrary(name_drmplayer);
+    if (gLibDrmPlayer != NULL) {
+        typedef int (*init_fun)(void);
 
+        init_fun init =
+            (init_fun)gLibDrmPlayer->lookup("_ZN7android20DrmPlayerFactoryInitEv");
+
+        if (init != NULL) {
+            err = init();
+            if (err) {
+                 ALOGE("DrmPlayerFactoryInit failed:%s", gLibDrmPlayer->lastError());
+                 gLibDrmPlayer.clear();
+             }
+        } else {
+            ALOGE("DrmPlayerFactoryInit failed:%s", gLibDrmPlayer->lastError());
+            gLibDrmPlayer.clear();
+        }
+
+
+    } else {
+        ALOGE("load libDrmPlayer.so for amlogicmedia failed:%s", gLibDrmPlayer->lastError());
+        gLibDrmPlayer.clear();
+    }
     return true;
 }
 
