@@ -88,6 +88,7 @@ namespace android {
 		KEY_PARAMETER_AML_PLAYER_ENA_AUTO_BUFFER	= 8005, 	// play ASAP...
 		KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX 	= 8006, 	// play use soft demux
 		KEY_PARAMETER_AML_PLAYER_PR_CUSTOM_DATA 	= 9001, 	// string, playready, set only
+		KEY_PARAMETER_AML_PLAYER_HDCP_CUSTOM_DATA   = 9002, 	// int, mircast hdcp enable or not
 	};
 	enum {
 		INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE = 8,
