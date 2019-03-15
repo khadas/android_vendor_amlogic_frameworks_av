@@ -89,15 +89,12 @@ namespace android {
 		KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX 	= 8006, 	// play use soft demux
 		KEY_PARAMETER_AML_PLAYER_PR_CUSTOM_DATA 	= 9001, 	// string, playready, set only
 	};
-	enum video_out_type {
-		VIDEO_OUT_SOFT_RENDER = 0,
-		VIDEO_OUT_HARDWARE    = 1,
-	};
 	enum {
 		INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE = 8,
 		INVOKE_ID_NETWORK_GET_STREAMBUF_BUFFERED_SIZE = 9,
 		INVOKE_ID_SET_TRACK_VOLUME = 10,
 		INVOKE_ID_GET_AM_TRACK_INFO = 11,
+		INVOKE_ID_USE_CUSTOMIZED_EXTRACTOR = 1001, // add for use costomized extractor
 	};
 }; // namespace android
 
