@@ -273,7 +273,7 @@ namespace android
     RTPSink::RTPSink(
         const sp<AmANetworkSession> &netSession,
         const sp<IGraphicBufferProducer> &bufferProducer,
-        const sp<AMessage> &stopNotify)
+        const sp<AMessage> &msgNotify)
         : mNetSession(netSession),
           mBufferProducer(bufferProducer),
           mRTPPort(0),
@@ -283,7 +283,7 @@ namespace android
           mNumPacketsReceived(0ll),
           mRegression(1000),
           mMaxDelayMs(-1ll),
-          mStopNotify(stopNotify),
+          mMsgNotify(msgNotify),
           mIsHDCP(false)
     {
         mDumpEnable = getPropertyInt("sys.wfddump", 0);
@@ -680,7 +680,7 @@ namespace android
                 sp<AMessage> notifyLost = new AMessage(kWhatPacketLost, this);
                 notifyLost->setInt32("ssrc", srcId);
 
-                mRenderer = new TunnelRenderer(notifyLost, mBufferProducer, mStopNotify);
+                mRenderer = new TunnelRenderer(notifyLost, mBufferProducer, mMsgNotify);
                 looper()->registerHandler(mRenderer);
 
                 mRenderer->setIsHDCP(mIsHDCP);

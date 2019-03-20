@@ -39,7 +39,7 @@ namespace android
     {
         RTPSink(const sp<AmANetworkSession> &netSession,
                 const sp<IGraphicBufferProducer> &bufferProducer,
-                const sp<AMessage> &stopNotify);
+                const sp<AMessage> &msgNotify);
 
         // If TCP interleaving is used, no UDP sockets are created, instead
         // incoming RTP/RTCP packets (arriving on the RTSP control connection)
@@ -84,7 +84,7 @@ namespace android
         int64_t mNumPacketsReceived;
         LinearRegression mRegression;
         int64_t mMaxDelayMs;
-        sp<AMessage> mStopNotify;
+        sp<AMessage> mMsgNotify;
 
         sp<TunnelRenderer> mRenderer;
         int32_t mDumpEnable;

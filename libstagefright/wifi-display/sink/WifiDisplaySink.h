@@ -161,7 +161,7 @@ namespace android
         AString mPlaybackSessionID;
         int32_t mPlaybackSessionTimeoutSecs;
         sp<AHandler> mSinkHandler;
-        sp<AMessage> mNotifyStop;
+        sp<AMessage> mMsgNotify;
         int32_t mRTSPPort;
         int32_t mConnectionRetry;
         #define MAX_CONN_RETRY 500
@@ -257,7 +257,7 @@ namespace android
             AString *user, AString *pass);
 
         int save_sessionid_to_file(char* filepath, int32_t sessionID);
-
+        bool mIDRFrameRequestPending;
         status_t sendIDRFrameRequest(int32_t sessionID);
         status_t onReceiveIDRFrameRequestResponse(
             int32_t sessionID, const sp<ParsedMessage> &msg);

@@ -29,7 +29,6 @@ using namespace std;
 
 namespace android
 {
-
     struct ABuffer;
     class SurfaceComposerClient;
     class SurfaceControl;
@@ -45,13 +44,18 @@ namespace android
         TunnelRenderer(
             const sp<AMessage> &notifyLost,
             const sp<IGraphicBufferProducer> &bufferProducer,
-            const sp<AMessage> &stopNotify);
+            const sp<AMessage> &msgNotify);
 
         sp<ABuffer> dequeueBuffer();
 
         enum
         {
             kWhatQueueBuffer,
+        };
+
+        enum {
+            kWhatNoPacketMsg,
+            kWahtLostPacketMsg,
         };
 
         void setIsHDCP(bool isHDCP);
@@ -93,7 +97,7 @@ namespace android
         int32_t mPackageRequest;
         bool mRequestedRetry;
         bool mRequestedRetransmission;
-        sp<AMessage> mStopNotify;
+        sp<AMessage> mMsgNotify;
         //sp<SystemControlClient > mSystemControlService;
 
         bool mIsHDCP;

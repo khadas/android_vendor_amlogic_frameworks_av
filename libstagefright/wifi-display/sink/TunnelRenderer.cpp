@@ -207,7 +207,7 @@ namespace android
     TunnelRenderer::TunnelRenderer(
         const sp<AMessage> &notifyLost,
         const sp<IGraphicBufferProducer> &bufferProducer,
-        const sp<AMessage> &stopNotify)
+        const sp<AMessage> &msgNotify)
         : mNotifyLost(notifyLost),
           mBufferProducer(bufferProducer),
           mTotalBytesQueued(0ll),
@@ -223,7 +223,7 @@ namespace android
           mPackageRequest(0),
           mRequestedRetry(false),
           mRequestedRetransmission(false),
-          mStopNotify(stopNotify),
+          mMsgNotify(msgNotify),
           mIsHDCP(false)
     {
         mCurTime = ALooper::GetNowUs();
@@ -341,7 +341,8 @@ namespace android
                     if (ret == 0)
                     {
                         ALOGI("no packets available beyond 12 secs,stop WifiDisplaySink now");
-                        sp<AMessage> notify = mStopNotify->dup();
+                        sp<AMessage> notify = mMsgNotify->dup();
+                        notify->setInt32("msg", kWhatNoPacketMsg);
                         notify->post();
                         mFirstFailedAttemptUs = ALooper::GetNowUs();
                     }
@@ -405,7 +406,6 @@ namespace android
         if (mFirstFailedAttemptUs < 0ll)
         {
             mFirstFailedAttemptUs = ALooper::GetNowUs();
-
             ALOGI("failed to get the correct packet the first time.");
             return NULL;
         }
@@ -422,7 +422,10 @@ namespace android
                 sp<AMessage> notify = mNotifyLost->dup();
                 notify->setInt32("seqNo", (mLastDequeuedExtSeqNo + 1) & 0xffff);
                 notify->post();
-
+                //For miracast, we shuold send request IDR to request a I Frame asap
+                sp<AMessage> msgNotify = mMsgNotify->dup();
+                msgNotify->setInt32("msg", kWahtLostPacketMsg);
+                msgNotify->post();
                 mRequestedRetry = true;
                 mRequestedRetransmission = true;
                 mRetryTimes++;
@@ -437,7 +440,6 @@ namespace android
 
         ALOGI("dropping packet. extSeqNo %d didn't arrive in time",
               mLastDequeuedExtSeqNo + 1);
-
         // Permanent failure, we never received the packet.
         mPackageFailed++;
 

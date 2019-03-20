@@ -68,7 +68,8 @@ namespace android
           mUsingHDCP(false),
           mNeedHDCP(false),
           mResolution(Normal),
-          mHDCPRunning(false)
+          mHDCPRunning(false),
+          mIDRFrameRequestPending(false)
     {
         srand(time(0));
         mHDCPPort = 9000 + rand() % 100;
@@ -248,7 +249,7 @@ namespace android
         case kWhatStart:
         {
             ALOGI("Received msg kWhatStart.");
-            mNotifyStop = new AMessage(kWhatNoPacket, this);
+            mMsgNotify = new AMessage(kWhatNoPacket, this);
             if (msg->findString("setupURI", &mSetupURI))
             {
                 AString path, user, pass;
@@ -480,11 +481,27 @@ namespace android
         }
         case kWhatNoPacket:
         {
-            sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
-            ALOGI("post msg kWhatSinkNotify - RTP no packets");
-            msg->setString("reason", "RTP_NO_PACKET");
-            msg->post();
-
+            int32_t msgCode;
+            CHECK(msg->findInt32("msg", &msgCode));
+            switch (msgCode)
+            {
+                case kWhatNoPacketMsg: {
+                    sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
+                    ALOGI("post msg kWhatSinkNotify - RTP no packets");
+                    msg->setString("reason", "RTP_NO_PACKET");
+                    msg->post();
+                    break;
+                }
+                case kWahtLostPacketMsg: {
+                    if (!mIDRFrameRequestPending) {
+                        ALOGI("requesting IDR frame");
+                        sendIDRFrameRequest(mSessionID);
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
             break;
         }
         default:
@@ -1018,7 +1035,7 @@ namespace android
 
         if (mRTPSink == NULL)
         {
-            mRTPSink = new RTPSink(mNetSession, mBufferProducer, mNotifyStop);
+            mRTPSink = new RTPSink(mNetSession, mBufferProducer, mMsgNotify);
             looper()->registerHandler(mRTPSink);
 
             err = mRTPSink->init(sUseTCPInterleaving);
@@ -1134,7 +1151,7 @@ namespace android
 
         if (mRTPSink == NULL)
         {
-            mRTPSink = new RTPSink(mNetSession, mBufferProducer, mNotifyStop);
+            mRTPSink = new RTPSink(mNetSession, mBufferProducer, mMsgNotify);
             looper()->registerHandler(mRTPSink);
 
             err = mRTPSink->init(sUseTCPInterleaving);
@@ -1315,6 +1332,38 @@ namespace android
             response->append(AStringPrintf("CSeq: %d\r\n", cseq));
         }
     }
+
+    status_t WifiDisplaySink::onReceiveIDRFrameRequestResponse(
+            int32_t sessionID, const sp<ParsedMessage> &msg) {
+        CHECK(mIDRFrameRequestPending);
+        mIDRFrameRequestPending = false;
+        ALOGI("sessionID=%d, has msg = %d", sessionID, msg != NULL);
+        return OK;
+    }
+
+    status_t WifiDisplaySink::sendIDRFrameRequest(int32_t sessionID) {
+        CHECK(!mIDRFrameRequestPending);
+        AString request = "SET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\r\n";
+        AppendCommonResponse(&request, mNextCSeq);
+        AString content = "wfd_idr_request\r\n";
+        request.append(AStringPrintf("Session: %s\r\n", mPlaybackSessionID.c_str()));
+        request.append(AStringPrintf("Content-Length: %d\r\n", content.size()));
+        request.append("\r\n");
+        request.append(content);
+        ALOGD("===== Send IDR Request =====");
+        status_t err = mNetSession->sendRequest(sessionID, request.c_str(), request.size());
+        if (err != OK) {
+            return err;
+        }
+        registerResponseHandler(
+            sessionID,
+            mNextCSeq,
+            &WifiDisplaySink::onReceiveIDRFrameRequestResponse);
+        ++mNextCSeq;
+        mIDRFrameRequestPending = true;
+        return OK;
+    }
+
 #if 1
     WifiDisplaySink::HDCPObserver::HDCPObserver(
         const sp<AMessage> &notify)
