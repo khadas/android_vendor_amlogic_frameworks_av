@@ -343,8 +343,7 @@ namespace android
                             msg->post();
                         }
                     }
-                    else if(err == -104)    //connection reset by peer
-                    {
+                    else {
                         sp<AMessage> msg = new AMessage(kWhatSinkNotify, mSinkHandler);
                         ALOGI("post msg kWhatSinkNotify - connection reset by peer");
                         msg->setString("reason", "RTSP_RESET");
@@ -415,32 +414,27 @@ namespace android
 
             switch (msgCode)
             {
-#if 1
             case HDCPModule::HDCP_INITIALIZATION_COMPLETE:
+            {
                 mHDCPRunning = true;
                 mRTPSink->setIsHDCP(true);
                 break;
+            }
             case HDCPModule::HDCP_SHUTDOWN_COMPLETE:
             case HDCPModule::HDCP_SHUTDOWN_FAILED:
+            {
                 mHDCP->setObserver(NULL);
                 mHDCPObserver.clear();
                 mHDCP.clear();
                 mHDCPRunning = false;
                 mHDCPLock.unlock();
+                sp<AMessage> sinkMsg = new AMessage(kWhatStopCompleted, mSinkHandler);
+                ALOGI("post msg kWhatStopCompleted for hdcp mode");
+                sinkMsg->post();
                 break;
+            }
             case HDCPModule::HDCP_SESSION_ESTABLISHED:
                 break;
-#endif
-#if 0
-                {
-                    // Ugly hack to make sure that the call to
-                    // HDCPObserver::notify is completely handled before
-                    // we clear the HDCP instance and unload the shared
-                    // library :(
-                    (new AMessage(kWhatFinishStop2, this))->post(300000ll);
-                    break;
-                }
-#endif
             default:
             {
                 ALOGE("HDCP failure, shutting down.");
@@ -467,16 +461,17 @@ namespace android
                 looper()->unregisterHandler(mRTPSink->id());
                 mRTPSink.clear();
             }
-#if 1
             if (mHDCP != NULL /*&& mHDCPRunning == true*/) {
                 mHDCPLock.lock();
                 mHDCPRunning = true;
                 ALOGI("kWhatStop: Initiating HDCP shutdown.");
                 mHDCP->shutdownAsync();
+            } else {
+                sp<AMessage> sinkMsg = new AMessage(kWhatStopCompleted, mSinkHandler);
+                ALOGI("post msg kWhatStopCompleted");
+                sinkMsg->post();
             }
-#endif
             //looper()->stop();
-
             break;
         }
         case kWhatNoPacket:
@@ -497,6 +492,9 @@ namespace android
                         ALOGI("requesting IDR frame");
                         sendIDRFrameRequest(mSessionID);
                     }
+                    sp<AMessage> msg = new AMessage(kWhatNoPacket, this);
+                    msg->setInt32("msg", kWahtLostPacketMsg);
+                    msg->post(5000000);
                     break;
                 }
                 default:
@@ -750,7 +748,9 @@ namespace android
             property_set("sys.wfd.state","0");
 
         mState = PLAYING;
-
+        sp<AMessage> requestIdrMsg = new AMessage(kWhatNoPacket, this);
+        requestIdrMsg->setInt32("msg", kWahtLostPacketMsg);
+        requestIdrMsg->post();
         return OK;
     }
 
@@ -1047,7 +1047,16 @@ namespace android
                 return;
             }
         }
-
+        const char *content = data->getContent();
+        if (strstr(content,"wfd_") == NULL) {
+            AString responseAlive = "RTSP/1.0 200 OK\r\n";
+            AppendCommonResponse(&responseAlive, cseq);
+            responseAlive.append("\r\n");
+            ALOGI("===== Response M16 Request =====");
+            status_t errAlive = mNetSession->sendRequest(sessionID, responseAlive.c_str());
+            CHECK_EQ(errAlive, (status_t)OK);
+            return;
+        }
         //ALOGI("!!! FIXME: HARD CODE with video_formats, audio_codecs and client_rtp_ports");
 
         char body[1024];

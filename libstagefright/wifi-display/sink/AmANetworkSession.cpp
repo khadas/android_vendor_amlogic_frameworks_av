@@ -1009,7 +1009,11 @@ status_t AmANetworkSession::createClientOrServer(
     }
 
     if (mode == kModeCreateUDPSession) {
-        int size = 256 * 1024;
+        int size = 2048 * 1024;
+        int sendbuff;
+        socklen_t optlen = sizeof(sendbuff);
+        res = getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sendbuff, (socklen_t*)&optlen);
+        ALOGI("original socket buffer size: %d", sendbuff);
 
         res = setsockopt(s, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
 
@@ -1023,6 +1027,27 @@ status_t AmANetworkSession::createClientOrServer(
         if (res < 0) {
             err = -errno;
             goto bail2;
+        }
+        res = getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sendbuff, (socklen_t*)&optlen);
+        ALOGI("after socket buffer size: %d", sendbuff);
+
+        //Configure QoS priority for UDP/RTP packets
+        int opt;
+        int priority;
+        priority = 5; /* 5: VI 7: VO */
+        opt = priority << 5;
+
+        res = setsockopt(s, SOL_IP, IP_TOS, &opt, sizeof(opt));
+        if (res < 0) {
+            err = -errno;
+            ALOGD("Socket IP_TOS option:%d", err);
+        }
+
+        opt = priority;
+        res = setsockopt(s, SOL_SOCKET, SO_PRIORITY, &opt, sizeof(opt));
+        if (res < 0) {
+            err = -errno;
+            ALOGD("Socket SO_PRIORITY option:%d", err);
         }
     } else if (mode == kModeCreateTCPDatagramSessionActive) {
         int flag = 1;

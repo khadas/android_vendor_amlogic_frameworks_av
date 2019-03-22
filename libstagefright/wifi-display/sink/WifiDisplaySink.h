@@ -126,6 +126,7 @@ namespace android
         enum
         {
             kWhatSinkNotify,
+            kWhatStopCompleted,
         };
 
         struct ResponseID

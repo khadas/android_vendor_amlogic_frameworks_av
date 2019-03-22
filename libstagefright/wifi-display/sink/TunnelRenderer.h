@@ -106,7 +106,7 @@ namespace android
         void destroyPlayer();
 
         void queueBuffer(const sp<ABuffer> &buffer);
-
+        bool mIsDestoryState;
         DISALLOW_EVIL_CONSTRUCTORS(TunnelRenderer);
     };
 

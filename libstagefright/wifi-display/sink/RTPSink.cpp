@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "RTPSink"
 #include <utils/Log.h>
 
@@ -159,6 +159,7 @@ namespace android
 
             mMaxSeq = seq;
         }
+#if 0
         else if (udelta <= kRTPSeqMod - kMaxMisorder)
         {
             // The sequence number made a very large jump
@@ -182,7 +183,7 @@ namespace android
         {
             // Duplicate or reordered packet.
         }
-
+#endif
         ++mReceived;
 
         buffer->setInt32Data(mCycles | seq);

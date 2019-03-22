@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "TunnelRenderer"
 #include <utils/Log.h>
 
@@ -238,10 +238,12 @@ namespace android
         if (mDebugEnable)
             ALOGE("Miracast debug info enabled\n");
         setProperty("sys.pkginfo", "suc:0,fail:0,req:0,total:0, max:0,min:0,retry:0,band:0");
+        mIsDestoryState = false;
     }
 
     TunnelRenderer::~TunnelRenderer()
     {
+        mIsDestoryState = true;
         destroyPlayer();
     }
 
@@ -292,10 +294,12 @@ namespace android
 
     sp<ABuffer> TunnelRenderer::dequeueBuffer()
     {
+        if (mIsDestoryState)
+            return NULL;
         Mutex::Autolock autoLock(mLock);
 
         sp<ABuffer> buffer;
-        int32_t extSeqNo;
+        uint32_t extSeqNo;
         char pkg_info[128];
         int64_t curUs;
 
@@ -330,8 +334,8 @@ namespace android
             else
             {
                 float  noPacketTime = (ALooper::GetNowUs() - mFirstFailedAttemptUs) / 1E6;
-                ALOGV("no packets available for %.2f secs",noPacketTime);
-                if (noPacketTime>12.0) //beyond 12S
+                ALOGE("no packets available for %.2f secs",noPacketTime);
+                if (noPacketTime > 12.0) //beyond 12S
                 {
 #if 1
 
@@ -362,8 +366,7 @@ namespace android
         {
             if (mRequestedRetransmission)
             {
-                ALOGI("Recovered after requesting retransmission of %d",
-                      extSeqNo);
+                ALOGE("Recovered after requesting retransmission of %d", extSeqNo);
             }
 
             if (!mRequestedRetry)
@@ -402,73 +405,37 @@ namespace android
             mMinBytesQueued = mMinBytesQueued < mTotalBytesQueued ? mMinBytesQueued : mTotalBytesQueued;
             return buffer;
         }
-
-        if (mFirstFailedAttemptUs < 0ll)
-        {
+        if (mFirstFailedAttemptUs < 0ll) {
             mFirstFailedAttemptUs = ALooper::GetNowUs();
             ALOGI("failed to get the correct packet the first time.");
             return NULL;
         }
-
-        if (mFirstFailedAttemptUs + 10000ll > ALooper::GetNowUs())
-        {
-            // We're willing to wait a little while to get the right packet.
-
-            if (!mRequestedRetransmission)
-            {
-                ALOGI("requesting retransmission of seqNo %d",
-                      (mLastDequeuedExtSeqNo + 1) & 0xffff);
-
-                sp<AMessage> notify = mNotifyLost->dup();
-                notify->setInt32("seqNo", (mLastDequeuedExtSeqNo + 1) & 0xffff);
-                notify->post();
-                //For miracast, we shuold send request IDR to request a I Frame asap
-                sp<AMessage> msgNotify = mMsgNotify->dup();
-                msgNotify->setInt32("msg", kWahtLostPacketMsg);
-                msgNotify->post();
-                mRequestedRetry = true;
-                mRequestedRetransmission = true;
-                mRetryTimes++;
-            }
-            else
-            {
-                ALOGI("still waiting for the correct packet to arrive.");
-            }
-
+        if (!mRequestedRetransmission) {
+            ALOGE("requesting retransmission of seqNo %d", (mLastDequeuedExtSeqNo + 1) & 0xffff);
+            sp<AMessage> notify = mNotifyLost->dup();
+            notify->setInt32("seqNo", (mLastDequeuedExtSeqNo + 1) & 0xffff);
+            notify->post();
+            //For miracast, we shuold send request IDR to request a I Frame asap
+            sp<AMessage> msgNotify = mMsgNotify->dup();
+            msgNotify->setInt32("msg", kWahtLostPacketMsg);
+            msgNotify->post();
+            mRequestedRetry = true;
+            mRequestedRetransmission = true;
+            mRetryTimes++;
+        }
+        if (mFirstFailedAttemptUs + 10000ll > ALooper::GetNowUs()) {
             return NULL;
         }
-
-        ALOGI("dropping packet. extSeqNo %d didn't arrive in time",
-              mLastDequeuedExtSeqNo + 1);
+        ALOGI("dropping packet. extSeqNo %d didn't arrive in time", mLastDequeuedExtSeqNo + 1);
         // Permanent failure, we never received the packet.
         mPackageFailed++;
-
-        if (mDebugEnable)
-        {
-            /*calculate bandwidth every 2s once*/
-            curUs = ALooper::GetNowUs();
-            if (curUs - mCurTime >= 1000000ll)
-            {
-                mBandwidth = mBytesQueued * ((float)1000000ll / (curUs - mCurTime));
-                //ALOGI("367 curUs - mCurTime =%lld, bytes=%ld", curUs-mCurTime, mBytesQueued);
-                mBytesQueued = 0;
-                mCurTime = ALooper::GetNowUs();
-                sprintf(pkg_info, "suc:%d,fail:%d,req:%d, total:%lld, max:%lld,min:%lld,retry:%lld, band:%lld",
-                        mPackageSuccess, mPackageFailed, mPackageRequest,
-                        mTotalBytesQueued, mMaxBytesQueued, mMinBytesQueued,
-                        mRetryTimes, mBandwidth);
-                setProperty("sys.pkginfo", pkg_info);
-            }
-        }
         mLastDequeuedExtSeqNo = extSeqNo;
         mFirstFailedAttemptUs = -1ll;
         mRequestedRetransmission = false;
         mRequestedRetry = false;
-
         mTotalBytesQueued -= buffer->size();
         mMinBytesQueued = mMinBytesQueued < mTotalBytesQueued ? mMinBytesQueued : mTotalBytesQueued;
         mPackets.erase(mPackets.begin());
-
         return buffer;
     }
 
@@ -525,20 +492,19 @@ namespace android
                     displayHeight,
                     PIXEL_FORMAT_RGB_565,
                     0);
-
             CHECK(mSurfaceControl != NULL);
             CHECK(mSurfaceControl->isValid());
-
-            //SurfaceComposerClient::openGlobalTransaction();
-            //CHECK_EQ(mSurfaceControl->setLayer(INT_MAX), (status_t)OK);
-            //CHECK_EQ(mSurfaceControl->show(), (status_t)OK);
-            //SurfaceComposerClient::closeGlobalTransaction();
-			//SurfaceComposerClient::Transaction t;
-			//t.setLayer(mSurfaceControl, INT_MAX).apply();
-			//CHECK_EQ(mSurfaceControl->setLayer(INT_MAX), (status_t)OK);
-			//CHECK_EQ(mSurfaceControl->show(), (status_t)OK);
-			//SurfaceControl::closeTransaction();
-
+#if ANDROID_PLATFORM_SDK_VERSION <= 27
+            SurfaceComposerClient::openGlobalTransaction();
+            CHECK_EQ(mSurfaceControl->setLayer(INT_MAX), (status_t)OK);
+            CHECK_EQ(mSurfaceControl->show(), (status_t)OK);
+            SurfaceComposerClient::closeGlobalTransaction();
+#else
+            SurfaceComposerClient::Transaction t;
+            t.setLayer(mSurfaceControl, INT_MAX);
+            t.show(mSurfaceControl);
+            t.apply();
+#endif
             mSurface = mSurfaceControl->getSurface();
             CHECK(mSurface != NULL);
         }
@@ -570,9 +536,8 @@ namespace android
             data.writeInt32(0);
             mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_HDCP_CUSTOM_DATA, data);
         }
-//        mPlayer->setVideoSurfaceTexture(
- //               mBufferProducer != NULL ? mBufferProducer : mSurface->getSurfaceTexture());
-        mPlayer->setVideoSurfaceTexture(mSurface->getIGraphicBufferProducer());
+        mPlayer->setVideoSurfaceTexture(
+                mBufferProducer != NULL ? mBufferProducer : mSurface->getIGraphicBufferProducer());
         Parcel request;
         //mPlayer->setParameter(KEY_PARAMETER_AML_PLAYER_DIS_AUTO_BUFFER, request);
         mPlayer->prepareAsync();
