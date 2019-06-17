@@ -97,6 +97,7 @@ namespace android {
 		INVOKE_ID_SET_TRACK_VOLUME = 10,
 		INVOKE_ID_GET_AM_TRACK_INFO = 11,
 		INVOKE_ID_USE_CUSTOMIZED_EXTRACTOR = 1001, // add for use costomized extractor
+		INVOKE_ID_GET_HDR_TYPE = 1002,             // add for get HDR TYPE
 	};
 }; // namespace android
 
