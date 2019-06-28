@@ -492,9 +492,14 @@ namespace android
                         ALOGI("requesting IDR frame");
                         sendIDRFrameRequest(mSessionID);
                     }
-                    sp<AMessage> msg = new AMessage(kWhatNoPacket, this);
-                    msg->setInt32("msg", kWahtLostPacketMsg);
-                    msg->post(5000000);
+                    int32_t isLoop = 0;
+                    CHECK(msg->findInt32("isLoop", &isLoop));
+                    if (isLoop) {
+                        sp<AMessage> msg = new AMessage(kWhatNoPacket, this);
+                        msg->setInt32("msg", kWahtLostPacketMsg);
+                        msg->setInt32("isLoop", 1);
+                        msg->post(5000000);
+                    }
                     break;
                 }
                 default:
@@ -750,6 +755,7 @@ namespace android
         mState = PLAYING;
         sp<AMessage> requestIdrMsg = new AMessage(kWhatNoPacket, this);
         requestIdrMsg->setInt32("msg", kWahtLostPacketMsg);
+        requestIdrMsg->setInt32("isLoop", 1);
         requestIdrMsg->post();
         return OK;
     }
@@ -1074,7 +1080,7 @@ namespace android
                      mHH.c_str());
 
         if (mNeedAudioCodecs)
-            snprintf(body + strlen(body), sizeof(body) - strlen(body), "wfd_audio_codecs: LPCM 00000003 00\r\n");
+            snprintf(body + strlen(body), sizeof(body) - strlen(body), "wfd_audio_codecs: LPCM 00000003 00, AAC 00000001 00\r\n");
 
         if (mNeed3dVideoFormats)
             snprintf(body + strlen(body), sizeof(body) - strlen(body), "wfd_3d_video_formats: none\r\n");

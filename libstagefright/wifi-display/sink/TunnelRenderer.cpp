@@ -418,6 +418,7 @@ namespace android
             //For miracast, we shuold send request IDR to request a I Frame asap
             sp<AMessage> msgNotify = mMsgNotify->dup();
             msgNotify->setInt32("msg", kWahtLostPacketMsg);
+            msgNotify->setInt32("isLoop", 0);
             msgNotify->post();
             mRequestedRetry = true;
             mRequestedRetransmission = true;
