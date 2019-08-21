@@ -155,11 +155,11 @@ namespace android
             {
                 // Sequence number wrapped - count another 64K cycle
                 mCycles += kRTPSeqMod;
+                ALOGE("mCycles now set to mCycles %d", mCycles);
             }
 
             mMaxSeq = seq;
         }
-#if 0
         else if (udelta <= kRTPSeqMod - kMaxMisorder)
         {
             // The sequence number made a very large jump
@@ -169,26 +169,29 @@ namespace android
                 // Two sequential packets -- assume that the other side
                 // restarted without telling us so just re-sync
                 // (i.e. pretend this was the first packet)
-
                 initSeq(seq);
+                ALOGE("very large jump seq is %d udelta is %d", seq, udelta);
+                buffer->setInt32Data(mCycles | seq);
+                buffer->meta()->setInt32("seq_reset", 1);
+                ++mReceived;
+                queuePacket(buffer);
+                return true;
             }
             else
             {
                 mBadSeq = (seq + 1) & (kRTPSeqMod - 1);
-
                 return false;
             }
         }
         else
         {
             // Duplicate or reordered packet.
+            ALOGE("We may receive a duplicatr or reordered seq is %d udelta is %d", seq, udelta);
+            buffer->meta()->setInt32("seq_reordered", 1);
         }
-#endif
         ++mReceived;
-
         buffer->setInt32Data(mCycles | seq);
         queuePacket(buffer);
-
         return true;
     }
 

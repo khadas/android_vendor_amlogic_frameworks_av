@@ -48,7 +48,7 @@ namespace android
 
         virtual void notify(int msg, int ext1, int ext2, const Parcel *obj)
         {
-            ALOGI("notify %d, %d, %d, %p", msg, ext1, ext2, obj);
+            //ALOGI("notify %d, %d, %d, %p", msg, ext1, ext2, obj);
             switch (msg) {
             case MEDIA_PREPARED:
                 mPrepared = true;
@@ -147,11 +147,16 @@ namespace android
 
     uint32_t TunnelRenderer::StreamSource::flags() const
     {
+#if 0
         if (mOwner->getIsHDCP()) {
             return kFlagAlignedVideoData;
         } else {
             return 0;
         }
+#else
+        //No matter is hdcp protect or not we assume one pes is one frame
+        return kFlagAlignedVideoData;
+#endif
     }
 
     void TunnelRenderer::StreamSource::doSomeWork()
@@ -250,7 +255,8 @@ namespace android
     void TunnelRenderer::queueBuffer(const sp<ABuffer> &buffer)
     {
         Mutex::Autolock autoLock(mLock);
-
+        int32_t value = 0;
+        int32_t newExtendedSeqNo = buffer->int32Data();
         mTotalBytesQueued += buffer->size();
         mBytesQueued += buffer->size();
         mMaxBytesQueued = mMaxBytesQueued > mTotalBytesQueued ? mMaxBytesQueued : mTotalBytesQueued;
@@ -260,7 +266,13 @@ namespace android
             return;
         }
 
-        int32_t newExtendedSeqNo = buffer->int32Data();
+        if (buffer->meta()->findInt32("seq_reset", &value)) {
+            if (value) {
+                ALOGE("Recieve seq_reset value is 0x%x 0x%x", value, newExtendedSeqNo);
+                mPackets.push_back(buffer);
+                return;
+            }
+        }
 
         List<sp<ABuffer> >::iterator firstIt = mPackets.begin();
         List<sp<ABuffer> >::iterator it = --mPackets.end();
@@ -299,15 +311,25 @@ namespace android
         Mutex::Autolock autoLock(mLock);
 
         sp<ABuffer> buffer;
-        uint32_t extSeqNo;
-        char pkg_info[128];
-        int64_t curUs;
+        uint32_t extSeqNo = 0;
+        char pkg_info[128] = { 0 };
+        int64_t curUs = 0;
+        int32_t value = 0;
 
         while (!mPackets.empty())
         {
+            value = 0;
             buffer = *mPackets.begin();
             extSeqNo = buffer->int32Data();
-
+            if (buffer->meta()->findInt32("seq_reset", &value)) {
+                if (value) {
+                    ALOGE("Handle seq_reset valuse is 0x%x 0x%x", value, extSeqNo);
+                    mLastDequeuedExtSeqNo = -1;
+                    mRequestedRetransmission = false;
+                    mRequestedRetry = false;
+                    mFirstFailedAttemptUs = -1ll;
+                }
+            }
             if (mLastDequeuedExtSeqNo < 0 || extSeqNo > mLastDequeuedExtSeqNo)
             {
                 break;
@@ -334,11 +356,9 @@ namespace android
             else
             {
                 float  noPacketTime = (ALooper::GetNowUs() - mFirstFailedAttemptUs) / 1E6;
-                ALOGE("no packets available for %.2f secs",noPacketTime);
+                //ALOGE("no packets available for %.2f secs",noPacketTime);
                 if (noPacketTime > 12.0) //beyond 12S
                 {
-#if 1
-
                     int ret = -1;
                     char value[PROPERTY_VALUE_MAX];
                     ret = getPropertyInt("sys.wfd.state", 0);
@@ -356,7 +376,6 @@ namespace android
                         mFirstFailedAttemptUs = ALooper::GetNowUs();
                         setProperty("sys.wfd.state", "0");
                     }
-#endif
                 }
             }
             return NULL;
@@ -415,11 +434,6 @@ namespace android
             sp<AMessage> notify = mNotifyLost->dup();
             notify->setInt32("seqNo", (mLastDequeuedExtSeqNo + 1) & 0xffff);
             notify->post();
-            //For miracast, we shuold send request IDR to request a I Frame asap
-            sp<AMessage> msgNotify = mMsgNotify->dup();
-            msgNotify->setInt32("msg", kWahtLostPacketMsg);
-            msgNotify->setInt32("isLoop", 0);
-            msgNotify->post();
             mRequestedRetry = true;
             mRequestedRetransmission = true;
             mRetryTimes++;
@@ -430,7 +444,15 @@ namespace android
         ALOGI("dropping packet. extSeqNo %d didn't arrive in time", mLastDequeuedExtSeqNo + 1);
         // Permanent failure, we never received the packet.
         mPackageFailed++;
-        mLastDequeuedExtSeqNo = extSeqNo;
+        if (buffer->meta()->findInt32("seq_reordered", &value)) {
+            if (value) {
+                ALOGE("Handle seq_reordered extSeqNo %d %d mLastDequeuedExtSeqNo is %d %d",
+                    extSeqNo, extSeqNo & 0xFFFF,  mLastDequeuedExtSeqNo, mLastDequeuedExtSeqNo & 0xFFFF);
+                mLastDequeuedExtSeqNo++;
+            }
+        } else {
+            mLastDequeuedExtSeqNo = extSeqNo;
+        }
         mFirstFailedAttemptUs = -1ll;
         mRequestedRetransmission = false;
         mRequestedRetry = false;
