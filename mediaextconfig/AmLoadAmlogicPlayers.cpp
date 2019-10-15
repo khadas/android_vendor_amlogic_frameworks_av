@@ -28,6 +28,7 @@ namespace android
 static sp<AmSharedLibrary> gLibAmlMedia;
 static sp<AmSharedLibrary> gLibAmNuPlayer;
 static sp<AmSharedLibrary> gLibDrmPlayer;
+static sp<AmSharedLibrary> gLibAmMediaPlayer;
 bool  LoadAndInitAmlogicMediaFactory(void)
 {
     int err;
@@ -106,6 +107,32 @@ bool  LoadAndInitAmlogicMediaFactory(void)
     } else {
         ALOGE("load libDrmPlayer.so for amlogicmedia failed:%s", gLibDrmPlayer->lastError());
         gLibDrmPlayer.clear();
+    }
+
+////////////////////////////gLibAmMediaPlayer
+    String8 name_ammediaplayer("libAmIptvMedia.so");
+    gLibAmMediaPlayer = new AmSharedLibrary(name_ammediaplayer);
+    if (gLibAmMediaPlayer != NULL) {
+        typedef int (*init_fun)(void);
+
+        init_fun init =
+            (init_fun)gLibAmMediaPlayer->lookup("_ZN7android24AmMediaPlayerFactoryInitEv");
+
+        if (init != NULL) {
+            err = init();
+            if (err) {
+                 ALOGE("AmMediaPlayerFactory failed:%s", gLibAmMediaPlayer->lastError());
+                 gLibAmMediaPlayer.clear();
+             }
+        } else {
+            ALOGE("AmMediaPlayerFactory failed:%s", gLibAmMediaPlayer->lastError());
+            gLibAmMediaPlayer.clear();
+        }
+
+
+    } else {
+        ALOGE("load libAmIptvMedia.so for amlogicmedia failed:%s", gLibAmMediaPlayer->lastError());
+        gLibAmMediaPlayer.clear();
     }
     return true;
 }
