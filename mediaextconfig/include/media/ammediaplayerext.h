@@ -110,12 +110,16 @@ namespace android {
         KEY_PARAMETER_AML_PLAYER_USE_SOFT_DEMUX 	= 8006, 	// play use soft demux
         KEY_PARAMETER_AML_PLAYER_PR_CUSTOM_DATA 	= 9001, 	// string, playready, set only
         KEY_PARAMETER_AML_PLAYER_HDCP_CUSTOM_DATA   = 9002, 	// int, mircast hdcp enable or not
+
+        KEY_PARAMETER_AML_PLAYER_GET_APK_NAME       = 4004,     //to tell player the apk name
     };
     enum {
         INVOKE_ID_NETWORK_GET_LPBUF_BUFFERED_SIZE = 8,
         INVOKE_ID_NETWORK_GET_STREAMBUF_BUFFERED_SIZE = 9,
         INVOKE_ID_SET_TRACK_VOLUME = 10,
         INVOKE_ID_GET_AM_TRACK_INFO = 11,
+        INVOKE_ID_NETWORK_SET_WINDOWSIZE = 15,
+        INVOKE_ID_SET_CLEARLASTFRAME = 16,
         INVOKE_ID_USE_CUSTOMIZED_EXTRACTOR = 1001, // add for use costomized extractor
         INVOKE_ID_GET_HDR_TYPE = 1002,             // add for get HDR TYPE
         INVOKE_ID_SET_SOUND_TRACK = 1003,                 // add for set sound track ,refer to lmono,rmono,stereo, set only
