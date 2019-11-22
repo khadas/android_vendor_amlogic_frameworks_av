@@ -69,6 +69,7 @@ namespace android
           mNeedHDCP(false),
           mResolution(Normal),
           mHDCPRunning(false),
+          mSourceStandby(false),
           mIDRFrameRequestPending(false)
     {
         srand(time(0));
@@ -136,6 +137,10 @@ namespace android
 
     void WifiDisplaySink::setTeardown(void)
     {
+        if (mState < CONNECTED) {
+            ALOGI("No need call setTeardown in state is %d", mState);
+            return;
+        }
         AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
         sendTeardown(mSessionID, !mSetupURI.empty()? mSetupURI.c_str() : url.c_str());
     }
@@ -313,19 +318,7 @@ namespace android
                 if (sessionID == mSessionID)
                 {
                     ALOGI("Lost control connection.");
-
                     // The control connection is dead now.
-#if 0
-                    mNetSession->destroySession(mSessionID);
-                    mSessionID = 0;
-
-                    if (mRTPSink != NULL)
-                    {
-                        looper()->unregisterHandler(mRTPSink->id());
-                        mRTPSink.clear();
-                    }
-#endif
-                    ALOGI("Quiting WifiDisplaySink.");
                     if (err == -111)    //"Connection refused"
                     {
                         if (mConnectionRetry++ < MAX_CONN_RETRY)
@@ -333,7 +326,7 @@ namespace android
                             mNetSession->destroySession(mSessionID);
                             mSessionID = 0;
                             ALOGI("Retry rtsp connection %d", mConnectionRetry);
-                            retryStart(100000ll);	//delay 100ms
+                            retryStart(200000ll);
                         }
                         else
                         {
@@ -369,7 +362,11 @@ namespace android
 
                     CHECK_EQ(err, (status_t)OK);
                 }
-
+                //After connect we send a message for 2s to cehck have rtsp packet from source or not
+                //If not this will report a error
+                sp<AMessage> msg = new AMessage(kWhatNoPacket, this);
+                msg->setInt32("msg", kWhatConnectedNoPacketCheck);
+                msg->post(2000000);
                 break;
             }
 
@@ -488,7 +485,7 @@ namespace android
                     break;
                 }
                 case kWahtLostPacketMsg: {
-                    if (!mIDRFrameRequestPending) {
+                    if (!mIDRFrameRequestPending && mState == PLAYING && mSourceStandby == false) {
                         ALOGI("requesting IDR frame");
                         sendIDRFrameRequest(mSessionID);
                     }
@@ -501,6 +498,16 @@ namespace android
                         msg->post(5000000);
                     }
                     break;
+                }
+                case kWhatConnectedNoPacketCheck: {
+                //After connect we send a message for 2s to cehck have rtsp packet from source or not
+                //If not this will report a error we use mNextCSeq to judge if have rtsp or not
+                    ALOGI("kWhatConnectedNoPacketCheck  mState is %d and mNextCSeq is %d ", mState, mNextCSeq);
+                    if (mState == CONNECTED && mNextCSeq <= 1) {
+                        sp<AMessage> msg = new AMessage(kWhatNoPacket, this);
+                        msg->setInt32("msg", kWhatNoPacketMsg);
+                        msg->post();
+                    }
                 }
                 default:
                     break;
@@ -1110,7 +1117,7 @@ namespace android
                 "wfd_uibc_capability: none\r\n");
 
         if (mNeedStandbyResumeCapability)
-            snprintf(body+ strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: none\r\n");
+            snprintf(body + strlen(body), sizeof(body) - strlen(body), "wfd_standby_resume_capability: supported\r\n");
 
         if (mNeedConnectorType)
             snprintf(body+ strlen(body), sizeof(body) - strlen(body),
@@ -1289,8 +1296,13 @@ namespace android
 
         if (strstr(content, "wfd_trigger_method: SETUP\r\n") != NULL) {
             AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
-            status_t err = sendSetup( sessionID, url.c_str());
-
+            status_t err = (status_t)OK;
+            if (mSourceStandby == true) {
+                err = sendPlay(sessionID, url.c_str());
+                mSourceStandby = false;
+            } else {
+                err = sendSetup( sessionID, url.c_str());
+            }
             CHECK_EQ(err, (status_t)OK);
         }
         else if (strstr(content, "wfd_trigger_method: TEARDOWN\r\n") != NULL)
@@ -1306,6 +1318,12 @@ namespace android
             AString url = AStringPrintf("rtsp://%s/wfd1.0/streamid=0", mRTSPHost.c_str());
             status_t err = sendPlay(sessionID, url.c_str());
             CHECK_EQ(err, (status_t)OK);
+        } else if (strstr(content, "wfd_standby") != NULL) {
+            ALOGE("the source should be in standby now");
+            //We don't do anything just wait the source exit from standby
+            mSourceStandby = true;
+        } else {
+            ALOGE("on setparameter receive other information");
         }
     }
 

@@ -1,28 +1,27 @@
 LOCAL_PATH := $(call my-dir)
-# MS12 DAP audio effect library
+
 include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
 
 LOCAL_ARM_MODE := arm
 
-LOCAL_MODULE := libms12dapwrapper
+LOCAL_MODULE := libvirtualx
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libdl \
     libutils \
-    libamaudioutils
+    libamaudioutils \
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
     hardware/amlogic/audio/utils/ini/include \
+    hardware/libhardware/include/hardware \
     hardware/libhardware/include \
     system/media/audio/include \
-    vendor/amlogic/frameworks/av/libaudioeffect/Utility
 
-LOCAL_SRC_FILES := ms12_dap_wapper.cpp
-LOCAL_SRC_FILES += ../Utility/AudioFade.c
+LOCAL_SRC_FILES := Virtualx.cpp
 
 LOCAL_CFLAGS += -O2
 
@@ -34,3 +33,4 @@ endif
 LOCAL_MODULE_RELATIVE_PATH := soundfx
 
 include $(BUILD_SHARED_LIBRARY)
+

@@ -79,8 +79,8 @@ enum Virtualsurround_state_e {
 
 /*parameter number passed from the Java layer corresponds to this*/
 typedef enum {
-   VIRTUALSURROUND_PARAM_ENABLE,
-   VIRTUALSURROUND_PARAM_EFFECTLEVEL,
+    VIRTUALSURROUND_PARAM_ENABLE,
+    VIRTUALSURROUND_PARAM_EFFECTLEVEL,
 } Virtualsurroundparams;
 
 typedef struct Virtualsurroundcfg_s {
@@ -89,7 +89,7 @@ typedef struct Virtualsurroundcfg_s {
 } Virtualsurroundcfg;
 
 typedef struct Virtualsurrounddata_s {
-   /* Virtualsurround API needed data */
+    /* Virtualsurround API needed data */
     Virtualsurroundcfg      tbcfg;
 } Virtualsurrounddata;
 
@@ -183,78 +183,79 @@ int Virtualsurround_init(VirtualsurroundContext *pContext) {
     CS_Capabilities.pBundleInstance = (void*)hCSInstance;
     LVCS_Status = LVCS_Memory(LVM_NULL,
                               &CS_MemTab,
-                               &CS_Capabilities);
-   CS_MemTab.Region[LVCS_MEMREGION_PERSISTENT_SLOW_DATA].pBaseAddress = &CS_Instance;
-  /* Allocate memory */
-   for (i = 0; i < LVM_NR_MEMORY_REGIONS; i++) {
+                              &CS_Capabilities);
+    CS_MemTab.Region[LVCS_MEMREGION_PERSISTENT_SLOW_DATA].pBaseAddress = &CS_Instance;
+    /* Allocate memory */
+    for (i = 0; i < LVM_NR_MEMORY_REGIONS; i++) {
         if (CS_MemTab.Region[i].Size != 0) {
             CS_MemTab.Region[i].pBaseAddress = malloc(CS_MemTab.Region[i].Size);
             if (CS_MemTab.Region[i].pBaseAddress == LVM_NULL) {
-                      ALOGV("\tLVM_ERROR :LvmBundle_init CreateInstance Failed to allocate %"
-                            " bytes for region %u\n", CS_MemTab.Region[i].Size, i );
-                      return LVCS_NULLADDRESS;
-               } else {
-                      ALOGV("\tLvmBundle_init CreateInstance allocated %"
-                            " bytes for region %u at %p\n",
-                            CS_MemTab.Region[i].Size, i, CS_MemTab.Region[i].pBaseAddress);
-                }
+                ALOGV("\tLVM_ERROR :LvmBundle_init CreateInstance Failed to allocate %"
+                    " bytes for region %u\n", CS_MemTab.Region[i].Size, i );
+                return LVCS_NULLADDRESS;
+            } else {
+                ALOGV("\tLvmBundle_init CreateInstance allocated %"
+                    " bytes for region %u at %p\n",
+                    CS_MemTab.Region[i].Size, i, CS_MemTab.Region[i].pBaseAddress);
             }
-     }
-   hCSInstance = LVM_NULL;
-   LVCS_Status = LVCS_Init(&hCSInstance,
+        }
+    }
+    hCSInstance = LVM_NULL;
+    LVCS_Status = LVCS_Init(&hCSInstance,
                               &CS_MemTab,
                               &CS_Capabilities);
-   pContext->gVirtualsurrounddata.tbcfg.effectlevel = 0;
-   pContext->gVirtualsurrounddata.tbcfg.enable = 0;
-   CS_Params->OperatingMode = LVCS_OFF;
-   CS_Params->CompressorMode = LVM_MODE_ON;
-   CS_Params->SourceFormat = LVCS_STEREO;
-   CS_Params->SpeakerType = LVCS_HEADPHONES;
-   CS_Params->SampleRate  = LVM_FS_48000;
-   CS_Params->ReverbLevel = 100;
-   CS_Params->EffectLevel =32700; /* 0~32767 */
-   pthread_mutex_unlock(&audio_vir_mutex);
+    pContext->gVirtualsurrounddata.tbcfg.effectlevel = 0;
+    pContext->gVirtualsurrounddata.tbcfg.enable = 0;
+    CS_Params->OperatingMode = LVCS_OFF;
+    CS_Params->CompressorMode = LVM_MODE_ON;
+    CS_Params->SourceFormat = LVCS_MONOINSTEREO;//LVCS_STEREO;
+    CS_Params->SpeakerType = LVCS_HEADPHONES;
+    CS_Params->SampleRate  = LVM_FS_48000;
+    CS_Params->ReverbLevel = 512;
+    CS_Params->EffectLevel = 32700; /* 0~32767 */
+    pthread_mutex_unlock(&audio_vir_mutex);
 
-   pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
-   pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
-   pContext->config.inputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
-   pContext->config.inputCfg.samplingRate = 48000;
-   pContext->config.inputCfg.bufferProvider.getBuffer = NULL;
-   pContext->config.inputCfg.bufferProvider.releaseBuffer = NULL;
-   pContext->config.inputCfg.bufferProvider.cookie = NULL;
-   pContext->config.inputCfg.mask = EFFECT_CONFIG_ALL;
-   pContext->config.outputCfg.accessMode = EFFECT_BUFFER_ACCESS_ACCUMULATE;
-   pContext->config.outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
-   pContext->config.outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
-   pContext->config.outputCfg.samplingRate = 48000;
-   pContext->config.outputCfg.bufferProvider.getBuffer = NULL;
-   pContext->config.outputCfg.bufferProvider.releaseBuffer = NULL;
-   pContext->config.outputCfg.bufferProvider.cookie = NULL;
-   pContext->config.outputCfg.mask = EFFECT_CONFIG_ALL;
-   ALOGD("%s: sucessful", __FUNCTION__);
-   return 0;
+    pContext->config.inputCfg.accessMode = EFFECT_BUFFER_ACCESS_READ;
+    pContext->config.inputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    pContext->config.inputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    pContext->config.inputCfg.samplingRate = 48000;
+    pContext->config.inputCfg.bufferProvider.getBuffer = NULL;
+    pContext->config.inputCfg.bufferProvider.releaseBuffer = NULL;
+    pContext->config.inputCfg.bufferProvider.cookie = NULL;
+    pContext->config.inputCfg.mask = EFFECT_CONFIG_ALL;
+    pContext->config.outputCfg.accessMode = EFFECT_BUFFER_ACCESS_ACCUMULATE;
+    pContext->config.outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    pContext->config.outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    pContext->config.outputCfg.samplingRate = 48000;
+    pContext->config.outputCfg.bufferProvider.getBuffer = NULL;
+    pContext->config.outputCfg.bufferProvider.releaseBuffer = NULL;
+    pContext->config.outputCfg.bufferProvider.cookie = NULL;
+    pContext->config.outputCfg.mask = EFFECT_CONFIG_ALL;
+    ALOGD("%s: sucessful", __FUNCTION__);
+    return 0;
 }
 
 /*Set I/O configuration: sample rate, channel, format, etc.*/
 int Virtualsurround_configure(VirtualsurroundContext *pContext, effect_config_t *pConfig)
 {
     if (pConfig->inputCfg.samplingRate != pConfig->outputCfg.samplingRate)
-            return -EINVAL;
+        return -EINVAL;
     if (pConfig->inputCfg.channels != pConfig->outputCfg.channels)
-            return -EINVAL;
+        return -EINVAL;
     if (pConfig->inputCfg.format != pConfig->outputCfg.format)
-            return -EINVAL;
+        return -EINVAL;
     if (pConfig->inputCfg.channels != AUDIO_CHANNEL_OUT_STEREO) {
-            ALOGW("%s: channels in = 0x%x channels out = 0x%x", __FUNCTION__, pConfig->inputCfg.channels, pConfig->outputCfg.channels);
-            pConfig->inputCfg.channels = pConfig->outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
-        }
+        ALOGW("%s: channels in = 0x%x channels out = 0x%x", __FUNCTION__,
+            pConfig->inputCfg.channels, pConfig->outputCfg.channels);
+        pConfig->inputCfg.channels = pConfig->outputCfg.channels = AUDIO_CHANNEL_OUT_STEREO;
+    }
     if (pConfig->outputCfg.accessMode != EFFECT_BUFFER_ACCESS_WRITE &&
             pConfig->outputCfg.accessMode != EFFECT_BUFFER_ACCESS_ACCUMULATE)
-            return -EINVAL;
+        return -EINVAL;
     if (pConfig->inputCfg.format != AUDIO_FORMAT_PCM_16_BIT) {
-            ALOGW("%s: format in = 0x%x format out = 0x%x", __FUNCTION__, pConfig->inputCfg.format, pConfig->outputCfg.format);
-            pConfig->inputCfg.format = pConfig->outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
-        }
+        ALOGW("%s: format in = 0x%x format out = 0x%x", __FUNCTION__, pConfig->inputCfg.format, pConfig->outputCfg.format);
+        pConfig->inputCfg.format = pConfig->outputCfg.format = AUDIO_FORMAT_PCM_16_BIT;
+    }
     memcpy(&pContext->config, pConfig, sizeof(effect_config_t));
     return 0;
 }
@@ -271,7 +272,7 @@ int Virtualsurround_setParameter(VirtualsurroundContext *pContext, void *pParam,
         return LVCS_NULLADDRESS;
     pthread_mutex_lock(&audio_vir_mutex);
     switch (param) {
-       case VIRTUALSURROUND_PARAM_ENABLE:
+        case VIRTUALSURROUND_PARAM_ENABLE:
             value = *(int32_t *)pValue;
             tbcfg->enable = value;
             if (tbcfg->enable == 1)
@@ -281,7 +282,7 @@ int Virtualsurround_setParameter(VirtualsurroundContext *pContext, void *pParam,
             LVCS_Control(hCSInstance,CS_Params);
             pthread_mutex_unlock(&audio_vir_mutex);
             break;
-       case VIRTUALSURROUND_PARAM_EFFECTLEVEL:
+        case VIRTUALSURROUND_PARAM_EFFECTLEVEL:
             value = *(int32_t *)pValue;
             tbcfg->effectlevel = value;
             if (tbcfg->effectlevel > 100)
@@ -293,10 +294,10 @@ int Virtualsurround_setParameter(VirtualsurroundContext *pContext, void *pParam,
             LVCS_Control(hCSInstance,CS_Params);
             pthread_mutex_unlock(&audio_vir_mutex);
             break;
-       default:
+        default:
             ALOGE("%s: unknown param %08x", __FUNCTION__, param);
             return -EINVAL;
-       }
+    }
     return 0;
 }
 
@@ -314,15 +315,15 @@ int Virtualsurround_getParameter(VirtualsurroundContext*pContext, void *pParam, 
         *(int*)pValue = (int)tbcfg->enable;
         ALOGD("%s: Get enable -> %d ", __FUNCTION__, tbcfg->enable);
         break;
-     case VIRTUALSURROUND_PARAM_EFFECTLEVEL:
+    case VIRTUALSURROUND_PARAM_EFFECTLEVEL:
         if (*pValueSize < sizeof(int32_t)) {
-             *pValueSize = 0;
-                 return -EINVAL;
-           }
+            *pValueSize = 0;
+            return -EINVAL;
+        }
         *(int*)pValue = tbcfg->effectlevel;
-         ALOGD("%s: Get effctlevel -> %d ", __FUNCTION__, tbcfg->effectlevel);
-         break;
-      default:
+        ALOGD("%s: Get effctlevel -> %d ", __FUNCTION__, tbcfg->effectlevel);
+        break;
+    default:
         ALOGE("%s: unknown param %d", __FUNCTION__, param);
         return -EINVAL;
     }
@@ -330,14 +331,14 @@ int Virtualsurround_getParameter(VirtualsurroundContext*pContext, void *pParam, 
 }
 
 int Virtualsurround_release(VirtualsurroundContext *pContext __unused) {
-   int i;
-   pthread_mutex_lock(&audio_vir_mutex);
-   for (i = 0; i < LVM_NR_MEMORY_REGIONS; i++) {
-       if (CS_MemTab.Region[i].pBaseAddress != 0) {
-           free(CS_MemTab.Region[i].pBaseAddress);
-           CS_MemTab.Region[i].pBaseAddress = NULL;
-         }
-       }
+    int i;
+    pthread_mutex_lock(&audio_vir_mutex);
+    for (i = 0; i < LVM_NR_MEMORY_REGIONS; i++) {
+        if (CS_MemTab.Region[i].pBaseAddress != 0) {
+            free(CS_MemTab.Region[i].pBaseAddress);
+            CS_MemTab.Region[i].pBaseAddress = NULL;
+        }
+    }
     hCSInstance = LVM_NULL;
     pthread_mutex_unlock(&audio_vir_mutex);
     return 0;
@@ -353,7 +354,7 @@ int Virtualsurround_process(effect_handle_t self, audio_buffer_t *inBuffer, audi
         return -EINVAL;
     }
 
-   if (inBuffer == NULL || inBuffer->raw == NULL ||
+    if (inBuffer == NULL || inBuffer->raw == NULL ||
         outBuffer == NULL || outBuffer->raw == NULL ||
         inBuffer->frameCount != outBuffer->frameCount ||
         inBuffer->frameCount == 0) {
@@ -371,13 +372,12 @@ int Virtualsurround_process(effect_handle_t self, audio_buffer_t *inBuffer, audi
             *out++ = *in++;
         }
     } else {
+        if (hCSInstance == LVM_NULL)
+            return LVCS_NULLADDRESS;
+        pthread_mutex_lock(&audio_vir_mutex);
+        LVCS_Process(hCSInstance,in,out,inBuffer->frameCount);
 
-    if (hCSInstance == LVM_NULL)
-        return LVCS_NULLADDRESS;
-    pthread_mutex_lock(&audio_vir_mutex);
-    LVCS_Process(hCSInstance,in,out,inBuffer->frameCount);
-
-    pthread_mutex_unlock(&audio_vir_mutex);
+        pthread_mutex_unlock(&audio_vir_mutex);
     }
     return 0;
 }
@@ -405,7 +405,6 @@ int Virtualsurround_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmd
         *(int *) pReplyData = Virtualsurround_configure(pContext, (effect_config_t *) pCmdData);
         break;
     case EFFECT_CMD_RESET:
-        //HPEQ_reset(pContext);
         break;
     case EFFECT_CMD_ENABLE:
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int))

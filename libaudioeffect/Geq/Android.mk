@@ -1,12 +1,12 @@
-LOCAL_PATH := $(call my-dir)
-# MS12 DAP audio effect library
+LOCAL_PATH:= $(call my-dir)
+
 include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_ARM_MODE := arm
+#LOCAL_ARM_MODE := arm
 
-LOCAL_MODULE := libms12dapwrapper
+LOCAL_MODULE:= libgeq
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
@@ -16,15 +16,21 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
+    vendor/amlogic/frameworks/av/libaudioeffect/Utility \
     hardware/amlogic/audio/utils/ini/include \
+    hardware/libhardware/include/hardware \
     hardware/libhardware/include \
-    system/media/audio/include \
-    vendor/amlogic/frameworks/av/libaudioeffect/Utility
+    system/media/audio/include
 
-LOCAL_SRC_FILES := ms12_dap_wapper.cpp
+LOCAL_SRC_FILES += Geq.cpp
 LOCAL_SRC_FILES += ../Utility/AudioFade.c
 
-LOCAL_CFLAGS += -O2
+LOCAL_LDFLAGS_arm  += $(LOCAL_PATH)/libAmlGeq.a
+LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/libAmlGeq64.a
+
+LOCAL_MULTILIB := both
+
+LOCAL_PRELINK_MODULE := false
 
 LOCAL_LDLIBS   +=  -llog
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)

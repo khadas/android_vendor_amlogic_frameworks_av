@@ -56,6 +56,7 @@ namespace android
         enum {
             kWhatNoPacketMsg,
             kWahtLostPacketMsg,
+            kWhatConnectedNoPacketCheck,
         };
 
         void setIsHDCP(bool isHDCP);

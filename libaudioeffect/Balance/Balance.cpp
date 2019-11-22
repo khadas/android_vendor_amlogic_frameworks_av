@@ -69,6 +69,7 @@ typedef enum {
     BALANCE_PARAM_LEVEL = 0,
     BALANCE_PARAM_ENABLE,
     BALANCE_PARAM_LEVEL_NUM,
+    BALANCE_PARAM_INDEX,
 } Balanceparams;
 
 typedef struct Balancecfg_s {
@@ -335,11 +336,18 @@ int Balance_getParameter(BalanceContext *pContext, void *pParam, size_t *pValueS
         value = data->usr_cfg.num;
         *(int32_t *) pValue = value;
         break;
+    case BALANCE_PARAM_INDEX:
+        float *pTmp;
+        pTmp = (float *)pValue;
+        for (int i = 0; i < data->usr_cfg.num ; i++) {
+            *pTmp++ = data->usr_cfg.level[i];
+            //ALOGE(" Leve[%f]",data->usr_cfg.level[i]);
+         }
+        break;
     default:
         ALOGE("%s: unknown param %d", __FUNCTION__, param);
         return -EINVAL;
     }
-
     return 0;
 }
 

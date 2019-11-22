@@ -112,6 +112,7 @@ namespace android
         enum {
             kWhatNoPacketMsg,
             kWahtLostPacketMsg,
+            kWhatConnectedNoPacketCheck,
         };
 
         enum
@@ -165,7 +166,7 @@ namespace android
         sp<AMessage> mMsgNotify;
         int32_t mRTSPPort;
         int32_t mConnectionRetry;
-        #define MAX_CONN_RETRY 500
+        #define MAX_CONN_RETRY 5
 
         /*add by yalong.liu*/
         bool mNeedAudioCodecs;
@@ -262,7 +263,7 @@ namespace android
         status_t sendIDRFrameRequest(int32_t sessionID);
         status_t onReceiveIDRFrameRequestResponse(
             int32_t sessionID, const sp<ParsedMessage> &msg);
-
+        bool mSourceStandby;
         DISALLOW_EVIL_CONSTRUCTORS(WifiDisplaySink);
     };
 

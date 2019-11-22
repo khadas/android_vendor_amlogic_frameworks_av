@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Amlogic Corporation.
+ * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef _AMLAGC_H_
-#define _AMLAGC_H_
+#ifndef ANDROID_DBX_H_
+#define ANDROID_DBX_H_
 
-#ifdef __cplusplus
-extern "C"  {
-#endif
-
-void* NewAmlAGC(void);
-void DoAmlAGC(void *handle, void *buffer, int len);
-void DeleteAmlAGC(void *handle);
-int SetAmlAGC(void *handle, float peak_level, float dynamic_threshold,
-        float noise_threshold, int response_time,int release_time);
-
-#ifdef __cplusplus
-}
-#endif
+#define DBX_CUP_LOAD_ARM9E 100  //Expressed in 0.1 MIPS
+#define DBX_MEM_USAGE      50   // Expressed in kB
 
 #endif
+

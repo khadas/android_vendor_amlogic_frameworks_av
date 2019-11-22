@@ -16,12 +16,14 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
+    vendor/amlogic/frameworks/av/libaudioeffect/Utility \
     hardware/amlogic/audio/utils/ini/include \
     hardware/libhardware/include/hardware \
     hardware/libhardware/include \
     system/media/audio/include
 
 LOCAL_SRC_FILES += Hpeq.cpp
+LOCAL_SRC_FILES += ../Utility/AudioFade.c
 
 LOCAL_LDFLAGS_arm  += $(LOCAL_PATH)/libAmlHpeq.a
 LOCAL_LDFLAGS_arm64 += $(LOCAL_PATH)/libAmlHpeq64.a
