@@ -99,7 +99,8 @@ namespace android {
         KEY_PARAMETER_AML_PLAYER_GET_DTS_ASSET_TOTAL	= 2012, 	// string, get dts asset total number
         KEY_PARAMETER_AML_PLAYER_SET_DTS_ASSET		= 2013, 	// string, set dts asset
         KEY_PARAMETER_AML_PLAYER_SWITCH_VIDEO_TRACK 	= 2015, 	//string,refer to video track index,set only
-        KEY_PARAMETER_AML_PLAYER_SET_TRICKPLAY_MODE     = 2016,     //string,refer to video ff/fb flag,set only
+        KEY_PARAMETER_AML_PLAYER_SET_TRICKPLAY_MODE    	= 2016,     //string,refer to video ff/fb flag,set only
+        KEY_PARAMETER_AML_PLAYER_SET_TS_OR_ES           = 2100,     //int,player write data type.
 
         KEY_PARAMETER_AML_PLAYER_HWBUFFER_STATE 	= 3001, 	// string,refer to stream buffer info
         KEY_PARAMETER_AML_PLAYER_RESET_BUFFER		= 8000, 	// top level seek..player need to reset & clearbuffers
