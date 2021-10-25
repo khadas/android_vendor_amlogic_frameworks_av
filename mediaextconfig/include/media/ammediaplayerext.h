@@ -74,6 +74,17 @@ namespace android {
         //notify java app the buffering circle percent
         MEDIA_INFO_BUFFERING_PERCENT = 0x9002,
     };
+
+	enum {
+            //amlogic extend error message code base
+            MEDIA_ERROR_AMLOGIC_BASE = -2000,
+
+            //read network data timeout.
+            MEDIA_ERROR_AMLOGIC_NETWORK_READ_TIMEOUT = MEDIA_ERROR_AMLOGIC_BASE + 1,
+
+            //network connected again.
+            MEDIA_ERROR_AMLOGIC_NETWORK_READ_AGAIN = MEDIA_ERROR_AMLOGIC_BASE + 1,
+    };
     enum {
 
         //AML Video INFO string,set only

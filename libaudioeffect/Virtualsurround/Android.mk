@@ -6,6 +6,10 @@ LOCAL_MODULE_TAGS := optional
 
 LOCAL_MODULE:= libvirtualsurround
 
+ifeq ($(ANDROID_BUILD_TYPE), 64)
+    LOCAL_CFLAGS += -DARM64_BIT
+endif
+
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libdl \
